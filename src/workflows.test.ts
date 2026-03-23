@@ -9,6 +9,8 @@ import type { ClientJob } from "./domain/contracts.js";
 import { OrchestratorAgent } from "./agents/orchestrator.js";
 import { SiteBuilderAgent } from "./agents/site-builder.js";
 import { QaReviewerAgent } from "./agents/qa-reviewer.js";
+import { ImonEngineAgent } from "./agents/imon-engine.js";
+import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { FileStore } from "./storage/store.js";
 import { AIClient } from "./openai/client.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
@@ -28,8 +30,20 @@ async function setupWorkspace() {
   const siteBuilder = new SiteBuilderAgent(ai, config, store);
   const qaReviewer = new QaReviewerAgent(config, store);
   const replyHandler = new ReplyHandlerAgent(ai);
+  const imonEngine = new ImonEngineAgent(config, store);
+  const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
 
-  return { root, config, store, orchestrator, siteBuilder, qaReviewer, replyHandler };
+  return {
+    root,
+    config,
+    store,
+    orchestrator,
+    siteBuilder,
+    qaReviewer,
+    replyHandler,
+    imonEngine,
+    digitalAssetFactory
+  };
 }
 
 test("prospecting imports leads with scores and stages", async () => {
@@ -137,4 +151,36 @@ test("client build, QA, and retention reporting work end to end", async () => {
   assert.equal(qa.passed, true);
   assert.ok(retention.updateSuggestions.length >= 2);
   assert.ok(retention.upsellCandidate.length > 0);
+});
+
+test("ImonEngine seeds the portfolio and produces a resource-aware report", async () => {
+  const { store, imonEngine } = await setupWorkspace();
+
+  const report = await imonEngine.bootstrap();
+  const engine = await store.getEngineState();
+  const businesses = await store.getManagedBusinesses();
+  const digitalAssetStore = businesses.find((business) => business.id === "imon-digital-asset-store");
+  const agency = businesses.find((business) => business.id === "auto-funding-agency");
+
+  assert.ok(engine);
+  assert.equal(engine?.portfolio.trackedBusinesses, 6);
+  assert.ok(digitalAssetStore);
+  assert.equal(digitalAssetStore?.stage, "ready");
+  assert.ok(agency);
+  assert.equal(agency?.stage, "paused");
+  assert.ok(report.nextLaunchCandidates.includes("imon-digital-asset-store"));
+  assert.ok(report.recommendedConcurrency >= 1);
+});
+
+test("digital asset factory seeds Gumroad starter packs", async () => {
+  const { store, imonEngine, digitalAssetFactory } = await setupWorkspace();
+  await imonEngine.bootstrap();
+
+  const created = await digitalAssetFactory.seedStarterQueue();
+  const packs = await store.getAssetPacks();
+
+  assert.equal(created.length, 3);
+  assert.equal(packs.length, 3);
+  assert.ok(packs.every((pack) => pack.marketplace === "gumroad"));
+  assert.ok(packs.every((pack) => pack.listingChecklist.length >= 4));
 });

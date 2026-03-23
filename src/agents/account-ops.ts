@@ -13,8 +13,16 @@ export class AccountOpsAgent {
 
   async ensureOperationalApprovals(): Promise<ApprovalTask[]> {
     const tasks: ApprovalTask[] = [];
+    const businesses = await this.store.getManagedBusinesses();
+    const activeCategories = new Set(
+      businesses.filter((business) => business.stage === "active").map((business) => business.category)
+    );
 
-    if (!this.config.business.stripeFounding || !this.config.business.stripeStandard) {
+    const requiresDirectBilling = activeCategories.has("client_services_agency") || activeCategories.has("micro_saas_factory");
+    const requiresBusinessInbox = activeCategories.has("client_services_agency") || activeCategories.has("micro_saas_factory");
+    const requiresGumroadSeller = activeCategories.has("digital_asset_store");
+
+    if (requiresDirectBilling && (!this.config.business.stripeFounding || !this.config.business.stripeStandard)) {
       tasks.push(
         await this.createOrUpdateTask({
           id: "approval-payment-links",
@@ -27,9 +35,17 @@ export class AccountOpsAgent {
           relatedEntityId: "stripe"
         })
       );
+    } else {
+      await this.deferTask(
+        "approval-payment-links",
+        "Stripe links are not on the critical path until a direct-billing business becomes active."
+      );
     }
 
-    if (!this.config.business.salesEmail.includes("@") || this.config.business.salesEmail.endsWith("example.com")) {
+    if (
+      requiresBusinessInbox &&
+      (!this.config.business.salesEmail.includes("@") || this.config.business.salesEmail.endsWith("example.com"))
+    ) {
       tasks.push(
         await this.createOrUpdateTask({
           id: "approval-sales-inbox",
@@ -41,6 +57,35 @@ export class AccountOpsAgent {
           relatedEntityType: "account",
           relatedEntityId: "sales-email"
         })
+      );
+    } else {
+      await this.deferTask(
+        "approval-sales-inbox",
+        "A dedicated business inbox is not required until a direct-support or direct-billing business is active."
+      );
+      await this.deferTask(
+        "approval-smtp-setup",
+        "SMTP can wait until live approval notifications matter for an active direct-support business."
+      );
+    }
+
+    if (requiresGumroadSeller && !this.config.marketplaces.gumroadSellerEmail) {
+      tasks.push(
+        await this.createOrUpdateTask({
+          id: "approval-gumroad-seller",
+          type: "marketplace",
+          actionNeeded: "Connect the Gumroad seller identity to ImonEngine",
+          reason: "The digital asset store is active, but the system does not yet know which Gumroad seller account it should track.",
+          ownerInstructions:
+            "Add GUMROAD_SELLER_EMAIL to .env. If you have a profile URL, add GUMROAD_PROFILE_URL as well.",
+          relatedEntityType: "account",
+          relatedEntityId: "gumroad"
+        })
+      );
+    } else {
+      await this.deferTask(
+        "approval-gumroad-seller",
+        "Gumroad seller identity is already connected or the digital asset store is not active."
       );
     }
 
@@ -94,5 +139,19 @@ export class AccountOpsAgent {
 
     const fallbackPath = path.join(this.config.notificationDir, `${task.id}.txt`);
     await writeTextFile(fallbackPath, `${subject}\n\n${body}\n`);
+  }
+
+  private async deferTask(id: string, reason: string): Promise<void> {
+    const existing = (await this.store.getApprovals()).find((candidate) => candidate.id === id);
+    if (!existing) {
+      return;
+    }
+
+    await this.store.saveApproval({
+      ...existing,
+      status: "waiting",
+      reason,
+      updatedAt: new Date().toISOString()
+    });
   }
 }

@@ -8,14 +8,29 @@ import type {
   RetentionReport,
   RunReport
 } from "../domain/contracts.js";
+import type { AssetPackRecord } from "../domain/digital-assets.js";
+import type {
+  BusinessLedgerEntry,
+  BusinessRunRecord,
+  EngineOverviewReport,
+  ImonEngineState,
+  ManagedBusiness,
+  VpsResourceSnapshot
+} from "../domain/engine.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../lib/fs.js";
 
 type EntityCollectionMap = {
   approvals: ApprovalTask[];
+  assetPacks: AssetPackRecord[];
+  businesses: ManagedBusiness[];
+  businessRuns: BusinessRunRecord[];
   clients: ClientJob[];
+  engineReports: EngineOverviewReport[];
   leads: LeadRecord[];
   offers: OfferConfig[];
   outreach: OutreachDraft[];
+  resourceSnapshots: VpsResourceSnapshot[];
+  revenueLedger: BusinessLedgerEntry[];
   retention: RetentionReport[];
   reports: RunReport[];
 };
@@ -27,10 +42,16 @@ export class FileStore {
     await ensureDir(this.stateDir);
     const collections: Array<keyof EntityCollectionMap> = [
       "approvals",
+      "assetPacks",
+      "businesses",
+      "businessRuns",
       "clients",
+      "engineReports",
       "leads",
       "offers",
       "outreach",
+      "resourceSnapshots",
+      "revenueLedger",
       "retention",
       "reports"
     ];
@@ -42,6 +63,10 @@ export class FileStore {
         await writeJsonFile(filePath, existing);
       })
     );
+
+    const enginePath = this.engineStatePath();
+    const engine = await readJsonFile<ImonEngineState | null>(enginePath, null);
+    await writeJsonFile(enginePath, engine);
   }
 
   async getOffers(): Promise<OfferConfig[]> {
@@ -78,6 +103,32 @@ export class FileStore {
     await this.upsert("clients", client);
   }
 
+  async getManagedBusinesses(): Promise<ManagedBusiness[]> {
+    return this.readCollection("businesses");
+  }
+
+  async getManagedBusiness(id: string): Promise<ManagedBusiness | undefined> {
+    const businesses = await this.getManagedBusinesses();
+    return businesses.find((business) => business.id === id);
+  }
+
+  async saveManagedBusiness(business: ManagedBusiness): Promise<void> {
+    await this.upsert("businesses", business);
+  }
+
+  async getAssetPacks(): Promise<AssetPackRecord[]> {
+    return this.readCollection("assetPacks");
+  }
+
+  async getAssetPack(id: string): Promise<AssetPackRecord | undefined> {
+    const packs = await this.getAssetPacks();
+    return packs.find((pack) => pack.id === id);
+  }
+
+  async saveAssetPack(pack: AssetPackRecord): Promise<void> {
+    await this.upsert("assetPacks", pack);
+  }
+
   async getApprovals(): Promise<ApprovalTask[]> {
     return this.readCollection("approvals");
   }
@@ -110,8 +161,52 @@ export class FileStore {
     await this.upsert("retention", report, (existing) => existing.clientId === report.clientId);
   }
 
+  async getEngineState(): Promise<ImonEngineState | undefined> {
+    return (await readJsonFile<ImonEngineState | null>(this.engineStatePath(), null)) ?? undefined;
+  }
+
+  async saveEngineState(state: ImonEngineState): Promise<void> {
+    await writeJsonFile(this.engineStatePath(), state);
+  }
+
+  async getBusinessRuns(): Promise<BusinessRunRecord[]> {
+    return this.readCollection("businessRuns");
+  }
+
+  async saveBusinessRun(run: BusinessRunRecord): Promise<void> {
+    await this.upsert("businessRuns", run);
+  }
+
+  async getResourceSnapshots(): Promise<VpsResourceSnapshot[]> {
+    return this.readCollection("resourceSnapshots");
+  }
+
+  async saveResourceSnapshot(snapshot: VpsResourceSnapshot): Promise<void> {
+    await this.upsert("resourceSnapshots", snapshot);
+  }
+
+  async getRevenueLedger(): Promise<BusinessLedgerEntry[]> {
+    return this.readCollection("revenueLedger");
+  }
+
+  async saveRevenueLedgerEntry(entry: BusinessLedgerEntry): Promise<void> {
+    await this.upsert("revenueLedger", entry);
+  }
+
+  async getEngineReports(): Promise<EngineOverviewReport[]> {
+    return this.readCollection("engineReports");
+  }
+
+  async saveEngineReport(report: EngineOverviewReport): Promise<void> {
+    await this.upsert("engineReports", report);
+  }
+
   private collectionPath(name: keyof EntityCollectionMap): string {
     return path.join(this.stateDir, `${name}.json`);
+  }
+
+  private engineStatePath(): string {
+    return path.join(this.stateDir, "engine.json");
   }
 
   private async readCollection<K extends keyof EntityCollectionMap>(

@@ -12,6 +12,8 @@ import { SiteBuilderAgent } from "./agents/site-builder.js";
 import { QaReviewerAgent } from "./agents/qa-reviewer.js";
 import { Deployer } from "./agents/deployer.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
+import { ImonEngineAgent } from "./agents/imon-engine.js";
+import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { buildAgencySite } from "./services/agency-site.js";
 
 interface Flags {
@@ -20,6 +22,7 @@ interface Flags {
 
 interface ClientBrief {
   id?: string;
+  businessId?: string;
   leadId?: string;
   clientName: string;
   niche: string;
@@ -84,6 +87,14 @@ function usage(): string {
     "  npm run dev -- qa --client sunrise-plumbing",
     "  npm run dev -- deploy --client sunrise-plumbing",
     "  npm run dev -- retain --client sunrise-plumbing",
+    "  npm run dev -- businesses",
+    "  npm run dev -- engine-sync",
+    "  npm run dev -- engine-report",
+    "  npm run dev -- activate-business --business imon-digital-asset-store",
+    "  npm run dev -- pause-business --business imon-digital-asset-store",
+    "  npm run dev -- vps-artifacts",
+    "  npm run dev -- seed-asset-packs",
+    "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
     "  npm run dev -- report",
     "  npm run dev -- build-agency-site"
@@ -101,6 +112,8 @@ async function buildContext() {
   const qaReviewer = new QaReviewerAgent(config, store);
   const deployer = new Deployer(config, store, orchestrator.getAccountOps());
   const replyHandler = new ReplyHandlerAgent(ai);
+  const imonEngine = new ImonEngineAgent(config, store);
+  const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
 
   return {
     config,
@@ -110,7 +123,9 @@ async function buildContext() {
     siteBuilder,
     qaReviewer,
     deployer,
-    replyHandler
+    replyHandler,
+    imonEngine,
+    digitalAssetFactory
   };
 }
 
@@ -119,6 +134,7 @@ async function createClientFromBrief(store: FileStore, briefPath: string): Promi
   const now = new Date().toISOString();
   const client: ClientJob = {
     id: brief.id ?? slugify(brief.clientName),
+    businessId: brief.businessId ?? "auto-funding-agency",
     leadId: brief.leadId,
     clientName: brief.clientName,
     niche: brief.niche,
@@ -174,15 +190,29 @@ async function handleReply(store: FileStore, replyHandler: ReplyHandlerAgent, le
 
 async function main(): Promise<void> {
   const { command, flags } = parseFlags(process.argv.slice(2));
-  const { config, store, orchestrator, siteBuilder, qaReviewer, deployer, replyHandler } =
+  const {
+    config,
+    store,
+    orchestrator,
+    siteBuilder,
+    qaReviewer,
+    deployer,
+    replyHandler,
+    imonEngine,
+    digitalAssetFactory
+  } =
     await buildContext();
 
   switch (command) {
     case "bootstrap": {
+      await imonEngine.bootstrap();
       await orchestrator.getAccountOps().ensureOperationalApprovals();
       await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
-      await orchestrator.getReports().generateRunReport(["Bootstrap completed."]);
-      logger.info("Seeded offers, generated approval tasks, built the agency site, and wrote an initial run report.");
+      await orchestrator.getReports().generateRunReport(["Bootstrap completed.", "ImonEngine portfolio seeded."]);
+      await imonEngine.writeVpsArtifacts();
+      logger.info(
+        "Seeded offers, bootstrapped ImonEngine, generated approval tasks, built the agency site, and wrote initial reports."
+      );
       break;
     }
     case "prospect": {
@@ -261,6 +291,61 @@ async function main(): Promise<void> {
     case "approvals": {
       const approvals = await store.getApprovals();
       console.log(JSON.stringify(approvals, null, 2));
+      break;
+    }
+    case "businesses": {
+      const businesses = await imonEngine.getPortfolioBusinesses();
+      console.log(JSON.stringify(businesses, null, 2));
+      break;
+    }
+    case "engine-sync": {
+      const report = await imonEngine.sync();
+      logger.info(
+        `Engine synced. ${report.businessCounts.active} active, ${report.businessCounts.ready} ready, recommended concurrency ${report.recommendedConcurrency}.`
+      );
+      break;
+    }
+    case "engine-report": {
+      const report = await imonEngine.sync();
+      console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "activate-business": {
+      const businessId = String(flags.business ?? "");
+      if (!businessId) {
+        throw new Error("Missing --business for activate-business command.");
+      }
+      const business = await imonEngine.activateBusiness(businessId);
+      logger.info(`Activated ${business.name}.`);
+      break;
+    }
+    case "pause-business": {
+      const businessId = String(flags.business ?? "");
+      if (!businessId) {
+        throw new Error("Missing --business for pause-business command.");
+      }
+      const business = await imonEngine.pauseBusiness(businessId);
+      logger.info(`Paused ${business.name}.`);
+      break;
+    }
+    case "vps-artifacts": {
+      const artifacts = await imonEngine.writeVpsArtifacts();
+      logger.info(`Wrote VPS artifacts to ${artifacts.manifestPath}`);
+      break;
+    }
+    case "seed-asset-packs": {
+      const created = await digitalAssetFactory.seedStarterQueue();
+      if (created.length === 0) {
+        await digitalAssetFactory.refreshArtifacts();
+        logger.info("Asset pack queue already exists. Refreshed artifacts.");
+      } else {
+        logger.info(`Seeded ${created.length} asset packs for the Gumroad launch queue.`);
+      }
+      break;
+    }
+    case "asset-packs": {
+      const packs = await store.getAssetPacks();
+      console.log(JSON.stringify(packs, null, 2));
       break;
     }
     case "report": {

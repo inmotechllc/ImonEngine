@@ -2,6 +2,9 @@
 
 ## Daily
 
+- Run `engine-sync` to refresh resource pressure and launch recommendations.
+- Review the ready queue in `businesses` before activating another business.
+- For the digital asset store, run `seed-asset-packs` until a starter queue exists, then work from `runtime/asset-store/<pack-id>/listing.md`.
 - Run `daily-run` against a new or refreshed public business list.
 - Review new approval tasks.
 - Review generated outreach drafts before first live send from a new inbox.
@@ -22,5 +25,6 @@
 
 ## Expansion Path
 
+- Keep the digital asset store and niche content sites active first, then move into faceless social only after platform accounts are warmed.
 - Once 3 retained clients exist, add white-label fulfillment briefs as another `ClientJob` source.
 - Once 10 completed jobs share the same process shape, extract the narrowest repeatable internal tool into a micro-SaaS.

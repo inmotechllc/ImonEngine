@@ -55,6 +55,7 @@ export interface LeadContact {
 
 export interface LeadRecord {
   id: string;
+  businessId?: string;
   businessName: string;
   niche: string;
   geo: string;
@@ -100,6 +101,7 @@ export interface DeploymentTarget {
 
 export interface ClientJob {
   id: string;
+  businessId?: string;
   leadId?: string;
   clientName: string;
   niche: string;
@@ -126,7 +128,7 @@ export interface ApprovalTask {
   reason: string;
   ownerInstructions: string;
   notifyChannel: "email";
-  relatedEntityType: "lead" | "client" | "account" | "workflow";
+  relatedEntityType: "lead" | "client" | "account" | "workflow" | "business" | "engine";
   relatedEntityId: string;
   deadlineAt?: string;
   status: ApprovalStatus;

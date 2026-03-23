@@ -9,10 +9,23 @@ export interface AppConfig {
   previewDir: string;
   reportDir: string;
   notificationDir: string;
+  opsDir: string;
+  assetStoreDir: string;
   openAiApiKey?: string;
   models: {
     fast: string;
     deep: string;
+  };
+  engine: {
+    name: string;
+    timezone: string;
+    hostLabel: string;
+    hostProvider: string;
+    hostPrimaryIp?: string;
+    maxConcurrentBusinesses: number;
+    cpuUtilizationTarget: number;
+    memoryUtilizationTarget: number;
+    minDiskFreeGb: number;
   };
   business: {
     name: string;
@@ -23,6 +36,10 @@ export interface AppConfig {
     approvalEmail: string;
     stripeFounding?: string;
     stripeStandard?: string;
+  };
+  marketplaces: {
+    gumroadSellerEmail?: string;
+    gumroadProfileUrl?: string;
   };
   smtp?: {
     host: string;
@@ -45,13 +62,17 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
   const previewDir = path.join(outputDir, "previews");
   const reportDir = path.join(outputDir, "reports");
   const notificationDir = path.join(outputDir, "notifications");
+  const opsDir = path.join(outputDir, "ops");
+  const assetStoreDir = path.join(outputDir, "asset-store");
 
   await Promise.all([
     ensureDir(outputDir),
     ensureDir(stateDir),
     ensureDir(previewDir),
     ensureDir(reportDir),
-    ensureDir(notificationDir)
+    ensureDir(notificationDir),
+    ensureDir(opsDir),
+    ensureDir(assetStoreDir)
   ]);
 
   const smtpHost = process.env.SMTP_HOST;
@@ -82,10 +103,23 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
     previewDir,
     reportDir,
     notificationDir,
+    opsDir,
+    assetStoreDir,
     openAiApiKey: process.env.OPENAI_API_KEY,
     models: {
       fast: process.env.OPENAI_MODEL_FAST ?? "gpt-4.1-mini",
       deep: process.env.OPENAI_MODEL_DEEP ?? "gpt-5"
+    },
+    engine: {
+      name: process.env.IMON_ENGINE_NAME ?? "ImonEngine",
+      timezone: process.env.IMON_ENGINE_TIMEZONE ?? "America/New_York",
+      hostLabel: process.env.IMON_ENGINE_HOST_LABEL ?? "OpenClaw VPS",
+      hostProvider: process.env.IMON_ENGINE_HOST_PROVIDER ?? "Contabo",
+      hostPrimaryIp: process.env.IMON_ENGINE_HOST_IP,
+      maxConcurrentBusinesses: Number(process.env.IMON_ENGINE_MAX_CONCURRENT_BUSINESSES ?? "2"),
+      cpuUtilizationTarget: Number(process.env.IMON_ENGINE_CPU_TARGET ?? "0.7"),
+      memoryUtilizationTarget: Number(process.env.IMON_ENGINE_MEMORY_TARGET ?? "0.75"),
+      minDiskFreeGb: Number(process.env.IMON_ENGINE_MIN_DISK_FREE_GB ?? "40")
     },
     business: {
       name: process.env.BUSINESS_NAME ?? "Northline Growth Systems",
@@ -96,6 +130,10 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
       approvalEmail: process.env.APPROVAL_EMAIL ?? "owner@example.com",
       stripeFounding: process.env.STRIPE_PAYMENT_LINK_FOUNDING,
       stripeStandard: process.env.STRIPE_PAYMENT_LINK_STANDARD
+    },
+    marketplaces: {
+      gumroadSellerEmail: process.env.GUMROAD_SELLER_EMAIL,
+      gumroadProfileUrl: process.env.GUMROAD_PROFILE_URL
     },
     smtp,
     cloudflare:

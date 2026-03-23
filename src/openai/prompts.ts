@@ -1,4 +1,5 @@
 import type { ClientJob, LeadRecord } from "../domain/contracts.js";
+import type { AssetPackBrief } from "../domain/digital-assets.js";
 
 export function scoringPrompt(lead: LeadRecord): string {
   return [
@@ -44,5 +45,15 @@ export function replyClassificationPrompt(message: string): string {
     "Return JSON with disposition, recommendedStage, nextAction, and approvalRequired.",
     "Allowed dispositions: positive, objection, neutral, unsubscribe.",
     `Reply: ${message}`
+  ].join("\n");
+}
+
+export function assetPackPrompt(brief: AssetPackBrief): string {
+  return [
+    "Create a Gumroad-ready digital asset pack blueprint.",
+    "Return JSON with title, shortDescription, description, suggestedPrice, priceVariants[], tags[], deliverables[], promptSeeds[], productionChecklist[], and listingChecklist[].",
+    "Keep it low-risk, specific, and easy to produce in a first launch sprint.",
+    "Avoid trademarked brands, copyrighted characters, or rights-sensitive content.",
+    `Brief: ${JSON.stringify(brief)}`
   ].join("\n");
 }

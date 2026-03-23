@@ -82,6 +82,19 @@ export const RetentionSchema = z.object({
   upsellCandidate: z.string().min(1)
 });
 
+export const AssetPackBlueprintSchema = z.object({
+  title: z.string().min(1),
+  shortDescription: z.string().min(1),
+  description: z.string().min(1),
+  suggestedPrice: z.number().min(1),
+  priceVariants: z.array(z.number()).min(2),
+  tags: z.array(z.string()).min(5),
+  deliverables: z.array(z.string()).min(3),
+  promptSeeds: z.array(z.string()).min(4),
+  productionChecklist: z.array(z.string()).min(4),
+  listingChecklist: z.array(z.string()).min(4)
+});
+
 export const ReplyClassificationSchema = z.object({
   disposition: z.enum(["positive", "objection", "neutral", "unsubscribe"]),
   recommendedStage: z.enum([

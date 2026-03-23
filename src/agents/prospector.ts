@@ -41,6 +41,7 @@ export class ProspectorAgent {
 
     return {
       id: slugify(record.businessName),
+      businessId: "auto-funding-agency",
       businessName: record.businessName,
       niche: record.niche,
       geo,
