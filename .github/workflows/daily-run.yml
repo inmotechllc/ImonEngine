@@ -1,0 +1,37 @@
+name: daily-run
+
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run daily pipeline
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL_FAST: ${{ vars.OPENAI_MODEL_FAST }}
+          OPENAI_MODEL_DEEP: ${{ vars.OPENAI_MODEL_DEEP }}
+          APPROVAL_EMAIL: ${{ vars.APPROVAL_EMAIL }}
+          BUSINESS_NAME: ${{ vars.BUSINESS_NAME }}
+          BUSINESS_PHONE: ${{ vars.BUSINESS_PHONE }}
+          BUSINESS_SALES_EMAIL: ${{ vars.BUSINESS_SALES_EMAIL }}
+          BUSINESS_SITE_URL: ${{ vars.BUSINESS_SITE_URL }}
+          BUSINESS_DOMAIN: ${{ vars.BUSINESS_DOMAIN }}
+          STRIPE_PAYMENT_LINK_FOUNDING: ${{ vars.STRIPE_PAYMENT_LINK_FOUNDING }}
+          STRIPE_PAYMENT_LINK_STANDARD: ${{ vars.STRIPE_PAYMENT_LINK_STANDARD }}
+        run: npm run daily
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-reports
+          path: runtime/

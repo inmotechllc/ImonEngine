@@ -1,0 +1,37 @@
+{
+  "id": "sunrise-plumbing",
+  "leadId": "summit-ridge-plumbing",
+  "clientName": "Sunrise Plumbing & Drain",
+  "niche": "home services",
+  "geo": "Akron, OH",
+  "primaryPhone": "(330) 555-0180",
+  "primaryEmail": "dispatch@sunriseplumbingdrain.com",
+  "offerId": "founding-offer",
+  "billingStatus": "paid",
+  "formEndpoint": "https://hooks.example.com/forms/sunrise-plumbing",
+  "assets": {
+    "logoText": "Sunrise Plumbing",
+    "brandColors": ["#10212f", "#d26a1f", "#f7efe3", "#fff9f3"],
+    "services": [
+      "Emergency plumbing repair",
+      "Drain cleaning",
+      "Water heater installation"
+    ],
+    "testimonials": [
+      "Fast dispatch and clear communication.",
+      "They fixed the issue without pushing extra work.",
+      "The new site makes it easier for customers to call."
+    ],
+    "reviews": [
+      "Great service and easy scheduling.",
+      "Tech showed up on time and explained the repair clearly.",
+      "Friendly crew and clean work."
+    ]
+  },
+  "intakeNotes": [
+    "Prioritize emergency repair calls.",
+    "Keep copy direct and local.",
+    "Highlight drain cleaning and water heater work."
+  ],
+  "nextAction": "Preview ready for owner review"
+}

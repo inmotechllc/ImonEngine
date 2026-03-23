@@ -1,0 +1,287 @@
+import path from "node:path";
+import { DEFAULT_AGENCY_PROFILE, DEFAULT_OFFERS } from "./domain/defaults.js";
+import type { ClientJob, LeadRecord, OfferConfig } from "./domain/contracts.js";
+import { loadConfig } from "./config.js";
+import { Logger } from "./lib/logger.js";
+import { readJsonFile, readTextFile } from "./lib/fs.js";
+import { slugify } from "./lib/text.js";
+import { AIClient } from "./openai/client.js";
+import { FileStore } from "./storage/store.js";
+import { OrchestratorAgent } from "./agents/orchestrator.js";
+import { SiteBuilderAgent } from "./agents/site-builder.js";
+import { QaReviewerAgent } from "./agents/qa-reviewer.js";
+import { Deployer } from "./agents/deployer.js";
+import { ReplyHandlerAgent } from "./agents/reply-handler.js";
+import { buildAgencySite } from "./services/agency-site.js";
+
+interface Flags {
+  [key: string]: string | boolean | undefined;
+}
+
+interface ClientBrief {
+  id?: string;
+  leadId?: string;
+  clientName: string;
+  niche: string;
+  geo: string;
+  primaryPhone: string;
+  primaryEmail: string;
+  offerId?: string;
+  formEndpoint?: string;
+  billingStatus?: ClientJob["billingStatus"];
+  assets?: ClientJob["assets"];
+  intakeNotes?: string[];
+  nextAction?: string;
+}
+
+const logger = new Logger();
+
+function parseFlags(args: string[]): { command: string; flags: Flags } {
+  const [command = "help", ...rest] = args;
+  const flags: Flags = {};
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index];
+    if (!token?.startsWith("--")) {
+      continue;
+    }
+
+    const key = token.slice(2);
+    const next = rest[index + 1];
+    if (!next || next.startsWith("--")) {
+      flags[key] = true;
+      continue;
+    }
+
+    flags[key] = next;
+    index += 1;
+  }
+
+  return { command, flags };
+}
+
+async function seedOffers(store: FileStore): Promise<void> {
+  const existing = await store.getOffers();
+  const existingIds = new Set(existing.map((offer) => offer.id));
+
+  for (const offer of DEFAULT_OFFERS) {
+    const next: OfferConfig =
+      existing.find((item) => item.id === offer.id) ?? offer;
+    if (!existingIds.has(offer.id) || JSON.stringify(next) !== JSON.stringify(offer)) {
+      await store.saveOffer({ ...next, ...offer });
+    }
+  }
+}
+
+function usage(): string {
+  return [
+    "Usage:",
+    "  npm run dev -- bootstrap",
+    "  npm run dev -- prospect --input examples/prospects/home-services.csv",
+    "  npm run dev -- daily-run --input examples/prospects/home-services.csv",
+    "  npm run dev -- create-client --brief examples/briefs/sunrise-plumbing.json",
+    "  npm run dev -- build-site --client sunrise-plumbing",
+    "  npm run dev -- qa --client sunrise-plumbing",
+    "  npm run dev -- deploy --client sunrise-plumbing",
+    "  npm run dev -- retain --client sunrise-plumbing",
+    "  npm run dev -- approvals",
+    "  npm run dev -- report",
+    "  npm run dev -- build-agency-site"
+  ].join("\n");
+}
+
+async function buildContext() {
+  const config = await loadConfig();
+  const store = new FileStore(config.stateDir);
+  await store.init();
+  await seedOffers(store);
+  const ai = new AIClient(config);
+  const orchestrator = new OrchestratorAgent(config, store, ai);
+  const siteBuilder = new SiteBuilderAgent(ai, config, store);
+  const qaReviewer = new QaReviewerAgent(config, store);
+  const deployer = new Deployer(config, store, orchestrator.getAccountOps());
+  const replyHandler = new ReplyHandlerAgent(ai);
+
+  return {
+    config,
+    store,
+    ai,
+    orchestrator,
+    siteBuilder,
+    qaReviewer,
+    deployer,
+    replyHandler
+  };
+}
+
+async function createClientFromBrief(store: FileStore, briefPath: string): Promise<ClientJob> {
+  const brief = await readJsonFile<ClientBrief>(path.resolve(briefPath), {} as ClientBrief);
+  const now = new Date().toISOString();
+  const client: ClientJob = {
+    id: brief.id ?? slugify(brief.clientName),
+    leadId: brief.leadId,
+    clientName: brief.clientName,
+    niche: brief.niche,
+    geo: brief.geo,
+    primaryPhone: brief.primaryPhone,
+    primaryEmail: brief.primaryEmail,
+    offerId: brief.offerId ?? "founding-offer",
+    siteStatus: "not_started",
+    qaStatus: "pending",
+    billingStatus: brief.billingStatus ?? "deposit_pending",
+    formEndpoint: brief.formEndpoint,
+    deployment: {
+      platform: "local-preview"
+    },
+    assets: brief.assets ?? {},
+    intakeNotes: brief.intakeNotes ?? [],
+    nextAction: brief.nextAction ?? "Send preview for review",
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await store.saveClient(client);
+  if (client.leadId) {
+    const lead = await store.getLead(client.leadId);
+    if (lead) {
+      await store.saveLead({
+        ...lead,
+        stage: "won",
+        updatedAt: now
+      });
+    }
+  }
+  return client;
+}
+
+async function handleReply(store: FileStore, replyHandler: ReplyHandlerAgent, leadId: string, messageFile: string) {
+  const lead = await store.getLead(leadId);
+  if (!lead) {
+    throw new Error(`Lead ${leadId} not found.`);
+  }
+
+  const message = await readTextFile(path.resolve(messageFile));
+  const result = await replyHandler.classify(message);
+  const updated: LeadRecord = {
+    ...lead,
+    stage: result.recommendedStage,
+    lastTouchAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  await store.saveLead(updated);
+  logger.info(`${lead.businessName}: ${result.disposition} -> ${result.nextAction}`);
+}
+
+async function main(): Promise<void> {
+  const { command, flags } = parseFlags(process.argv.slice(2));
+  const { config, store, orchestrator, siteBuilder, qaReviewer, deployer, replyHandler } =
+    await buildContext();
+
+  switch (command) {
+    case "bootstrap": {
+      await orchestrator.getAccountOps().ensureOperationalApprovals();
+      await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
+      await orchestrator.getReports().generateRunReport(["Bootstrap completed."]);
+      logger.info("Seeded offers, generated approval tasks, built the agency site, and wrote an initial run report.");
+      break;
+    }
+    case "prospect": {
+      const input = String(flags.input ?? "");
+      if (!input) {
+        throw new Error("Missing --input for prospect command.");
+      }
+      const leads = await orchestrator.prospect(input);
+      logger.info(`Imported and scored ${leads.length} leads.`);
+      break;
+    }
+    case "daily-run": {
+      const input = typeof flags.input === "string" ? flags.input : undefined;
+      await orchestrator.dailyRun(input);
+      logger.info("Daily run completed.");
+      break;
+    }
+    case "create-client": {
+      const brief = String(flags.brief ?? "");
+      if (!brief) {
+        throw new Error("Missing --brief for create-client command.");
+      }
+      const client = await createClientFromBrief(store, brief);
+      logger.info(`Client ${client.clientName} created with id ${client.id}.`);
+      break;
+    }
+    case "build-site": {
+      const clientId = String(flags.client ?? "");
+      const client = await store.getClient(clientId);
+      if (!client) {
+        throw new Error(`Client ${clientId} not found.`);
+      }
+      const result = await siteBuilder.buildClientSite(client);
+      logger.info(`Built preview at ${result.previewDir}`);
+      break;
+    }
+    case "qa": {
+      const clientId = String(flags.client ?? "");
+      const client = await store.getClient(clientId);
+      if (!client) {
+        throw new Error(`Client ${clientId} not found.`);
+      }
+      const report = await qaReviewer.review(client);
+      logger.info(`QA ${report.passed ? "passed" : "failed"} for ${client.clientName}.`);
+      break;
+    }
+    case "deploy": {
+      const clientId = String(flags.client ?? "");
+      const client = await store.getClient(clientId);
+      if (!client) {
+        throw new Error(`Client ${clientId} not found.`);
+      }
+      const target = await deployer.deploy(client);
+      logger.info(`Deploy target: ${target}`);
+      break;
+    }
+    case "retain": {
+      const clientId = String(flags.client ?? "");
+      const client = await store.getClient(clientId);
+      if (!client) {
+        throw new Error(`Client ${clientId} not found.`);
+      }
+      const report = await orchestrator.getReports().generateRetentionReport(client);
+      logger.info(`Retention report created with upsell: ${report.upsellCandidate}`);
+      break;
+    }
+    case "handle-reply": {
+      const leadId = String(flags.lead ?? "");
+      const messageFile = String(flags["message-file"] ?? "");
+      if (!leadId || !messageFile) {
+        throw new Error("Missing --lead or --message-file for handle-reply command.");
+      }
+      await handleReply(store, replyHandler, leadId, messageFile);
+      break;
+    }
+    case "approvals": {
+      const approvals = await store.getApprovals();
+      console.log(JSON.stringify(approvals, null, 2));
+      break;
+    }
+    case "report": {
+      const reports = await store.getReports();
+      console.log(JSON.stringify(reports.at(-1) ?? null, null, 2));
+      break;
+    }
+    case "build-agency-site": {
+      const output = await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
+      logger.info(`Agency site generated at ${output}`);
+      break;
+    }
+    default: {
+      console.log(usage());
+      break;
+    }
+  }
+}
+
+main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  logger.error(message);
+  process.exitCode = 1;
+});

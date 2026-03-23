@@ -1,0 +1,5 @@
+businessName,niche,city,state,ownerName,email,phone,website,hasWebsite,hasHttps,mobileFriendly,clearOffer,callsToAction,pageSpeedBucket,notes,tags
+Summit Ridge Plumbing,home services,Akron,OH,Chris Bell,chris@summitridgeplumbing.com,(330) 555-0180,http://summitridgeplumbing.com,true,false,false,false,false,slow,"No HTTPS; cluttered hero; CTA buried below fold",plumbing|priority
+Lakefront HVAC,home services,Cleveland,OH,Maya Ellis,hello@lakefronthvac.com,(216) 555-0129,https://lakefronthvac.com,true,true,false,true,false,average,"Mobile menu overlaps the call button",hvac
+Northside Roof Repair,home services,Toledo,OH,,,,,false,false,false,false,false,unknown,"No public website found; direct mail likely but no public email",roofing
+Brightline Cleaning,home services,Columbus,OH,Tara Fox,team@brightlinecleaning.co,(614) 555-0164,https://brightlinecleaning.co,true,true,true,true,true,fast,"Strong execution already",cleaning

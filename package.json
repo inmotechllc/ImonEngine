@@ -1,0 +1,29 @@
+{
+  "name": "auto-funding",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node build/index.js",
+    "test": "tsx --test src/workflows.test.ts",
+    "bootstrap": "tsx src/index.ts bootstrap",
+    "daily": "tsx src/index.ts daily-run --input examples/prospects/home-services.csv",
+    "demo:agency": "tsx src/index.ts build-agency-site",
+    "demo:client": "tsx src/index.ts create-client --brief examples/briefs/sunrise-plumbing.json && tsx src/index.ts build-site --client sunrise-plumbing && tsx src/index.ts qa --client sunrise-plumbing"
+  },
+  "dependencies": {
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.6.1",
+    "nodemailer": "^7.0.10",
+    "openai": "^6.32.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/nodemailer": "^7.0.11",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
