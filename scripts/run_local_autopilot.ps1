@@ -82,3 +82,4 @@ if ($status) {
 }
 
 Write-LogLine "Autopilot work unit finished."
+exit 0
