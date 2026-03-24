@@ -218,6 +218,20 @@ test("store ops rebalance the next asset type instead of endlessly picking wallp
   assert.notEqual(nextType, "wallpaper_pack");
 });
 
+test("store ops reserve Imon for the parent system and scaffold distinct future brand aliases", async () => {
+  const { storeOps } = await setupWorkspace();
+
+  const profiles = await storeOps.ensureSocialProfiles("imon-pod-store");
+  const gmailAlias = profiles.find((profile) => profile.platform === "gmail_alias");
+  const xProfile = profiles.find((profile) => profile.platform === "x");
+
+  assert.equal(gmailAlias?.brandName, "Canvas Current");
+  assert.equal(gmailAlias?.emailAlias, "imonengine+canvascurrent@gmail.com");
+  assert.equal(xProfile?.status, "planned");
+  assert.ok(xProfile?.notes.some((note) => note.includes("simulated clicks")));
+  assert.ok(xProfile?.notes.some((note) => note.includes("manual solve")));
+});
+
 test("store ops import Gumroad and Relay data into a revenue snapshot", async () => {
   const { root, store, imonEngine, digitalAssetFactory, storeOps } = await setupWorkspace();
   await imonEngine.bootstrap();

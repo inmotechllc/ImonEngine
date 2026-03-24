@@ -6,6 +6,7 @@
 - The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.
 - Due Facebook and Pinterest growth posts are now executed from the local runner before new catalog seeding continues.
 - The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.
+- Reserve `ImonEngine` and `Imon` for parent-level accounts or the legacy first store only; new businesses should always get distinct names and `imonengine+<brandhandle>@gmail.com` aliases.
 - Catalog expansion is now paced by config instead of running unbounded:
   - `STORE_MAX_NEW_PACKS_7D`
   - `STORE_MAX_PUBLISHED_PACKS`
@@ -13,6 +14,7 @@
   - `STORE_MAX_OPEN_PACK_QUEUE`
 - Browser-backed publishing is handled by `scripts/publish_gumroad_product.py`.
 - Browser-backed Facebook and Pinterest posting is handled by `scripts/publish_growth_post.py`.
+- X signup should prefer visual input and simulated clicks, then pause for manual owner completion only when an anti-bot or identity challenge appears.
 - Gumroad uploads are only considered complete after the content row shows `Download` and the transient `Cancel` action disappears.
 - Gumroad product media is only considered complete after at least one cover image exists and the square thumbnail no longer shows the `Upload` placeholder.
 - If a listing ever publishes without a square thumbnail, repair it with `npm run dev -- repair-asset-pack-media --pack <id>`.

@@ -6,7 +6,8 @@
 - Use the generated square teasers for the live channel set first: Pinterest pins for the `Imon Digital Assets` board, then Facebook Page posts from the signed-in `Imon` page.
 - Publish due Facebook or Pinterest posts with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`.
 - Review channel readiness in `runtime/ops/social-profiles.md`.
-- X remains in the registry but stays blocked until the Arkose challenge is cleared safely.
+- Reserve `ImonEngine` for the parent system and give future brands their own names plus `imonengine+<brandhandle>@gmail.com` aliases before account signup.
+- X remains in the registry but stays blocked until the Arkose challenge is cleared safely. Use visual input or simulated clicks first, then hand off for manual challenge completion only when the platform forces it.
 - Refresh the scheduled post queue with `npm run dev -- growth-queue`.
 - Review the live queue in `runtime/ops/growth-queue.md`.
 - Rotate product focus weekly in this order:

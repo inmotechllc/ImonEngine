@@ -23,6 +23,14 @@ const DIGITAL_ASSET_STORE_ID = "imon-digital-asset-store";
 const DIGITAL_ASSET_BRAND_NAME = "Imon";
 const DEFAULT_CURRENCY = "USD";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const DEFAULT_BRAND_NAMES: Record<string, string> = {
+  "imon-digital-asset-store": "Imon",
+  "imon-niche-content-sites": "Northbeam Atlas",
+  "imon-faceless-social-brand": "Velora Echo",
+  "imon-micro-saas-factory": "QuietPivot",
+  "imon-pod-store": "Canvas Current",
+  "auto-funding-agency": "Northline Growth Systems"
+};
 
 const GROWTH_CHANNEL_PRIORITY: Record<DigitalAssetType, GrowthChannel[]> = {
   wallpaper_pack: ["pinterest", "x", "facebook_page", "gumroad_update"],
@@ -117,12 +125,37 @@ function assetChannelPriority(assetType: DigitalAssetType): number {
   }
 }
 
+function titleCase(input: string): string {
+  return input
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function defaultBrandNameForBusiness(businessId: string): string {
+  const named = DEFAULT_BRAND_NAMES[businessId];
+  if (named) {
+    return named;
+  }
+
+  const stripped = businessId
+    .replace(/^imon-/, "")
+    .replace(/-store$/, "")
+    .replace(/-factory$/, "")
+    .replace(/-brand$/, "")
+    .replace(/-sites$/, "")
+    .replace(/-agency$/, "");
+
+  return titleCase(stripped) || "Untitled Brand";
+}
+
 function composeGrowthCaption(pack: AssetPackRecord, channel: GrowthChannel): string {
   const cta =
     channel === "gumroad_update"
-      ? "Now live in the ImonEngine store."
+      ? "Now live in the storefront."
       : channel === "facebook_page"
-        ? "See the full pack from the Imon page."
+        ? "See the full pack from the brand page."
         : "See the full pack on Gumroad.";
   return [
     pack.title,
@@ -242,7 +275,7 @@ export class StoreOpsService {
 
   async ensureSocialProfiles(
     businessId = DIGITAL_ASSET_STORE_ID,
-    brandName = DIGITAL_ASSET_BRAND_NAME
+    brandName = defaultBrandNameForBusiness(businessId)
   ): Promise<SocialProfileRecord[]> {
     const baseEmail = this.config.marketplaces.gumroadSellerEmail ?? "imonengine@gmail.com";
     const emailAlias = buildAlias(baseEmail, brandName);
@@ -251,93 +284,174 @@ export class StoreOpsService {
     const current = existing.filter((profile) => profile.businessId === businessId);
     const byPlatform = new Map(current.map((profile) => [profile.platform, profile]));
 
-    const defaults: Array<Omit<SocialProfileRecord, "createdAt" | "updatedAt">> = [
-      {
-        id: `${businessId}-gmail-alias`,
-        businessId,
-        brandName,
-        emailAlias,
-        platform: "gmail_alias",
-        handle: emailAlias,
-        status: "live",
-        notes: ["Alias routes into the primary ImonEngine Gmail inbox."]
-      },
-      {
-        id: `${businessId}-gumroad`,
-        businessId,
-        brandName,
-        emailAlias,
-        platform: "gumroad",
-        handle: "imonengine",
-        profileUrl: this.config.marketplaces.gumroadProfileUrl
-          ? `https://${this.config.marketplaces.gumroadProfileUrl.replace(/^https?:\/\//, "")}`
-          : "https://imonengine.gumroad.com",
-        status: "live",
-        notes: ["Primary store for this business."]
-      },
-      {
-        id: `${businessId}-meta-business`,
-        businessId,
-        brandName,
-        emailAlias,
-        platform: "meta_business",
-        externalId: "1042144572314434",
-        profileUrl: "https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=1042144572314434",
-        status: "live",
-        notes: ["Signed-in Meta Business Suite workspace."]
-      },
-      {
-        id: `${businessId}-facebook-page`,
-        businessId,
-        brandName,
-        emailAlias,
-        platform: "facebook_page",
-        handle: "Imon",
-        externalId: "61577389319663",
-        profileUrl: "https://www.facebook.com/profile.php?id=61577389319663",
-        status: "live",
-        notes: ["Current Facebook Page for the digital asset store business."]
-      },
-      {
-        id: `${businessId}-x`,
-        businessId,
-        brandName,
-        emailAlias,
-        platform: "x",
-        handle: "imon",
-        status: "blocked",
-        blocker: "X signup reaches an Arkose Labs anti-bot challenge after form entry and needs a manual human solve when it appears.",
-        notes: ["Use the alias email for signup, then continue manually only if the Arkose challenge is presented."]
-      },
-      {
-        id: `${businessId}-pinterest`,
-        businessId,
-        brandName,
-        emailAlias,
-        platform: "pinterest",
-        handle: "imonengineimon",
-        profileUrl: "https://www.pinterest.com/imonengineimon/",
-        status: "live",
-        notes: [
-          "Pinterest business profile is live for the digital asset store.",
-          "Primary board: Imon Digital Assets."
-        ]
-      }
-    ];
+    const brandHandle = slugify(brandName).replace(/-/g, "");
+    const defaults: Array<Omit<SocialProfileRecord, "createdAt" | "updatedAt">> =
+      businessId === DIGITAL_ASSET_STORE_ID
+        ? [
+            {
+              id: `${businessId}-gmail-alias`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "gmail_alias",
+              handle: emailAlias,
+              status: "live",
+              notes: ["Alias routes into the primary ImonEngine Gmail inbox."]
+            },
+            {
+              id: `${businessId}-gumroad`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "gumroad",
+              handle: "imonengine",
+              profileUrl: this.config.marketplaces.gumroadProfileUrl
+                ? `https://${this.config.marketplaces.gumroadProfileUrl.replace(/^https?:\/\//, "")}`
+                : "https://imonengine.gumroad.com",
+              status: "live",
+              notes: [
+                "Primary store for this business.",
+                "This is the legacy first-business exception; future brands should not reuse the Imon name."
+              ]
+            },
+            {
+              id: `${businessId}-meta-business`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "meta_business",
+              externalId: "1042144572314434",
+              profileUrl: "https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=1042144572314434",
+              status: "live",
+              notes: ["Signed-in Meta Business Suite workspace."]
+            },
+            {
+              id: `${businessId}-facebook-page`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "facebook_page",
+              handle: "Imon",
+              externalId: "61577389319663",
+              profileUrl: "https://www.facebook.com/profile.php?id=61577389319663",
+              status: "live",
+              notes: ["Current Facebook Page for the digital asset store business."]
+            },
+            {
+              id: `${businessId}-x`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "x",
+              handle: "imon",
+              status: "blocked",
+              blocker:
+                "X signup reaches an Arkose Labs anti-bot challenge after form entry and should hand off to the owner for a manual solve when it appears.",
+              notes: [
+                "Use the alias email plus visual or simulated clicks for the normal signup flow.",
+                "If Arkose appears, pause for a manual owner solve and then resume automation."
+              ]
+            },
+            {
+              id: `${businessId}-pinterest`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "pinterest",
+              handle: "imonengineimon",
+              profileUrl: "https://www.pinterest.com/imonengineimon/",
+              status: "live",
+              notes: [
+                "Pinterest business profile is live for the digital asset store.",
+                "Primary board: Imon Digital Assets."
+              ]
+            }
+          ]
+        : [
+            {
+              id: `${businessId}-gmail-alias`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "gmail_alias",
+              handle: emailAlias,
+              status: "live",
+              notes: [
+                "Alias routes into the primary ImonEngine Gmail inbox.",
+                "Reserve ImonEngine and Imon for the parent system, not for this brand."
+              ]
+            },
+            {
+              id: `${businessId}-facebook-page`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "facebook_page",
+              handle: brandName,
+              status: "planned",
+              notes: [
+                `Create a dedicated Facebook Page named ${brandName} under the parent Meta account.`,
+                `Use ${emailAlias} for any related signup or verification emails.`
+              ]
+            },
+            {
+              id: `${businessId}-meta-business`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "meta_business",
+              status: "planned",
+              notes: [
+                `Add ${brandName} as its own Page/asset under the parent Meta account after the page exists.`,
+                "Do not create a second personal Meta account for the brand."
+              ]
+            },
+            {
+              id: `${businessId}-x`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "x",
+              handle: brandHandle,
+              status: "planned",
+              notes: [
+                `Use ${emailAlias} for signup and prefer visual input or simulated clicks instead of brittle DOM assumptions.`,
+                "If Arkose appears, hand off to the owner for a manual solve and then resume automation."
+              ]
+            },
+            {
+              id: `${businessId}-pinterest`,
+              businessId,
+              brandName,
+              emailAlias,
+              platform: "pinterest",
+              handle: `imonengine${brandHandle}`,
+              status: "planned",
+              notes: [
+                `Create a dedicated Pinterest business profile for ${brandName} once the brand has enough creative inventory.`,
+                `Default board suggestion: ${brandName} Digital Assets.`
+              ]
+            }
+          ];
 
     const saved: SocialProfileRecord[] = [];
     for (const profile of defaults) {
       const existingProfile = byPlatform.get(profile.platform);
+      const preserveLiveProfile = existingProfile?.status === "live";
       const next: SocialProfileRecord = {
         ...profile,
         createdAt: existingProfile?.createdAt ?? now,
         updatedAt: now,
-        status: existingProfile?.status ?? profile.status,
-        blocker: existingProfile?.blocker ?? profile.blocker,
-        handle: existingProfile?.handle ?? profile.handle,
-        profileUrl: existingProfile?.profileUrl ?? profile.profileUrl,
-        externalId: existingProfile?.externalId ?? profile.externalId,
-        notes: existingProfile?.notes?.length ? existingProfile.notes : profile.notes
+        status: preserveLiveProfile ? existingProfile.status : profile.status,
+        blocker: preserveLiveProfile ? existingProfile.blocker ?? profile.blocker : profile.blocker,
+        handle: preserveLiveProfile ? existingProfile.handle ?? profile.handle : profile.handle ?? existingProfile?.handle,
+        profileUrl: preserveLiveProfile
+          ? existingProfile.profileUrl ?? profile.profileUrl
+          : profile.profileUrl ?? existingProfile?.profileUrl,
+        externalId: preserveLiveProfile
+          ? existingProfile.externalId ?? profile.externalId
+          : profile.externalId ?? existingProfile?.externalId,
+        notes: preserveLiveProfile && existingProfile?.notes?.length ? existingProfile.notes : profile.notes
       };
       await this.store.saveSocialProfile(next);
       saved.push(next);

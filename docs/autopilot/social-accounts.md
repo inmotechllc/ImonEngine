@@ -5,6 +5,7 @@
 - Business: `imon-digital-asset-store`
 - Brand name: `Imon`
 - Alias email: `imonengine+imon@gmail.com`
+- Note: `Imon` is the legacy first-business exception. Future businesses should use distinct brand names and their own plus-tag aliases.
 
 ## Current Status
 
@@ -28,3 +29,4 @@
 - The free-channel queue should prefer live channels first.
 - For the current store, that currently means `pinterest` and `facebook_page`.
 - X stays in the registry but should not drive the live queue until the Arkose challenge is cleared.
+- Future X signups should use visual input or simulated clicks first, then hand off for manual challenge completion only when the platform forces it.

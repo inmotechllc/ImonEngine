@@ -158,7 +158,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
   },
   {
     id: "imon-niche-content-sites",
-    name: "Imon Niche Content Sites",
+    name: "Northbeam Atlas Network",
     module: "content-site-network",
     category: "niche_content_site",
     launchPriority: 2,
@@ -176,7 +176,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
       "Feed content performance back into portfolio planning"
     ],
     ownerActions: [
-      "Approve the first niche and domain strategy",
+      "Approve the first niche, domain strategy, and distinct site brand",
       "Connect analytics and affiliate programs",
       "Review monetization disclosures"
     ],
@@ -213,7 +213,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
   },
   {
     id: "imon-faceless-social-brand",
-    name: "Imon Faceless Social Brand",
+    name: "Velora Echo Media",
     module: "social-brand-studio",
     category: "faceless_social_brand",
     launchPriority: 3,
@@ -231,7 +231,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
       "Escalate platform-risk events before account damage compounds"
     ],
     ownerActions: [
-      "Create and warm platform accounts",
+      "Create and warm platform accounts under a distinct creator brand",
       "Approve brand guardrails and moderation settings",
       "Review the first week of posting volume"
     ],
@@ -270,7 +270,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
   },
   {
     id: "imon-micro-saas-factory",
-    name: "Imon Micro-SaaS Factory",
+    name: "QuietPivot Labs",
     module: "micro-saas-factory",
     category: "micro_saas_factory",
     launchPriority: 4,
@@ -288,7 +288,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
       "Reuse portfolio learnings as product features"
     ],
     ownerActions: [
-      "Approve the first MVP niche",
+      "Approve the first MVP niche and brand name",
       "Connect Stripe and support inboxes",
       "Review legal pages before launch"
     ],
@@ -326,7 +326,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
   },
   {
     id: "imon-pod-store",
-    name: "Imon Print-on-Demand Store",
+    name: "Canvas Current",
     module: "pod-lab",
     category: "print_on_demand_store",
     launchPriority: 5,
@@ -346,7 +346,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
     ownerActions: [
       "Connect POD vendor accounts",
       "Set shipping and tax defaults",
-      "Approve the first store theme and niches"
+      "Approve the first store theme, brand name, and niches"
     ],
     launchBlockers: [
       "Print-on-demand vendor integrations and store policies need owner approval."

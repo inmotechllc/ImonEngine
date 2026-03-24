@@ -16,6 +16,9 @@ Every phase agent must follow this protocol.
 - Use any relevant skills, integrations, freeware, free tiers, OpenAI API usage, or VPS tooling that does not require spending money.
 - Prefer repeatable scripts and tracked docs over one-off local-only actions.
 - Use the ImonEngine Gmail account and signed-in browser session when a signup or email step is needed.
+- Reserve `ImonEngine` and `Imon` for parent-system accounts only unless a legacy store already depends on them.
+- Give every new business a distinct, relevant brand name and use `imonengine+<brandhandle>@gmail.com` for signup aliases.
+- For X signup, prefer visual input and simulated clicks for the normal flow, then pause for a manual owner solve if Arkose or a similar human challenge appears.
 - If OpenClaw on the VPS can reduce human effort safely, use it and document how.
 
 ## Required Outputs For Every Phase
