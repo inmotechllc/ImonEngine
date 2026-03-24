@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -15,6 +18,13 @@ def parse_args() -> argparse.Namespace:
         description="Create and publish a Gumroad digital product from a ready-for-upload pack."
     )
     parser.add_argument("--pack-dir", required=True)
+    parser.add_argument("--product-id")
+    parser.add_argument("--edit-url")
+    parser.add_argument(
+        "--content-only",
+        action="store_true",
+        help="Repair or verify the content tab for an existing product instead of creating a new one.",
+    )
     parser.add_argument("--port", type=int)
     return parser.parse_args()
 
@@ -33,13 +43,33 @@ def first_existing(paths: list[Path]) -> Path | None:
     return None
 
 
-def collect_publish_assets(pack_dir: Path) -> dict[str, Any]:
+def slugify_filename(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "download"
+
+
+def pick_source_zip(gumroad_dir: Path, pack: dict[str, Any]) -> Path:
+    zip_files = [path for path in gumroad_dir.glob("*.zip") if path.is_file()]
+    if not zip_files:
+        raise SystemExit(f"No Gumroad zip found in {gumroad_dir}")
+
+    expected_name = f"{slugify_filename(str(pack.get('title', 'download')))}.zip"
+    exact = next((path for path in zip_files if path.name.lower() == expected_name.lower()), None)
+    if exact:
+        return exact
+
+    zip_files.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return zip_files[0]
+
+
+def collect_publish_assets(pack_dir: Path, pack: dict[str, Any]) -> dict[str, Any]:
     gumroad_dir = pack_dir / "gumroad"
     covers_dir = pack_dir / "covers"
 
-    zip_files = sorted(gumroad_dir.glob("*.zip"))
-    if not zip_files:
-        raise SystemExit(f"No Gumroad zip found in {gumroad_dir}")
+    source_zip_path = pick_source_zip(gumroad_dir, pack)
+    temp_dir = Path(tempfile.mkdtemp(prefix="gumroad-upload-"))
+    upload_zip_path = temp_dir / f"{slugify_filename(str(pack.get('title', source_zip_path.stem)))}.zip"
+    shutil.copy2(source_zip_path, upload_zip_path)
 
     cover_files = sorted(
         [
@@ -60,7 +90,9 @@ def collect_publish_assets(pack_dir: Path) -> dict[str, Any]:
     )
 
     return {
-        "zip_path": zip_files[0],
+        "zip_path": upload_zip_path,
+        "source_zip_path": source_zip_path,
+        "temp_dir": temp_dir,
         "cover_files": cover_files[:2],
         "thumbnail_file": thumbnail_file,
     }
@@ -271,16 +303,100 @@ def populate_product_tab(page: CdpPage, pack: dict[str, Any], cover_files: list[
     time.sleep(3)
 
 
-def populate_content_tab(page: CdpPage, edit_url: str, zip_path: Path) -> None:
+def read_content_tab_state(page: CdpPage, zip_path: Path) -> dict[str, Any]:
+    zip_stem = zip_path.stem.lower()
+    state = page.evaluate(
+        f"""
+(() => {{
+  const text = document.body.innerText || '';
+  const lower = text.toLowerCase();
+  const controls = [...document.querySelectorAll('button, a, [role="button"]')]
+    .map((node) => (node.innerText || node.getAttribute('aria-label') || '').trim().toLowerCase())
+    .filter(Boolean);
+  return {{
+    hasStem: lower.includes({js_string(zip_stem)}),
+    hasDownload: controls.some((value) => value === 'download' || value.includes('download')),
+    hasCancel: controls.some((value) => value === 'cancel' || value.includes('cancel')),
+    isEmpty: lower.includes('enter the content you want to sell'),
+    bodySnippet: text.slice(0, 1200)
+  }};
+}})()
+"""
+    )
+    if not isinstance(state, dict):
+        return {
+            "hasStem": False,
+            "hasDownload": False,
+            "hasCancel": False,
+            "isEmpty": True,
+            "bodySnippet": "",
+        }
+    return state
+
+
+def content_tab_ready(state: dict[str, Any]) -> bool:
+    return bool(state.get("hasStem")) and bool(state.get("hasDownload")) and not bool(state.get("hasCancel"))
+
+
+def wait_for_content_upload(page: CdpPage, zip_path: Path, *, timeout: float | None = None) -> dict[str, Any]:
+    if timeout is None:
+        size_mb = zip_path.stat().st_size / (1024 * 1024)
+        timeout = max(180.0, min(420.0, 120.0 + (size_mb * 3.0)))
+    deadline = time.time() + timeout
+    last_state: dict[str, Any] | None = None
+    while time.time() < deadline:
+        last_state = read_content_tab_state(page, zip_path)
+        if content_tab_ready(last_state):
+            return last_state
+        time.sleep(1.0)
+    details = last_state.get("bodySnippet", "") if last_state else ""
+    raise RuntimeError(f"Timed out waiting for Gumroad to finish processing the uploaded file. {details}")
+
+
+def ensure_content_tab(page: CdpPage, edit_url: str, zip_path: Path, *, attempts: int = 3) -> dict[str, Any]:
     page.navigate(f"{edit_url}/content")
     wait_until(page, "location.pathname.endsWith('/edit/content') && !!document.querySelector('input[type=file]')", timeout=30)
-    page.upload_files("input[type=file]", 0, [str(zip_path.resolve())])
-    zip_stem = zip_path.stem
-    wait_until(page, f"document.body.innerText.toLowerCase().includes({js_string(zip_stem.lower())})", timeout=60)
-    action = click_primary_action(page)
-    if action is None:
-        raise RuntimeError("Could not save Gumroad content.")
-    time.sleep(3)
+    initial_state = read_content_tab_state(page, zip_path)
+    if content_tab_ready(initial_state):
+        return {"changed": False, "state": initial_state, "attempts": 0}
+
+    last_state = initial_state
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        page.navigate(f"{edit_url}/content")
+        wait_until(
+            page,
+            "location.pathname.endsWith('/edit/content') && !!document.querySelector('input[type=file]')",
+            timeout=30,
+        )
+        try:
+            page.upload_files("input[type=file]", 0, [str(zip_path.resolve())])
+            last_state = wait_for_content_upload(page, zip_path)
+        except Exception as error:
+            last_error = error
+            time.sleep(2)
+            continue
+        action = click_primary_action(page)
+        if action is None:
+            raise RuntimeError("Could not save Gumroad content.")
+        time.sleep(3)
+        page.navigate(f"{edit_url}/content")
+        wait_until(
+            page,
+            "location.pathname.endsWith('/edit/content') && !!document.querySelector('input[type=file]')",
+            timeout=30,
+        )
+        last_state = read_content_tab_state(page, zip_path)
+        if content_tab_ready(last_state):
+            return {"changed": True, "state": last_state, "attempts": attempt}
+
+    details = last_state.get("bodySnippet", "") if isinstance(last_state, dict) else ""
+    if last_error:
+        raise RuntimeError(
+            f"Gumroad content was still missing after {attempts} upload attempt(s). "
+            f"{last_error} {details}"
+        ) from last_error
+    raise RuntimeError(f"Gumroad content was still missing after {attempts} upload attempt(s). {details}")
 
 
 def populate_receipt_tab(page: CdpPage, edit_url: str, receipt_text: str) -> None:
@@ -348,31 +464,64 @@ def extract_product_urls(page: CdpPage) -> tuple[str, str, str]:
 
 def main() -> int:
     args = parse_args()
+    if args.product_id and args.edit_url:
+        raise SystemExit("Pass either --product-id or --edit-url, not both.")
+    if (args.product_id or args.edit_url) and not args.content_only:
+        raise SystemExit("Existing Gumroad products are only supported with --content-only.")
+
     pack_dir = Path(args.pack_dir).resolve()
     manifest = read_manifest(pack_dir)
-    assets = collect_publish_assets(pack_dir)
+    assets = collect_publish_assets(pack_dir, manifest)
 
     port = args.port or detect_mcp_chrome_port()
-    tab = open_new_tab(port, "https://gumroad.com/products/new")
+    edit_base_url = args.edit_url
+    if not edit_base_url and args.product_id:
+        edit_base_url = f"https://gumroad.com/products/{args.product_id}/edit"
+
+    target_url = f"{edit_base_url}/content" if edit_base_url else "https://gumroad.com/products/new"
+    tab = open_new_tab(port, target_url)
     page = CdpPage(tab["webSocketDebuggerUrl"])
     try:
         page.enable()
-        edit_url = create_product(page, str(manifest["title"]), int(manifest["suggestedPrice"]))
-        edit_base_url = edit_url.split("/content")[0].split("/receipt")[0].split("/share")[0]
-        populate_product_tab(page, manifest, assets["cover_files"])
-        populate_content_tab(page, edit_base_url, assets["zip_path"])
-        populate_receipt_tab(page, edit_base_url, compose_receipt(manifest))
-        publish_if_needed(page, edit_base_url)
+        content_result: dict[str, Any]
+        if edit_base_url:
+            content_result = ensure_content_tab(page, edit_base_url, assets["zip_path"])
+        else:
+            edit_url = create_product(page, str(manifest["title"]), int(manifest["suggestedPrice"]))
+            edit_base_url = edit_url.split("/content")[0].split("/receipt")[0].split("/share")[0]
+            populate_product_tab(page, manifest, assets["cover_files"])
+            content_result = ensure_content_tab(page, edit_base_url, assets["zip_path"])
+            populate_receipt_tab(page, edit_base_url, compose_receipt(manifest))
+            publish_if_needed(page, edit_base_url)
+
+        page.navigate(f"{edit_base_url}/content")
+        wait_until(
+            page,
+            "location.pathname.endsWith('/edit/content') && !!document.querySelector('input[type=file]')",
+            timeout=30,
+        )
+        verification = read_content_tab_state(page, assets["zip_path"])
+        if not content_tab_ready(verification):
+            raise RuntimeError(
+                "Gumroad content verification failed after upload. "
+                f"{verification.get('bodySnippet', '')}"
+            )
+
+        page.navigate(edit_base_url)
+        wait_until(page, "location.pathname.includes('/edit') && document.querySelectorAll('button').length > 0")
         product_id, final_edit_url, product_url = extract_product_urls(page)
         print(
             json.dumps(
                 {
-                    "status": "published",
+                    "status": "verified" if args.content_only else "published",
                     "packId": manifest["id"],
                     "productId": product_id,
                     "productUrl": product_url,
                     "editUrl": final_edit_url,
                     "zipPath": str(assets["zip_path"]),
+                    "sourceZipPath": str(assets["source_zip_path"]),
+                    "contentChanged": bool(content_result.get("changed")),
+                    "uploadAttempts": int(content_result.get("attempts", 0)),
                 },
                 indent=2,
             )
@@ -384,6 +533,7 @@ def main() -> int:
             close_tab(port, str(tab["id"]))
         except Exception:
             pass
+        shutil.rmtree(assets["temp_dir"], ignore_errors=True)
 
 
 if __name__ == "__main__":

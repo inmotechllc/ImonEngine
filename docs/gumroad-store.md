@@ -75,6 +75,7 @@
 - Keep the signed-in automation browser open for Gumroad and Gmail access.
 - If the Playwright wrapper fails to reattach, recover the session with `python scripts/chrome_cdp.py list-tabs`.
 - Publish the next ready pack through the live browser session with `python scripts/publish_gumroad_product.py --pack-dir <pack-dir>`.
+- Repair a published listing's missing download with `npm run dev -- repair-asset-pack-content --pack <id>`.
 - Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.
 
 ## Post-Publish Sync Flow
