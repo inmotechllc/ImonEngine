@@ -95,6 +95,7 @@ function usage(): string {
     "  npm run dev -- vps-artifacts",
     "  npm run dev -- seed-asset-packs",
     "  npm run dev -- stage-asset-pack --pack <id>",
+    "  npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
     "  npm run dev -- report",
@@ -353,6 +354,16 @@ async function main(): Promise<void> {
       const packId = typeof flags.pack === "string" ? flags.pack : undefined;
       const pack = await digitalAssetFactory.stagePack(packId);
       logger.info(`Staged ${pack.title} at ${pack.outputDir}`);
+      break;
+    }
+    case "publish-asset-pack": {
+      const packId = String(flags.pack ?? "");
+      const productUrl = String(flags.url ?? "");
+      if (!packId || !productUrl) {
+        throw new Error("Missing --pack or --url for publish-asset-pack command.");
+      }
+      const pack = await digitalAssetFactory.publishPack(packId, productUrl);
+      logger.info(`Recorded published asset pack ${pack.title} at ${pack.productUrl}`);
       break;
     }
     case "report": {

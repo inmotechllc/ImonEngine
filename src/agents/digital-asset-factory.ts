@@ -274,6 +274,26 @@ export class DigitalAssetFactoryAgent {
     return next;
   }
 
+  async publishPack(id: string, productUrl: string): Promise<AssetPackRecord> {
+    const pack = await this.store.getAssetPack(id);
+    if (!pack) {
+      throw new Error(`Asset pack ${id} not found.`);
+    }
+
+    const publishedAt = nowIso();
+    const next: AssetPackRecord = {
+      ...pack,
+      status: "published",
+      productUrl,
+      publishedAt,
+      updatedAt: publishedAt
+    };
+
+    await this.store.saveAssetPack(next);
+    await this.writePackArtifacts(next);
+    return next;
+  }
+
   private async writePackArtifacts(pack: AssetPackRecord): Promise<void> {
     await writeJsonFile(path.join(pack.outputDir, "manifest.json"), pack);
     await writeTextFile(
@@ -285,6 +305,8 @@ export class DigitalAssetFactoryAgent {
         `Status: ${pack.status}`,
         `Suggested price: $${pack.suggestedPrice}`,
         `Price test points: ${pack.priceVariants.map((value) => `$${value}`).join(", ")}`,
+        ...(pack.productUrl ? [`Product URL: ${pack.productUrl}`] : []),
+        ...(pack.publishedAt ? [`Published at: ${pack.publishedAt}`] : []),
         "",
         "## Summary",
         pack.shortDescription,

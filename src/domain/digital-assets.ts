@@ -37,6 +37,8 @@ export interface AssetPackRecord {
   listingChecklist: string[];
   outputDir: string;
   status: AssetPackStatus;
+  productUrl?: string;
+  publishedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
