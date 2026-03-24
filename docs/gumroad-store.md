@@ -59,13 +59,13 @@
 - Suggested price: `$9`
 - Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-cool-blue-gradients-with-soft-diffused-shadows-blue-haze-desktop-backgrounds-for-operators`
 
-## Ready To Upload
-
-## Planned Queue
-
 - Product: `Cream poster fibers and matte analog grain Cream poster grain textures for creators`
-- Status: `planned`
-- Pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-cream-poster-fibers-and-matte-analog-grain-cream-poster-grain-textures-for-creators`
+- Product URL: `https://imonengine.gumroad.com/l/hmhsrz`
+- Status: `published`
+- Suggested price: `$12`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-cream-poster-fibers-and-matte-analog-grain-cream-poster-grain-textures-for-creators`
+
+## Ready To Upload
 
 ## Repo-Controlled Autopilot
 
@@ -74,6 +74,7 @@
 - VPS wrapper: `scripts/run_vps_autopilot.sh`
 - VPS cron installer: `scripts/install-vps-autopilot.sh`
 - Local Gumroad publisher: `scripts/publish_gumroad_product.py`
+- Local Facebook growth publisher: `scripts/publish_growth_post.py`
 - VPS sync helper: `scripts/sync_vps_repo.py`
 
 ## Browser Recovery
@@ -81,8 +82,6 @@
 - Keep the signed-in automation browser open for Gumroad and Gmail access.
 - If the Playwright wrapper fails to reattach, recover the session with `python scripts/chrome_cdp.py list-tabs`.
 - Publish the next ready pack through the live browser session with `python scripts/publish_gumroad_product.py --pack-dir <pack-dir>`.
-- Repair a published listing's missing thumbnail with `npm run dev -- repair-asset-pack-media --pack <id>`.
-- Repair a published listing's missing download with `npm run dev -- repair-asset-pack-content --pack <id>`.
 - Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.
 
 ## Growth And Revenue Controls
@@ -94,10 +93,6 @@
 - Import Relay CSV transactions: `npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]`
 - Build revenue report: `npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]`
 - Build collective fund report: `npm run dev -- collective-fund-report [--days 30]`
-- Current social registry: `C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\social-profiles.md`
-- Current free-channel queue output: `C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.md`
-- Current revenue output: `C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\revenue-report.md`
-- Current collective fund output: `C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\collective-fund-report.md`
 
 ## Post-Publish Sync Flow
 
