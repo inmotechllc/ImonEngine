@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { AppConfig } from "../config.js";
 import type { AssetPackBrief, AssetPackRecord, DigitalAssetType } from "../domain/digital-assets.js";
-import { writeJsonFile, writeTextFile } from "../lib/fs.js";
+import { ensureDir, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
 import { AIClient, AssetPackBlueprintSchema } from "../openai/client.js";
 import { assetPackPrompt } from "../openai/prompts.js";
@@ -116,6 +116,66 @@ function fallbackBlueprint(brief: AssetPackBrief) {
   };
 }
 
+function refinedTitle(pack: AssetPackRecord): string {
+  if (pack.assetType === "wallpaper_pack") {
+    return "Minimal Productivity Desktop Background Pack";
+  }
+
+  if (pack.assetType === "social_template_pack") {
+    return "Neutral Instagram Carousel Template Pack";
+  }
+
+  if (pack.assetType === "icon_pack") {
+    return "Glassmorphism Icon Set for Indie Builders";
+  }
+
+  return pack.title;
+}
+
+function refinedShortDescription(pack: AssetPackRecord): string {
+  if (pack.assetType === "wallpaper_pack") {
+    return "A focused set of 24 clean 4K wallpapers built for productivity-minded desktops.";
+  }
+
+  if (pack.assetType === "social_template_pack") {
+    return "A neutral carousel template pack for creators who want clean posts without custom design work.";
+  }
+
+  if (pack.assetType === "icon_pack") {
+    return "A polished icon set for app builders who want soft glassmorphism without drawing from scratch.";
+  }
+
+  return pack.shortDescription;
+}
+
+function refinedDescription(pack: AssetPackRecord): string {
+  if (pack.assetType === "wallpaper_pack") {
+    return [
+      "A 24-image wallpaper pack designed for clean workspaces, focus-heavy desktops, and low-distraction setups.",
+      "The style stays minimal, modern, and easy to live with across monitors and laptop displays.",
+      "Built for Gumroad as a fast-to-ship first product with clear visual value."
+    ].join(" ");
+  }
+
+  if (pack.assetType === "social_template_pack") {
+    return [
+      "A ready-to-use Instagram carousel template pack for creators, coaches, and solo businesses.",
+      "The layouts use a restrained neutral palette so the pack feels premium instead of generic.",
+      "Made for quick customization and fast publishing."
+    ].join(" ");
+  }
+
+  if (pack.assetType === "icon_pack") {
+    return [
+      "An 80-icon bundle for indie builders, SaaS prototypes, and UI experiments.",
+      "The set leans into soft glassmorphism so it feels modern without looking noisy.",
+      "Ideal for landing pages, dashboards, and lightweight design systems."
+    ].join(" ");
+  }
+
+  return pack.description;
+}
+
 export class DigitalAssetFactoryAgent {
   constructor(
     private readonly config: AppConfig,
@@ -189,6 +249,31 @@ export class DigitalAssetFactoryAgent {
     return packs;
   }
 
+  async stagePack(id?: string): Promise<AssetPackRecord> {
+    const packs = await this.store.getAssetPacks();
+    const pack =
+      (id ? packs.find((candidate) => candidate.id === id) : undefined) ??
+      packs.find((candidate) => candidate.status === "planned");
+
+    if (!pack) {
+      throw new Error("No asset pack is available to stage.");
+    }
+
+    const next: AssetPackRecord = {
+      ...pack,
+      title: refinedTitle(pack),
+      shortDescription: refinedShortDescription(pack),
+      description: refinedDescription(pack),
+      status: "producing",
+      updatedAt: nowIso()
+    };
+
+    await this.store.saveAssetPack(next);
+    await this.writePackArtifacts(next);
+    await this.writeStageArtifacts(next);
+    return next;
+  }
+
   private async writePackArtifacts(pack: AssetPackRecord): Promise<void> {
     await writeJsonFile(path.join(pack.outputDir, "manifest.json"), pack);
     await writeTextFile(
@@ -220,6 +305,83 @@ export class DigitalAssetFactoryAgent {
         ...pack.productionChecklist.map((item) => `- ${item}`),
         "",
         "## Listing Checklist",
+        ...pack.listingChecklist.map((item) => `- ${item}`)
+      ].join("\n")
+    );
+  }
+
+  private async writeStageArtifacts(pack: AssetPackRecord): Promise<void> {
+    const rawDir = path.join(pack.outputDir, "assets", "raw");
+    const finalDir = path.join(pack.outputDir, "assets", "final");
+    const coversDir = path.join(pack.outputDir, "covers");
+    const gumroadDir = path.join(pack.outputDir, "gumroad");
+    const promptsDir = path.join(pack.outputDir, "prompts");
+
+    await Promise.all([
+      ensureDir(rawDir),
+      ensureDir(finalDir),
+      ensureDir(coversDir),
+      ensureDir(gumroadDir),
+      ensureDir(promptsDir)
+    ]);
+
+    await writeTextFile(
+      path.join(promptsDir, "generation-prompts.md"),
+      [
+        `# ${pack.title}`,
+        "",
+        "Use these prompts to generate or commission the first version of the pack.",
+        "",
+        ...pack.promptSeeds.map((prompt, index) => `${index + 1}. ${prompt}`),
+        "",
+        "## Output Targets",
+        `- Pack size: ${pack.packSize}`,
+        `- Audience: ${pack.audience}`,
+        `- Style: ${pack.style}`,
+        `- Marketplace: ${pack.marketplace}`
+      ].join("\n")
+    );
+
+    await writeTextFile(
+      path.join(gumroadDir, "product-draft.md"),
+      [
+        `# ${pack.title}`,
+        "",
+        `Suggested price: $${pack.suggestedPrice}`,
+        `Price tests: ${pack.priceVariants.map((value) => `$${value}`).join(", ")}`,
+        "",
+        "## Short Description",
+        pack.shortDescription,
+        "",
+        "## Full Description",
+        pack.description,
+        "",
+        "## Deliverables",
+        ...pack.deliverables.map((item) => `- ${item}`),
+        "",
+        "## Tags",
+        pack.tags.join(", ")
+      ].join("\n")
+    );
+
+    await writeTextFile(
+      path.join(pack.outputDir, "production-plan.md"),
+      [
+        `# Production Plan: ${pack.title}`,
+        "",
+        "## Immediate Steps",
+        "- Generate or source the final asset batch.",
+        "- Export the product files into `assets/final/`.",
+        "- Create 2 Gumroad cover images in `covers/`.",
+        "- Add the final zip and screenshots into `gumroad/`.",
+        "",
+        "## Folder Rules",
+        "- `assets/raw/`: loose source outputs and rejected candidates",
+        "- `assets/final/`: cleaned deliverables that go into the product zip",
+        "- `covers/`: Gumroad gallery images and thumbnails",
+        "- `gumroad/`: final listing copy and the upload zip",
+        "",
+        "## Publish Checklist",
         ...pack.listingChecklist.map((item) => `- ${item}`)
       ].join("\n")
     );

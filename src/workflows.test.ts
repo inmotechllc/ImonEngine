@@ -184,3 +184,16 @@ test("digital asset factory seeds Gumroad starter packs", async () => {
   assert.ok(packs.every((pack) => pack.marketplace === "gumroad"));
   assert.ok(packs.every((pack) => pack.listingChecklist.length >= 4));
 });
+
+test("digital asset factory stages the first pack for production", async () => {
+  const { store, imonEngine, digitalAssetFactory } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  await digitalAssetFactory.seedStarterQueue();
+
+  const staged = await digitalAssetFactory.stagePack();
+  const saved = await store.getAssetPack(staged.id);
+
+  assert.ok(saved);
+  assert.equal(saved?.status, "producing");
+  assert.equal(saved?.title, "Minimal Productivity Desktop Background Pack");
+});

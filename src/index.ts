@@ -94,6 +94,7 @@ function usage(): string {
     "  npm run dev -- pause-business --business imon-digital-asset-store",
     "  npm run dev -- vps-artifacts",
     "  npm run dev -- seed-asset-packs",
+    "  npm run dev -- stage-asset-pack --pack <id>",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
     "  npm run dev -- report",
@@ -346,6 +347,12 @@ async function main(): Promise<void> {
     case "asset-packs": {
       const packs = await store.getAssetPacks();
       console.log(JSON.stringify(packs, null, 2));
+      break;
+    }
+    case "stage-asset-pack": {
+      const packId = typeof flags.pack === "string" ? flags.pack : undefined;
+      const pack = await digitalAssetFactory.stagePack(packId);
+      logger.info(`Staged ${pack.title} at ${pack.outputDir}`);
       break;
     }
     case "report": {
