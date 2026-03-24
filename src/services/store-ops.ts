@@ -306,8 +306,8 @@ export class StoreOpsService {
         platform: "x",
         handle: "imon",
         status: "blocked",
-        blocker: "X signup requires a birthdate confirmation that has not been provided to automation.",
-        notes: ["Use alias email for signup when the birthdate can be entered manually or supplied safely."]
+        blocker: "X signup reaches an Arkose Labs anti-bot challenge after form entry and needs a manual human solve when it appears.",
+        notes: ["Use the alias email for signup, then continue manually only if the Arkose challenge is presented."]
       },
       {
         id: `${businessId}-pinterest`,
@@ -315,10 +315,13 @@ export class StoreOpsService {
         brandName,
         emailAlias,
         platform: "pinterest",
-        handle: "imon",
-        status: "blocked",
-        blocker: "Pinterest business signup requires a birthdate confirmation that has not been provided to automation.",
-        notes: ["Use alias email for signup when the birthdate can be entered manually or supplied safely."]
+        handle: "imonengineimon",
+        profileUrl: "https://www.pinterest.com/imonengineimon/",
+        status: "live",
+        notes: [
+          "Pinterest business profile is live for the digital asset store.",
+          "Primary board: Imon Digital Assets."
+        ]
       }
     ];
 

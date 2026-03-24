@@ -12,17 +12,19 @@
 - `meta_business`: live
 - `gumroad`: live
 - `gmail_alias`: live
-- `x`: blocked on birthdate confirmation during signup
-- `pinterest`: blocked on birthdate confirmation during signup
+- `x`: blocked on Arkose anti-bot challenge during signup
+- `pinterest`: live
 
 ## Live URLs
 
 - Facebook Page: `https://www.facebook.com/profile.php?id=61577389319663`
 - Meta Business Suite: `https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=1042144572314434`
 - Gumroad: `https://imonengine.gumroad.com`
+- Pinterest Profile: `https://www.pinterest.com/imonengineimon/`
+- Pinterest Board: `Imon Digital Assets`
 
 ## Growth Rule
 
 - The free-channel queue should prefer live channels first.
-- For the current store, that currently means `facebook_page`.
-- X and Pinterest stay in the registry but do not drive the live queue until the signup blockers are cleared.
+- For the current store, that currently means `pinterest` and `facebook_page`.
+- X stays in the registry but should not drive the live queue until the Arkose challenge is cleared.
