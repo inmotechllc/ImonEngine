@@ -59,6 +59,7 @@ npm run dev -- retain --client sunrise-plumbing
 - `npm run dev -- vps-artifacts`
 - `npm run dev -- seed-asset-packs`
 - `npm run dev -- stage-asset-pack --pack <id>`
+- `npm run dev -- ready-asset-pack --pack <id>`
 - `npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>`
 - `npm run dev -- asset-packs`
 - `npm run dev -- approvals`
@@ -95,5 +96,6 @@ npm run dev -- retain --client sunrise-plumbing
 - `ImonEngine` does not auto-activate new businesses blindly. It ranks what should launch next and checks the VPS before you promote another business into the active set.
 - The first live business path is Gumroad-first. `GUMROAD_SELLER_EMAIL` is enough to connect the seller identity before you buy a business inbox.
 - After a Gumroad product goes live, record it with `publish-asset-pack`, then run `engine-sync` so ImonEngine reflects the live store state.
+- When a generated pack is complete but not yet published, mark it with `ready-asset-pack` so the queue distinguishes upload-ready products from drafts.
 - Outreach validation rejects guarantee language and unsupported performance claims by default.
 - The stack is file-backed so it can run before you add a database or hosted queue.

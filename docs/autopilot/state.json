@@ -1,0 +1,47 @@
+{
+  "program": "imonengine-store-autopilot",
+  "status": "active",
+  "currentPhase": "phase-01-product-factory-expansion",
+  "browserSession": {
+    "required": true,
+    "note": "Keep the signed-in ImonEngine browser session open for Gumroad and Gmail access."
+  },
+  "phases": [
+    {
+      "id": "phase-01-product-factory-expansion",
+      "title": "Product Factory Expansion",
+      "status": "in_progress",
+      "goal": "Finish the second digital asset and grow the store catalog toward five products."
+    },
+    {
+      "id": "phase-02-store-conversion-automation",
+      "title": "Store Conversion Automation",
+      "status": "pending",
+      "goal": "Improve storefront conversion and Gumroad-native sales flows."
+    },
+    {
+      "id": "phase-03-growth-automation",
+      "title": "Growth Automation",
+      "status": "pending",
+      "goal": "Create no-cost traffic and promotion workflows that support store sales."
+    },
+    {
+      "id": "phase-04-autonomous-operations-hardening",
+      "title": "Autonomous Operations Hardening",
+      "status": "pending",
+      "goal": "Improve ImonEngine, VPS workflows, and operational resilience for the store lane."
+    },
+    {
+      "id": "phase-05-final-review-and-notification",
+      "title": "Final Review And Notification",
+      "status": "pending",
+      "goal": "Close out the roadmap, update docs, sync the VPS, and email completion."
+    }
+  ],
+  "notes": [
+    "The first Gumroad product is live.",
+    "The second product bundle is generated and marked ready_for_upload inside ImonEngine.",
+    "Phase 1 should finish publishing the second product and create at least 3 additional products.",
+    "If Playwright file uploads fail, recover the automation browser first or use an alternate safe browser-upload path before publishing."
+  ]
+}

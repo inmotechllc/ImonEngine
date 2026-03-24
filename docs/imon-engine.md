@@ -33,6 +33,7 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- vps-artifacts`
 - `npm run dev -- seed-asset-packs`
 - `npm run dev -- stage-asset-pack --pack <id>`
+- `npm run dev -- ready-asset-pack --pack <id>`
 - `npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>`
 - `npm run dev -- asset-packs`
 
@@ -57,7 +58,8 @@ The first two businesses are marked `ready` by default because they have the lig
 ## Gumroad Publish Flow
 
 1. Stage the selected pack.
-2. Publish it on Gumroad.
-3. Record the live URL with `publish-asset-pack`.
-4. Run `engine-sync`.
-5. Review `runtime/ops/engine-overview.json` again before moving to the next pack.
+2. When generation is complete, mark it with `ready-asset-pack`.
+3. Publish it on Gumroad.
+4. Record the live URL with `publish-asset-pack`.
+5. Run `engine-sync`.
+6. Review `runtime/ops/engine-overview.json` again before moving to the next pack.

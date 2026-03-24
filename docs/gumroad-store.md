@@ -27,6 +27,22 @@
 - `Stripe` is deferred for direct checkout and can stay out of the critical path while Gumroad is the active storefront.
 - The store uses the free Gumroad profile and the existing Gmail account instead of a paid support inbox.
 
+## Second Product Ready
+
+- Product: `Neutral Instagram Carousel Template Pack`
+- Gumroad draft URL: `https://imonengine.gumroad.com/l/wvhzrhl`
+- Local pack status: `ready_for_upload`
+- Upload zip: `runtime/asset-store/gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators/gumroad/neutral-instagram-carousel-template-pack.zip`
+- Main cover: `runtime/asset-store/gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators/covers/cover-01.png`
+- Square thumbnail: `runtime/asset-store/gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators/covers/thumbnail-square.png`
+- Planned price: `$12`
+- Note: the bundle is generated and tracked, but browser upload still depends on a session/file-path workflow that Phase 1 should finish or work around.
+- Generated bundle:
+  - editable PowerPoint deck
+  - quick-start PDF
+  - Gumroad cover set
+  - upload zip
+
 ## Post-Publish Sync Flow
 
 After a product is published on Gumroad:

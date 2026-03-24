@@ -294,6 +294,23 @@ export class DigitalAssetFactoryAgent {
     return next;
   }
 
+  async markReadyForUpload(id: string): Promise<AssetPackRecord> {
+    const pack = await this.store.getAssetPack(id);
+    if (!pack) {
+      throw new Error(`Asset pack ${id} not found.`);
+    }
+
+    const next: AssetPackRecord = {
+      ...pack,
+      status: "ready_for_upload",
+      updatedAt: nowIso()
+    };
+
+    await this.store.saveAssetPack(next);
+    await this.writePackArtifacts(next);
+    return next;
+  }
+
   private async writePackArtifacts(pack: AssetPackRecord): Promise<void> {
     await writeJsonFile(path.join(pack.outputDir, "manifest.json"), pack);
     await writeTextFile(
