@@ -61,11 +61,33 @@ if ($status) {
       Write-LogLine "Pushed autopilot changes to GitHub."
 
       if ($env:IMON_ENGINE_VPS_PASSWORD) {
-        & python scripts\sync_vps_repo.py `
-          --upload-file "$repoRoot\\runtime\\state\\assetPacks.json::/opt/imon-engine/runtime/state/assetPacks.json" `
-          --post-command "cd /opt/imon-engine && npm run build" `
-          --post-command "cd /opt/imon-engine && npm run dev -- engine-sync" `
-          --post-command "cd /opt/imon-engine && npm run dev -- vps-artifacts" *>> $logPath
+        $uploadSpecs = @(
+          "$repoRoot\\runtime\\state\\assetPacks.json::/opt/imon-engine/runtime/state/assetPacks.json",
+          "$repoRoot\\runtime\\state\\growthQueue.json::/opt/imon-engine/runtime/state/growthQueue.json",
+          "$repoRoot\\runtime\\state\\growthPolicies.json::/opt/imon-engine/runtime/state/growthPolicies.json",
+          "$repoRoot\\runtime\\state\\allocationPolicies.json::/opt/imon-engine/runtime/state/allocationPolicies.json",
+          "$repoRoot\\runtime\\state\\allocationSnapshots.json::/opt/imon-engine/runtime/state/allocationSnapshots.json",
+          "$repoRoot\\runtime\\state\\salesTransactions.json::/opt/imon-engine/runtime/state/salesTransactions.json"
+        )
+
+        $syncArgs = @(
+          "scripts\\sync_vps_repo.py"
+        )
+        foreach ($uploadSpec in $uploadSpecs) {
+          if (Test-Path ($uploadSpec.Split("::")[0])) {
+            $syncArgs += "--upload-file"
+            $syncArgs += $uploadSpec
+          }
+        }
+        $syncArgs += @(
+          "--post-command", "cd /opt/imon-engine && npm run build",
+          "--post-command", "cd /opt/imon-engine && npm run dev -- engine-sync",
+          "--post-command", "cd /opt/imon-engine && npm run dev -- growth-queue",
+          "--post-command", "cd /opt/imon-engine && npm run dev -- revenue-report",
+          "--post-command", "cd /opt/imon-engine && npm run dev -- vps-artifacts"
+        )
+
+        & python @syncArgs *>> $logPath
 
         if ($LASTEXITCODE -eq 0) {
           Write-LogLine "Synced autopilot changes to the VPS."
