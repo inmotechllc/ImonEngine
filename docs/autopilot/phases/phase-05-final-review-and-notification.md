@@ -20,6 +20,7 @@ Verify the roadmap end state, finalize documentation, sync the VPS, and notify t
 
 After the email is sent:
 
-- Mark the program `complete` in [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
+- Mark Phase 5 `completed` in [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
+- Move Phase 6 to `in_progress` so the store keeps operating after the first roadmap closes.
 - Update [log.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/log.md).
-- Do not schedule another phase automation.
+- Keep the repo-controlled scheduler active.

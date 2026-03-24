@@ -23,24 +23,40 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
+$report = $null
+if (Test-Path $runReportPath) {
+  try {
+    $report = Get-Content $runReportPath -Raw | ConvertFrom-Json
+  } catch {
+    $report = $null
+  }
+}
+
+if ($report -and -not $report.changed -and [string]$report.status -eq "idle") {
+  Write-LogLine "No durable work was produced in this run."
+  exit 0
+}
+
 $status = git status --porcelain
 if ($status) {
   git add .
   $summary = "Autopilot work unit"
-  if (Test-Path $runReportPath) {
+  if ($report -and $report.summary) {
+    $summary = [string]$report.summary
+  } elseif (Test-Path $runReportPath) {
     try {
-      $report = Get-Content $runReportPath -Raw | ConvertFrom-Json
-      if ($report.summary) {
-        $summary = [string]$report.summary
-      }
+      $summary = [string]((Get-Content $runReportPath -Raw | ConvertFrom-Json).summary)
     } catch {
       $summary = "Autopilot work unit"
     }
   }
+  if ([string]::IsNullOrWhiteSpace($summary)) {
+    $summary = "Autopilot work unit"
+  }
 
   git commit -m "Autopilot: $summary" *>> $logPath
   if ($LASTEXITCODE -eq 0) {
-    git push *>> $logPath
+    git push origin HEAD:main *>> $logPath
     if ($LASTEXITCODE -eq 0) {
       Write-LogLine "Pushed autopilot changes to GitHub."
 

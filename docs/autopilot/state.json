@@ -1,7 +1,7 @@
 {
   "program": "imonengine-store-autopilot",
-  "status": "completed",
-  "currentPhase": "phase-05-final-review-and-notification",
+  "status": "active",
+  "currentPhase": "phase-06-continuous-store-operations",
   "browserSession": {
     "required": true,
     "note": "Keep the signed-in ImonEngine browser session open for Gumroad and Gmail access."
@@ -36,6 +36,12 @@
       "title": "Final Review And Notification",
       "status": "completed",
       "goal": "Close out the roadmap, update docs, sync the VPS, and email completion."
+    },
+    {
+      "id": "phase-06-continuous-store-operations",
+      "title": "Continuous Store Operations",
+      "status": "in_progress",
+      "goal": "Keep seeding, staging, and building low-support store products after the first roadmap email."
     }
   ],
   "notes": [

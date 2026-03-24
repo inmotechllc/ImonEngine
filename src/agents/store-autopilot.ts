@@ -20,6 +20,43 @@ const BUILDERS: Partial<Record<DigitalAssetType, string>> = {
   texture_pack: "build_texture_pack.py"
 };
 
+const CONTINUOUS_BRIEFS: Array<{
+  niche: string;
+  assetType: DigitalAssetType;
+  style: string;
+  audience: string;
+  packSize: number;
+}> = [
+  {
+    niche: "Charcoal developer desktop backgrounds",
+    assetType: "wallpaper_pack",
+    style: "charcoal gradients with low-contrast geometry",
+    audience: "developers and product teams",
+    packSize: 16
+  },
+  {
+    niche: "Stone paper textures for pitch decks",
+    assetType: "texture_pack",
+    style: "stone fibers and quiet grain overlays",
+    audience: "consultants and pitch-deck designers",
+    packSize: 24
+  },
+  {
+    niche: "Blue haze desktop backgrounds for operators",
+    assetType: "wallpaper_pack",
+    style: "cool blue gradients with soft diffused shadows",
+    audience: "operators and remote teams",
+    packSize: 16
+  },
+  {
+    niche: "Cream poster grain textures for creators",
+    assetType: "texture_pack",
+    style: "cream poster fibers and matte analog grain",
+    audience: "content creators and brand designers",
+    packSize: 24
+  }
+];
+
 type AutopilotPhaseStatus = "pending" | "in_progress" | "completed";
 
 interface AutopilotPhase {
@@ -90,7 +127,6 @@ export class StoreAutopilotAgent {
         details: ["No further scheduled work is required."],
         changed: false
       };
-      await this.appendLog(result);
       await this.writeRunReport(result);
       return result;
     }
@@ -112,6 +148,9 @@ export class StoreAutopilotAgent {
       case "phase-05-final-review-and-notification":
         result = await this.runPhaseFive(state);
         break;
+      case "phase-06-continuous-store-operations":
+        result = await this.runPhaseSix(state);
+        break;
       default:
         result = {
           phaseId: state.currentPhase,
@@ -128,7 +167,9 @@ export class StoreAutopilotAgent {
       await this.imonEngine.writeVpsArtifacts();
     }
 
-    await this.appendLog(result);
+    if (result.changed || result.status !== "idle") {
+      await this.appendLog(result);
+    }
     await this.writeRunReport(result);
     return result;
   }
@@ -372,14 +413,67 @@ export class StoreAutopilotAgent {
       };
     }
 
-    await this.completeProgram(state);
+    await this.advancePhase(state, state.currentPhase);
     return {
       phaseId: "phase-05-final-review-and-notification",
       status: "completed",
-      summary: "Phase 5 is complete. The final review is written and the owner notification email was sent.",
+      summary: "Phase 5 is complete. The final review is written, the owner notification email was sent, and continuous store ops are active.",
       details: [finalReviewPath, finalEmailPath, "Sent Gmail notification to joshuabigaud@gmail.com"],
       changed: true,
       phaseAdvanced: true
+    };
+  }
+
+  private async runPhaseSix(state: AutopilotState): Promise<AutopilotRunResult> {
+    const packs = await this.store.getAssetPacks();
+    const producing = packs.find((pack) => pack.status === "producing");
+    if (producing) {
+      const buildOutput = await this.buildPack(producing);
+      return {
+        phaseId: state.currentPhase,
+        status: "progress",
+        summary: `Built ${producing.title} in continuous store-ops mode.`,
+        details: [`Builder: ${path.basename(buildOutput.builderPath)}`, ...buildOutput.details],
+        changed: true
+      };
+    }
+
+    const planned = packs.find((pack) => pack.status === "planned");
+    if (planned) {
+      const staged = await this.digitalAssetFactory.stagePack(planned.id);
+      return {
+        phaseId: state.currentPhase,
+        status: "progress",
+        summary: `Staged ${staged.title} in continuous store-ops mode.`,
+        details: [`Pack id: ${staged.id}`, `Asset type: ${staged.assetType}`, `Output dir: ${staged.outputDir}`],
+        changed: true
+      };
+    }
+
+    const nextBrief = this.getNextContinuousBrief(packs);
+    if (nextBrief) {
+      const created = await this.digitalAssetFactory.createPack({
+        ...nextBrief,
+        marketplace: "gumroad"
+      });
+      return {
+        phaseId: state.currentPhase,
+        status: "progress",
+        summary: `Seeded a new continuous pack brief: ${created.title}.`,
+        details: [`Created ${created.id}`, `Asset type: ${created.assetType}`, `Output dir: ${created.outputDir}`],
+        changed: true
+      };
+    }
+
+    return {
+      phaseId: state.currentPhase,
+      status: "idle",
+      summary: "Continuous store operations are caught up. No new brief was needed in this run.",
+      details: [
+        "Published and ready-for-upload packs remain documented.",
+        "The next run will continue if a new brief is seeded or a staged pack appears."
+      ],
+      changed: false
     };
   }
 
@@ -387,6 +481,32 @@ export class StoreAutopilotAgent {
     const publishedCount = packs.filter((pack) => pack.status === "published").length;
     const builtCount = packs.filter((pack) => READY_OR_PUBLISHED_STATUSES.includes(pack.status)).length;
     return publishedCount >= 2 && builtCount >= PHASE_ONE_TARGET_PACK_COUNT;
+  }
+
+  private getNextContinuousBrief(packs: AssetPackRecord[]): {
+    niche: string;
+    assetType: DigitalAssetType;
+    style: string;
+    audience: string;
+    packSize: number;
+  } | null {
+    const existingNiches = new Set(packs.map((pack) => pack.niche));
+    const queued = CONTINUOUS_BRIEFS.find((brief) => !existingNiches.has(brief.niche));
+    if (queued) {
+      return queued;
+    }
+
+    const generatedWallpapers = packs.filter((pack) =>
+      pack.niche.startsWith("Low-noise desktop backgrounds volume")
+    ).length;
+
+    return {
+      niche: `Low-noise desktop backgrounds volume ${generatedWallpapers + 1}`,
+      assetType: "wallpaper_pack",
+      style: "smoky neutral gradients with subtle geometry",
+      audience: "operators, developers, and creator workspaces",
+      packSize: 14
+    };
   }
 
   private async buildPack(pack: AssetPackRecord): Promise<{ builderPath: string; details: string[] }> {

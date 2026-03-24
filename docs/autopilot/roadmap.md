@@ -17,6 +17,7 @@ The program ends only when all of the following are true:
 3. Automate the first sales and growth loops.
 4. Harden the operating system around the store so ImonEngine can run it smoothly on the VPS.
 5. Close the loop with documentation, state handoff, and final notification.
+6. Continue evergreen store operations after the first roadmap closes.
 
 ## Ordered Phases
 
@@ -54,6 +55,12 @@ The program ends only when all of the following are true:
 - Update the roadmap, handoff docs, and store docs with final status.
 - Commit, push, and sync the final changes.
 - Use the signed-in browser session to send a completion email to `joshuabigaud@gmail.com`.
+
+### Phase 6: Continuous Store Operations
+
+- Keep the digital asset store moving after the first completion email.
+- Seed, stage, and build additional low-support asset packs when the queue is empty.
+- Leave the process evergreen so the hourly runner continues doing useful work instead of idling permanently.
 
 ## Global Constraints
 
