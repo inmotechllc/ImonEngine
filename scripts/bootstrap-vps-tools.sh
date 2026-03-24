@@ -33,6 +33,8 @@ ensure_base_packages() {
     gnupg \
     jq \
     lsb-release \
+    python3-pip \
+    python3-venv \
     unzip \
     x11-utils \
     xauth \
@@ -88,6 +90,12 @@ ensure_playwright() {
   playwright install --with-deps chromium
 }
 
+ensure_python_automation_deps() {
+  log "Installing Python automation dependencies."
+  python3 -m pip install --break-system-packages --upgrade pip
+  python3 -m pip install --break-system-packages pillow websocket-client
+}
+
 ensure_codex() {
   if command -v codex >/dev/null 2>&1; then
     log "Codex CLI already installed."
@@ -129,6 +137,8 @@ RUN apt-get update && \
 
 RUN npm install -g @openai/codex playwright && \
     playwright install --with-deps chromium
+
+RUN python3 -m pip install --break-system-packages pillow websocket-client
 
 WORKDIR /workspace
 CMD ["sleep", "infinity"]
@@ -185,6 +195,7 @@ main() {
   ensure_docker
   ensure_chrome
   ensure_playwright
+  ensure_python_automation_deps
   ensure_codex
   ensure_dir "$CHROME_PROFILE_DIR"
   ensure_dir "$STATE_DIR"
