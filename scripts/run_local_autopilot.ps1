@@ -62,6 +62,7 @@ if ($status) {
 
       if ($env:IMON_ENGINE_VPS_PASSWORD) {
         & python scripts\sync_vps_repo.py `
+          --upload-file "$repoRoot\\runtime\\state\\assetPacks.json::/opt/imon-engine/runtime/state/assetPacks.json" `
           --post-command "cd /opt/imon-engine && npm run build" `
           --post-command "cd /opt/imon-engine && npm run dev -- engine-sync" `
           --post-command "cd /opt/imon-engine && npm run dev -- vps-artifacts" *>> $logPath

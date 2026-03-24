@@ -4,7 +4,9 @@
 
 - Install with `powershell -ExecutionPolicy Bypass -File scripts/install-windows-autopilot.ps1`.
 - The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.
-- The local runner executes one work unit, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.
+- The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.
+- Browser-backed publishing is handled by `scripts/publish_gumroad_product.py`.
+- The VPS sync step now uploads `runtime/state/assetPacks.json` so published Gumroad URLs are mirrored into `/opt/imon-engine` even though `runtime/` is not stored in git.
 
 ## VPS Scheduler
 

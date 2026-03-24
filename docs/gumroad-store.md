@@ -47,7 +47,7 @@
 - Suggested price: `$9`
 - Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-charcoal-gradients-with-low-contrast-geometry-charcoal-developer-desktop-backgrounds`
 
-- Product: `Muted Paper Grain Texture Pack`
+- Product: `Stone Paper Texture Pack for Pitch Decks`
 - Product URL: `https://imonengine.gumroad.com/l/yclwyd`
 - Status: `published`
 - Suggested price: `$14`
@@ -63,6 +63,12 @@
 - VPS cron installer: `scripts/install-vps-autopilot.sh`
 - Local Gumroad publisher: `scripts/publish_gumroad_product.py`
 - VPS sync helper: `scripts/sync_vps_repo.py`
+
+## Continuous Loop
+
+- Phase 6 now publishes one `ready_for_upload` pack before it stages or seeds more work.
+- Once the ready queue is empty, the next hourly run returns to `planned -> producing -> ready_for_upload -> published`.
+- The current next brief is `Blue haze desktop backgrounds for operators`.
 
 ## Browser Recovery
 
