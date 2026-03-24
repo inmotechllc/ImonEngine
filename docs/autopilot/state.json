@@ -40,8 +40,9 @@
   ],
   "notes": [
     "The first Gumroad product is live.",
-    "The second product bundle is generated and marked ready_for_upload inside ImonEngine.",
-    "Phase 1 should finish publishing the second product and create at least 3 additional products.",
-    "If Playwright file uploads fail, recover the automation browser first or use an alternate safe browser-upload path before publishing."
+    "The second Gumroad product is live and should be tracked as published inside ImonEngine.",
+    "The local Codex automation `Store Autopilot` is active on an hourly schedule for this workspace.",
+    "Phase 1 should create at least 3 additional products now that the first two are live.",
+    "If Playwright cannot reattach to the signed-in browser, use the CDP fallback script against the active mcp-chrome session."
   ]
 }

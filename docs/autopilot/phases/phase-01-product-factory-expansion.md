@@ -12,7 +12,7 @@ Expand the digital asset store from one live product to a repeatable factory wit
 
 ## Required Outputs
 
-- The second product is `ready_for_upload` or `published`.
+- The second product is `published`.
 - At least 3 additional product directories exist with real deliverables, covers, listing copy, and upload zips.
 - Product-generation scripts are improved if that reduces future manual work.
 - [docs/gumroad-store.md](C:/AIWorkspace/Projects/Auto-Funding/docs/gumroad-store.md) reflects the expanded catalog.
@@ -22,6 +22,7 @@ Expand the digital asset store from one live product to a repeatable factory wit
 - Reuse [build_social_template_pack.py](C:/AIWorkspace/Projects/Auto-Funding/scripts/build_social_template_pack.py) or extend it.
 - Prefer templates, icon packs, wallpaper packs, checklists, prompt packs, and similar assets that do not require heavy support.
 - Use the signed-in Gumroad browser session to publish when file-upload constraints can be solved safely.
+- If the Playwright wrapper fails against the existing browser, use [chrome_cdp.py](C:/AIWorkspace/Projects/Auto-Funding/scripts/chrome_cdp.py) to keep the session alive instead of starting over.
 - Use free tooling only.
 
 ## Completion Criteria

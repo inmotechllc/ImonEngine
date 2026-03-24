@@ -14,6 +14,7 @@ Then:
 - Commit and push durable repo changes.
 - Sync `/opt/imon-engine` on the VPS.
 - Keep the dedicated signed-in browser session open when possible.
+- If the Playwright browser wrapper cannot reattach but the signed-in automation browser is still open, use [scripts/chrome_cdp.py](C:/AIWorkspace/Projects/Auto-Funding/scripts/chrome_cdp.py) against the active `mcp-chrome` session instead of restarting the browser.
 - Use free tiers, the ImonEngine browser session, OpenAI API usage, and OpenClaw/VPS access when they reduce human intervention without spending money.
 - Advance the phase state when the current phase is complete.
 - Continue this loop until the final phase sends the completion email to `joshuabigaud@gmail.com`.
