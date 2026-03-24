@@ -19,11 +19,13 @@ import type {
 } from "../domain/engine.js";
 import type {
   CatalogGrowthPolicy,
+  CollectiveFundSnapshot,
   GrowthWorkItem,
   RevenueAllocationPolicy,
   RevenueAllocationSnapshot,
   SalesTransaction
 } from "../domain/store-ops.js";
+import type { SocialProfileRecord } from "../domain/social.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../lib/fs.js";
 
 type EntityCollectionMap = {
@@ -33,6 +35,7 @@ type EntityCollectionMap = {
   businesses: ManagedBusiness[];
   businessRuns: BusinessRunRecord[];
   clients: ClientJob[];
+  collectiveSnapshots: CollectiveFundSnapshot[];
   growthQueue: GrowthWorkItem[];
   growthPolicies: CatalogGrowthPolicy[];
   engineReports: EngineOverviewReport[];
@@ -43,6 +46,7 @@ type EntityCollectionMap = {
   resourceSnapshots: VpsResourceSnapshot[];
   revenueLedger: BusinessLedgerEntry[];
   salesTransactions: SalesTransaction[];
+  socialProfiles: SocialProfileRecord[];
   retention: RetentionReport[];
   reports: RunReport[];
 };
@@ -60,6 +64,7 @@ export class FileStore {
       "businesses",
       "businessRuns",
       "clients",
+      "collectiveSnapshots",
       "growthPolicies",
       "growthQueue",
       "engineReports",
@@ -69,6 +74,7 @@ export class FileStore {
       "resourceSnapshots",
       "revenueLedger",
       "salesTransactions",
+      "socialProfiles",
       "retention",
       "reports"
     ];
@@ -182,6 +188,14 @@ export class FileStore {
     await this.upsert("allocationSnapshots", snapshot);
   }
 
+  async getCollectiveSnapshots(): Promise<CollectiveFundSnapshot[]> {
+    return this.readCollection("collectiveSnapshots");
+  }
+
+  async saveCollectiveSnapshot(snapshot: CollectiveFundSnapshot): Promise<void> {
+    await this.upsert("collectiveSnapshots", snapshot);
+  }
+
   async getGrowthPolicies(): Promise<CatalogGrowthPolicy[]> {
     return this.readCollection("growthPolicies");
   }
@@ -196,6 +210,14 @@ export class FileStore {
 
   async saveSalesTransaction(transaction: SalesTransaction): Promise<void> {
     await this.upsert("salesTransactions", transaction);
+  }
+
+  async getSocialProfiles(): Promise<SocialProfileRecord[]> {
+    return this.readCollection("socialProfiles");
+  }
+
+  async saveSocialProfile(profile: SocialProfileRecord): Promise<void> {
+    await this.upsert("socialProfiles", profile);
   }
 
   async getOutreachDrafts(): Promise<OutreachDraft[]> {

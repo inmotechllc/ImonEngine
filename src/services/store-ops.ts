@@ -6,6 +6,7 @@ import type { AssetPackRecord, DigitalAssetType } from "../domain/digital-assets
 import type { BusinessLedgerEntry } from "../domain/engine.js";
 import type {
   CatalogGrowthPolicy,
+  CollectiveFundSnapshot,
   GrowthChannel,
   GrowthWorkItem,
   RevenueAllocationPolicy,
@@ -13,13 +14,23 @@ import type {
   SalesTransaction,
   SalesTransactionType
 } from "../domain/store-ops.js";
+import type { SocialProfileRecord } from "../domain/social.js";
 import { writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
 import { FileStore } from "../storage/store.js";
 
 const DIGITAL_ASSET_STORE_ID = "imon-digital-asset-store";
+const DIGITAL_ASSET_BRAND_NAME = "Imon";
 const DEFAULT_CURRENCY = "USD";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const GROWTH_CHANNEL_PRIORITY: Record<DigitalAssetType, GrowthChannel[]> = {
+  wallpaper_pack: ["pinterest", "x", "facebook_page", "gumroad_update"],
+  texture_pack: ["pinterest", "facebook_page", "gumroad_update", "x"],
+  social_template_pack: ["facebook_page", "gumroad_update", "x", "pinterest"],
+  icon_pack: ["x", "facebook_page", "gumroad_update", "pinterest"],
+  ui_kit: ["facebook_page", "gumroad_update", "x", "pinterest"]
+};
 
 type CsvRow = Record<string, string>;
 
@@ -88,17 +99,7 @@ function roundCurrency(value: number): number {
 }
 
 function channelForAssetType(assetType: DigitalAssetType): GrowthChannel[] {
-  switch (assetType) {
-    case "wallpaper_pack":
-      return ["pinterest", "x"];
-    case "texture_pack":
-      return ["pinterest", "linkedin"];
-    case "social_template_pack":
-      return ["linkedin", "gumroad_update"];
-    case "icon_pack":
-    case "ui_kit":
-      return ["linkedin", "x"];
-  }
+  return GROWTH_CHANNEL_PRIORITY[assetType];
 }
 
 function assetChannelPriority(assetType: DigitalAssetType): number {
@@ -117,7 +118,12 @@ function assetChannelPriority(assetType: DigitalAssetType): number {
 }
 
 function composeGrowthCaption(pack: AssetPackRecord, channel: GrowthChannel): string {
-  const cta = channel === "gumroad_update" ? "Now live in the ImonEngine store." : "See the full pack on Gumroad.";
+  const cta =
+    channel === "gumroad_update"
+      ? "Now live in the ImonEngine store."
+      : channel === "facebook_page"
+        ? "See the full pack from the Imon page."
+        : "See the full pack on Gumroad.";
   return [
     pack.title,
     "",
@@ -215,6 +221,14 @@ function buildGenericBrief(assetType: DigitalAssetType, index: number): {
   }
 }
 
+function buildAlias(baseEmail: string, brandName: string): string {
+  const [local, domain] = baseEmail.split("@");
+  if (!local || !domain) {
+    return baseEmail;
+  }
+  return `${local}+${slugify(brandName).replace(/-/g, "")}@${domain}`;
+}
+
 export interface SalesImportResult {
   imported: number;
   ledgerEntriesCreated: number;
@@ -225,6 +239,109 @@ export class StoreOpsService {
     private readonly config: AppConfig,
     private readonly store: FileStore
   ) {}
+
+  async ensureSocialProfiles(
+    businessId = DIGITAL_ASSET_STORE_ID,
+    brandName = DIGITAL_ASSET_BRAND_NAME
+  ): Promise<SocialProfileRecord[]> {
+    const baseEmail = this.config.marketplaces.gumroadSellerEmail ?? "imonengine@gmail.com";
+    const emailAlias = buildAlias(baseEmail, brandName);
+    const now = nowIso();
+    const existing = await this.store.getSocialProfiles();
+    const current = existing.filter((profile) => profile.businessId === businessId);
+    const byPlatform = new Map(current.map((profile) => [profile.platform, profile]));
+
+    const defaults: Array<Omit<SocialProfileRecord, "createdAt" | "updatedAt">> = [
+      {
+        id: `${businessId}-gmail-alias`,
+        businessId,
+        brandName,
+        emailAlias,
+        platform: "gmail_alias",
+        handle: emailAlias,
+        status: "live",
+        notes: ["Alias routes into the primary ImonEngine Gmail inbox."]
+      },
+      {
+        id: `${businessId}-gumroad`,
+        businessId,
+        brandName,
+        emailAlias,
+        platform: "gumroad",
+        handle: "imonengine",
+        profileUrl: this.config.marketplaces.gumroadProfileUrl
+          ? `https://${this.config.marketplaces.gumroadProfileUrl.replace(/^https?:\/\//, "")}`
+          : "https://imonengine.gumroad.com",
+        status: "live",
+        notes: ["Primary store for this business."]
+      },
+      {
+        id: `${businessId}-meta-business`,
+        businessId,
+        brandName,
+        emailAlias,
+        platform: "meta_business",
+        externalId: "1042144572314434",
+        profileUrl: "https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=1042144572314434",
+        status: "live",
+        notes: ["Signed-in Meta Business Suite workspace."]
+      },
+      {
+        id: `${businessId}-facebook-page`,
+        businessId,
+        brandName,
+        emailAlias,
+        platform: "facebook_page",
+        handle: "Imon",
+        externalId: "61577389319663",
+        profileUrl: "https://www.facebook.com/profile.php?id=61577389319663",
+        status: "live",
+        notes: ["Current Facebook Page for the digital asset store business."]
+      },
+      {
+        id: `${businessId}-x`,
+        businessId,
+        brandName,
+        emailAlias,
+        platform: "x",
+        handle: "imon",
+        status: "blocked",
+        blocker: "X signup requires a birthdate confirmation that has not been provided to automation.",
+        notes: ["Use alias email for signup when the birthdate can be entered manually or supplied safely."]
+      },
+      {
+        id: `${businessId}-pinterest`,
+        businessId,
+        brandName,
+        emailAlias,
+        platform: "pinterest",
+        handle: "imon",
+        status: "blocked",
+        blocker: "Pinterest business signup requires a birthdate confirmation that has not been provided to automation.",
+        notes: ["Use alias email for signup when the birthdate can be entered manually or supplied safely."]
+      }
+    ];
+
+    const saved: SocialProfileRecord[] = [];
+    for (const profile of defaults) {
+      const existingProfile = byPlatform.get(profile.platform);
+      const next: SocialProfileRecord = {
+        ...profile,
+        createdAt: existingProfile?.createdAt ?? now,
+        updatedAt: now,
+        status: existingProfile?.status ?? profile.status,
+        blocker: existingProfile?.blocker ?? profile.blocker,
+        handle: existingProfile?.handle ?? profile.handle,
+        profileUrl: existingProfile?.profileUrl ?? profile.profileUrl,
+        externalId: existingProfile?.externalId ?? profile.externalId,
+        notes: existingProfile?.notes?.length ? existingProfile.notes : profile.notes
+      };
+      await this.store.saveSocialProfile(next);
+      saved.push(next);
+    }
+
+    return saved.sort((left, right) => left.platform.localeCompare(right.platform));
+  }
 
   async ensureCatalogPolicy(businessId = DIGITAL_ASSET_STORE_ID): Promise<CatalogGrowthPolicy> {
     const policies = await this.store.getGrowthPolicies();
@@ -267,9 +384,7 @@ export class StoreOpsService {
       businessId,
       taxReserveRate: this.config.storeOps.finance.taxReserveRate,
       reinvestmentRate: this.config.storeOps.finance.reinvestmentRate,
-      toolsRate: this.config.storeOps.finance.toolsRate,
       refundBufferRate: this.config.storeOps.finance.refundBufferRate,
-      profitHoldRate: this.config.storeOps.finance.profitHoldRate,
       cashoutThreshold: this.config.storeOps.finance.cashoutThreshold,
       updatedAt: nowIso()
     };
@@ -327,6 +442,28 @@ export class StoreOpsService {
       canSeedMore: reasons.length === 0,
       reasons
     };
+  }
+
+  async getActiveGrowthChannels(
+    businessId = DIGITAL_ASSET_STORE_ID
+  ): Promise<Set<GrowthChannel>> {
+    const profiles = await this.ensureSocialProfiles(businessId);
+    const channels = new Set<GrowthChannel>(["gumroad_update"]);
+    for (const profile of profiles) {
+      if (profile.status !== "live") {
+        continue;
+      }
+      if (profile.platform === "facebook_page") {
+        channels.add("facebook_page");
+      }
+      if (profile.platform === "x") {
+        channels.add("x");
+      }
+      if (profile.platform === "pinterest") {
+        channels.add("pinterest");
+      }
+    }
+    return channels;
   }
 
   selectNextAssetType(
@@ -405,6 +542,7 @@ export class StoreOpsService {
     packs: AssetPackRecord[],
     businessId = DIGITAL_ASSET_STORE_ID
   ): Promise<GrowthWorkItem[]> {
+    const activeChannels = await this.getActiveGrowthChannels(businessId);
     const published = packs
       .filter((pack) => pack.status === "published" && pack.productUrl)
       .sort((left, right) => assetChannelPriority(left.assetType) - assetChannelPriority(right.assetType));
@@ -418,7 +556,10 @@ export class StoreOpsService {
     const planned: GrowthWorkItem[] = [];
 
     const channelSlots = published.flatMap((pack) =>
-      channelForAssetType(pack.assetType).map((channel) => ({ pack, channel }))
+      channelForAssetType(pack.assetType)
+        .filter((channel) => activeChannels.has(channel))
+        .slice(0, 2)
+        .map((channel) => ({ pack, channel }))
     );
 
     const slotCount = Math.min(postsPerWeek, channelSlots.length);
@@ -491,6 +632,33 @@ export class StoreOpsService {
         })
     ].join("\n");
 
+    await writeTextFile(markdownPath, markdown);
+    return { jsonPath, markdownPath };
+  }
+
+  async writeSocialArtifacts(
+    profiles: SocialProfileRecord[]
+  ): Promise<{ jsonPath: string; markdownPath: string }> {
+    const jsonPath = path.join(this.config.opsDir, "social-profiles.json");
+    const markdownPath = path.join(this.config.opsDir, "social-profiles.md");
+    await writeJsonFile(jsonPath, profiles);
+    const markdown = [
+      "# Social Profiles",
+      "",
+      ...profiles.map((profile) =>
+        [
+          `## ${profile.platform}`,
+          `- Brand: ${profile.brandName}`,
+          `- Alias: ${profile.emailAlias}`,
+          `- Status: ${profile.status}`,
+          ...(profile.handle ? [`- Handle: ${profile.handle}`] : []),
+          ...(profile.profileUrl ? [`- URL: ${profile.profileUrl}`] : []),
+          ...(profile.blocker ? [`- Blocker: ${profile.blocker}`] : []),
+          ...profile.notes.map((note) => `- Note: ${note}`),
+          ""
+        ].join("\n")
+      )
+    ].join("\n");
     await writeTextFile(markdownPath, markdown);
     return { jsonPath, markdownPath };
   }
@@ -675,11 +843,25 @@ export class StoreOpsService {
       unmatchedRelayTransactions,
       recommendations: {
         taxReserve: roundCurrency(netRevenue * policy.taxReserveRate),
-        reinvestment: roundCurrency(netRevenue * policy.reinvestmentRate),
-        tools: roundCurrency(netRevenue * policy.toolsRate),
+        growthReinvestment: roundCurrency(netRevenue * policy.reinvestmentRate),
         refundBuffer: roundCurrency(netRevenue * policy.refundBufferRate),
-        profitHold: roundCurrency(netRevenue * policy.profitHoldRate),
-        ownerCashoutReady: netRevenue * policy.profitHoldRate >= policy.cashoutThreshold
+        collectiveTransfer: roundCurrency(
+          Math.max(
+            0,
+            netRevenue -
+              roundCurrency(netRevenue * policy.taxReserveRate) -
+              roundCurrency(netRevenue * policy.reinvestmentRate) -
+              roundCurrency(netRevenue * policy.refundBufferRate)
+          )
+        ),
+        ownerCashoutReady:
+          Math.max(
+            0,
+            netRevenue -
+              roundCurrency(netRevenue * policy.taxReserveRate) -
+              roundCurrency(netRevenue * policy.reinvestmentRate) -
+              roundCurrency(netRevenue * policy.refundBufferRate)
+          ) >= policy.cashoutThreshold
       },
       generatedAt: latestSignal
     };
@@ -712,11 +894,88 @@ export class StoreOpsService {
         "",
         "## Recommended Allocation",
         `- Tax reserve: $${snapshot.recommendations.taxReserve.toFixed(2)}`,
-        `- Reinvestment: $${snapshot.recommendations.reinvestment.toFixed(2)}`,
-        `- Tools: $${snapshot.recommendations.tools.toFixed(2)}`,
+        `- Brand growth reinvestment: $${snapshot.recommendations.growthReinvestment.toFixed(2)}`,
         `- Refund buffer: $${snapshot.recommendations.refundBuffer.toFixed(2)}`,
-        `- Profit hold: $${snapshot.recommendations.profitHold.toFixed(2)}`,
-        `- Owner cashout ready: ${snapshot.recommendations.ownerCashoutReady ? "yes" : "no"}`
+        `- Transfer to collective ImonEngine fund: $${snapshot.recommendations.collectiveTransfer.toFixed(2)}`,
+        `- Business cashout threshold reached: ${snapshot.recommendations.ownerCashoutReady ? "yes" : "no"}`
+      ].join("\n")
+    );
+    return { jsonPath, markdownPath };
+  }
+
+  async buildCollectiveFundSnapshot(days = 30): Promise<CollectiveFundSnapshot> {
+    const policy = await this.ensureAllocationPolicy(DIGITAL_ASSET_STORE_ID);
+    const latestByBusiness = new Map<string, RevenueAllocationSnapshot>();
+    for (const snapshot of await this.store.getAllocationSnapshots()) {
+      if (new Date(snapshot.generatedAt).getTime() < new Date(rangeStart(days)).getTime()) {
+        continue;
+      }
+      const current = latestByBusiness.get(snapshot.businessId);
+      if (!current || current.generatedAt.localeCompare(snapshot.generatedAt) < 0) {
+        latestByBusiness.set(snapshot.businessId, snapshot);
+      }
+    }
+
+    const contributingBusinesses = [...latestByBusiness.values()].map((snapshot) => ({
+      businessId: snapshot.businessId,
+      collectiveTransfer: snapshot.recommendations.collectiveTransfer,
+      growthReinvestment: snapshot.recommendations.growthReinvestment
+    }));
+    const totalCollectiveTransfer = roundCurrency(
+      contributingBusinesses.reduce((sum, item) => sum + item.collectiveTransfer, 0)
+    );
+    const totalGrowthReinvestment = roundCurrency(
+      contributingBusinesses.reduce((sum, item) => sum + item.growthReinvestment, 0)
+    );
+    const sharedToolsReinvestmentCap = roundCurrency(totalCollectiveTransfer * policy.reinvestmentRate);
+    const reserveAfterSharedReinvestment = roundCurrency(
+      Math.max(0, totalCollectiveTransfer - sharedToolsReinvestmentCap)
+    );
+    const snapshot: CollectiveFundSnapshot = {
+      id: `collective-fund-${nowIso().replaceAll(":", "-")}`,
+      generatedAt: nowIso(),
+      businessCount: contributingBusinesses.length,
+      contributingBusinesses,
+      totals: {
+        collectiveTransfer: totalCollectiveTransfer,
+        growthReinvestment: totalGrowthReinvestment
+      },
+      recommendations: {
+        sharedToolsReinvestmentCap,
+        reserveAfterSharedReinvestment,
+        ownerCashoutReady: reserveAfterSharedReinvestment >= policy.cashoutThreshold
+      }
+    };
+    await this.store.saveCollectiveSnapshot(snapshot);
+    return snapshot;
+  }
+
+  async writeCollectiveArtifacts(snapshot: CollectiveFundSnapshot): Promise<{ jsonPath: string; markdownPath: string }> {
+    const jsonPath = path.join(this.config.opsDir, "collective-fund-report.json");
+    const markdownPath = path.join(this.config.opsDir, "collective-fund-report.md");
+    await writeJsonFile(jsonPath, snapshot);
+    await writeTextFile(
+      markdownPath,
+      [
+        "# Collective ImonEngine Fund",
+        "",
+        `Generated at: ${snapshot.generatedAt}`,
+        `Businesses contributing: ${snapshot.businessCount}`,
+        "",
+        "## Brand Contributions",
+        ...snapshot.contributingBusinesses.map(
+          (item) =>
+            `- ${item.businessId}: collective transfer $${item.collectiveTransfer.toFixed(2)}, growth reinvestment $${item.growthReinvestment.toFixed(2)}`
+        ),
+        "",
+        "## Collective Totals",
+        `- Total collective transfer: $${snapshot.totals.collectiveTransfer.toFixed(2)}`,
+        `- Total brand growth reinvestment: $${snapshot.totals.growthReinvestment.toFixed(2)}`,
+        "",
+        "## Shared Reinvestment Policy",
+        `- Max shared reinvestment into cross-business tools: $${snapshot.recommendations.sharedToolsReinvestmentCap.toFixed(2)}`,
+        `- Reserve remaining after shared reinvestment: $${snapshot.recommendations.reserveAfterSharedReinvestment.toFixed(2)}`,
+        `- Collective cashout threshold reached: ${snapshot.recommendations.ownerCashoutReady ? "yes" : "no"}`
       ].join("\n")
     );
     return { jsonPath, markdownPath };

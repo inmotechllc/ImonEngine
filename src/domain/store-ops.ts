@@ -1,6 +1,6 @@
 import type { DigitalAssetType } from "./digital-assets.js";
 
-export type GrowthChannel = "gumroad_update" | "x" | "linkedin" | "pinterest";
+export type GrowthChannel = "gumroad_update" | "facebook_page" | "x" | "linkedin" | "pinterest";
 
 export type GrowthWorkItemStatus = "planned" | "queued" | "posted" | "skipped";
 
@@ -56,9 +56,7 @@ export interface RevenueAllocationPolicy {
   businessId: string;
   taxReserveRate: number;
   reinvestmentRate: number;
-  toolsRate: number;
   refundBufferRate: number;
-  profitHoldRate: number;
   cashoutThreshold: number;
   updatedAt: string;
 }
@@ -79,13 +77,32 @@ export interface RevenueAllocationSnapshot {
   unmatchedRelayTransactions: number;
   recommendations: {
     taxReserve: number;
-    reinvestment: number;
-    tools: number;
+    growthReinvestment: number;
     refundBuffer: number;
-    profitHold: number;
+    collectiveTransfer: number;
     ownerCashoutReady: boolean;
   };
   generatedAt: string;
+}
+
+export interface CollectiveFundSnapshot {
+  id: string;
+  generatedAt: string;
+  businessCount: number;
+  contributingBusinesses: Array<{
+    businessId: string;
+    collectiveTransfer: number;
+    growthReinvestment: number;
+  }>;
+  totals: {
+    collectiveTransfer: number;
+    growthReinvestment: number;
+  };
+  recommendations: {
+    sharedToolsReinvestmentCap: number;
+    reserveAfterSharedReinvestment: number;
+    ownerCashoutReady: boolean;
+  };
 }
 
 export interface CatalogGrowthPolicy {

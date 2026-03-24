@@ -55,9 +55,7 @@ export interface AppConfig {
     finance: {
       taxReserveRate: number;
       reinvestmentRate: number;
-      toolsRate: number;
       refundBufferRate: number;
-      profitHoldRate: number;
       cashoutThreshold: number;
     };
   };
@@ -169,9 +167,7 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
       finance: {
         taxReserveRate: Number(process.env.STORE_TAX_RESERVE_RATE ?? "0.2"),
         reinvestmentRate: Number(process.env.STORE_REINVESTMENT_RATE ?? "0.35"),
-        toolsRate: Number(process.env.STORE_TOOLS_RATE ?? "0.1"),
         refundBufferRate: Number(process.env.STORE_REFUND_BUFFER_RATE ?? "0.1"),
-        profitHoldRate: Number(process.env.STORE_PROFIT_HOLD_RATE ?? "0.25"),
         cashoutThreshold: Number(process.env.STORE_CASHOUT_THRESHOLD ?? "100")
       }
     },
