@@ -84,6 +84,14 @@ interface JsonResult {
   [key: string]: unknown;
 }
 
+export interface AutopilotPublishResult {
+  packId: string;
+  title: string;
+  productUrl: string;
+  editUrl?: string;
+  productId?: string;
+}
+
 export interface AutopilotRunResult {
   phaseId: string;
   status: "progress" | "completed" | "blocked" | "idle";
@@ -426,43 +434,44 @@ export class StoreAutopilotAgent {
 
   private async runPhaseSix(state: AutopilotState): Promise<AutopilotRunResult> {
     const packs = await this.store.getAssetPacks();
-    const producing = packs.find((pack) => pack.status === "producing");
-    if (producing) {
-      const buildOutput = await this.buildPack(producing);
-      return {
-        phaseId: state.currentPhase,
-        status: "progress",
-        summary: `Built ${producing.title} in continuous store-ops mode.`,
-        details: [`Builder: ${path.basename(buildOutput.builderPath)}`, ...buildOutput.details],
-        changed: true
-      };
+    const ready = packs.find((pack) => pack.status === "ready_for_upload");
+    if (ready) {
+      try {
+        const published = await this.autopublishReadyPack(ready.id);
+        return {
+          phaseId: state.currentPhase,
+          status: "progress",
+          summary: `Published ${published.title} in continuous store-ops mode.`,
+          details: [
+            `Pack id: ${published.packId}`,
+            `Product URL: ${published.productUrl}`,
+            ...(published.editUrl ? [`Edit URL: ${published.editUrl}`] : []),
+            ...(published.productId ? [`Product id: ${published.productId}`] : [])
+          ],
+          changed: true
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const fallback = await this.runContinuousQueueWork(packs, [
+          `Auto-publish skipped for ${ready.title}: ${message}`
+        ]);
+        if (fallback) {
+          return fallback;
+        }
+
+        return {
+          phaseId: state.currentPhase,
+          status: "blocked",
+          summary: `${ready.title} is ready for upload, but the Gumroad publish workflow could not complete in this run.`,
+          details: [message],
+          changed: false
+        };
+      }
     }
 
-    const planned = packs.find((pack) => pack.status === "planned");
-    if (planned) {
-      const staged = await this.digitalAssetFactory.stagePack(planned.id);
-      return {
-        phaseId: state.currentPhase,
-        status: "progress",
-        summary: `Staged ${staged.title} in continuous store-ops mode.`,
-        details: [`Pack id: ${staged.id}`, `Asset type: ${staged.assetType}`, `Output dir: ${staged.outputDir}`],
-        changed: true
-      };
-    }
-
-    const nextBrief = this.getNextContinuousBrief(packs);
-    if (nextBrief) {
-      const created = await this.digitalAssetFactory.createPack({
-        ...nextBrief,
-        marketplace: "gumroad"
-      });
-      return {
-        phaseId: state.currentPhase,
-        status: "progress",
-        summary: `Seeded a new continuous pack brief: ${created.title}.`,
-        details: [`Created ${created.id}`, `Asset type: ${created.assetType}`, `Output dir: ${created.outputDir}`],
-        changed: true
-      };
+    const fallback = await this.runContinuousQueueWork(packs);
+    if (fallback) {
+      return fallback;
     }
 
     return {
@@ -475,6 +484,80 @@ export class StoreAutopilotAgent {
       ],
       changed: false
     };
+  }
+
+  async autopublishReadyPack(packId?: string): Promise<AutopilotPublishResult> {
+    const packs = await this.store.getAssetPacks();
+    const pack =
+      (packId ? packs.find((candidate) => candidate.id === packId) : undefined) ??
+      packs.find((candidate) => candidate.status === "ready_for_upload");
+
+    if (!pack) {
+      throw new Error("No ready-for-upload asset pack is available to publish.");
+    }
+
+    const publishResult = await this.runPythonScript("publish_gumroad_product.py", ["--pack-dir", pack.outputDir]);
+    const productUrl = String(publishResult.productUrl ?? "");
+    if (!productUrl) {
+      throw new Error("The Gumroad publish script did not return a product URL.");
+    }
+
+    const published = await this.digitalAssetFactory.publishPack(pack.id, productUrl);
+    await this.refreshLiveCatalogDocs();
+
+    return {
+      packId: published.id,
+      title: published.title,
+      productUrl,
+      editUrl: typeof publishResult.editUrl === "string" ? publishResult.editUrl : undefined,
+      productId: typeof publishResult.productId === "string" ? publishResult.productId : undefined
+    };
+  }
+
+  private async runContinuousQueueWork(
+    packs: AssetPackRecord[],
+    leadingDetails: string[] = []
+  ): Promise<AutopilotRunResult | null> {
+    const producing = packs.find((pack) => pack.status === "producing");
+    if (producing) {
+      const buildOutput = await this.buildPack(producing);
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: "progress",
+        summary: `Built ${producing.title} in continuous store-ops mode.`,
+        details: [...leadingDetails, `Builder: ${path.basename(buildOutput.builderPath)}`, ...buildOutput.details],
+        changed: true
+      };
+    }
+
+    const planned = packs.find((pack) => pack.status === "planned");
+    if (planned) {
+      const staged = await this.digitalAssetFactory.stagePack(planned.id);
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: "progress",
+        summary: `Staged ${staged.title} in continuous store-ops mode.`,
+        details: [...leadingDetails, `Pack id: ${staged.id}`, `Asset type: ${staged.assetType}`, `Output dir: ${staged.outputDir}`],
+        changed: true
+      };
+    }
+
+    const nextBrief = this.getNextContinuousBrief(packs);
+    if (nextBrief) {
+      const created = await this.digitalAssetFactory.createPack({
+        ...nextBrief,
+        marketplace: "gumroad"
+      });
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: "progress",
+        summary: `Seeded a new continuous pack brief: ${created.title}.`,
+        details: [...leadingDetails, `Created ${created.id}`, `Asset type: ${created.assetType}`, `Output dir: ${created.outputDir}`],
+        changed: true
+      };
+    }
+
+    return null;
   }
 
   private phaseOneComplete(packs: AssetPackRecord[]): boolean {
@@ -687,12 +770,14 @@ export class StoreAutopilotAgent {
       "- Install local schedule: `scripts/install-windows-autopilot.ps1`",
       "- VPS wrapper: `scripts/run_vps_autopilot.sh`",
       "- VPS cron installer: `scripts/install-vps-autopilot.sh`",
+      "- Local Gumroad publisher: `scripts/publish_gumroad_product.py`",
       "- VPS sync helper: `scripts/sync_vps_repo.py`",
       "",
       "## Browser Recovery",
       "",
       "- Keep the signed-in automation browser open for Gumroad and Gmail access.",
       "- If the Playwright wrapper fails to reattach, recover the session with `python scripts/chrome_cdp.py list-tabs`.",
+      "- Publish the next ready pack through the live browser session with `python scripts/publish_gumroad_product.py --pack-dir <pack-dir>`.",
       "- Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.",
       "",
       "## Post-Publish Sync Flow",
@@ -780,7 +865,7 @@ export class StoreAutopilotAgent {
       "",
       "- Install with `powershell -ExecutionPolicy Bypass -File scripts/install-windows-autopilot.ps1`.",
       "- The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.",
-      "- The local runner executes one work unit, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.",
+      "- The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.",
       "",
       "## VPS Scheduler",
       "",
@@ -813,9 +898,15 @@ export class StoreAutopilotAgent {
       "",
       "- The local task is the primary scheduler because it can reuse the signed-in browser session when needed.",
       "- The VPS cron job is optional and best for headless build and sync work.",
+      "- `scripts/publish_gumroad_product.py` should only run on the local scheduler because it depends on the signed-in Gumroad browser session.",
       "- If the browser is closed, the final-phase Gmail delivery will block until the session is reopened.",
       ""
     ].join("\n");
+  }
+
+  private async refreshLiveCatalogDocs(): Promise<void> {
+    const packs = await this.store.getAssetPacks();
+    await this.writeIfChanged(this.gumroadStoreDocPath, this.composeGumroadStoreDoc(packs));
   }
 
   private composeEnvExample(): string {

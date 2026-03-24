@@ -42,6 +42,10 @@ BODY_FONT = find_font(
 )
 
 
+def slugify(value: str) -> str:
+    return "-".join("".join(ch.lower() if ch.isalnum() else " " for ch in value).split())
+
+
 PALETTES = [
     ("#F2EDE6", "#DDD0C2", "#B89E85"),
     ("#F4F1EC", "#D7CCC0", "#A58D79"),
@@ -136,8 +140,8 @@ def create_preview_sheet(source_paths: list[Path], out_path: Path) -> None:
             outline="#A48F7D",
             width=4,
         )
-    draw.text((120, 930), "Muted paper grain textures", font=TITLE_FONT, fill="#241E1A")
-    draw.text((120, 1010), "Built for brand decks, posters, mockups, and creator graphics.", font=BODY_FONT, fill="#71675E")
+    draw.text((120, 930), "Texture preview sheet", font=TITLE_FONT, fill="#241E1A")
+    draw.text((120, 1010), "Built for layered graphics, decks, mockups, and visual systems.", font=BODY_FONT, fill="#71675E")
     canvas.save(out_path)
 
 
@@ -271,14 +275,15 @@ def main() -> None:
     cover_one = covers_dir / "cover-01.png"
     cover_two = covers_dir / "cover-02.png"
     thumb = covers_dir / "thumbnail-square.png"
-    create_cover(textures[:4], cover_one, pack["title"], "Muted paper textures for brand systems, posters, and creator graphics.", square=False)
-    create_cover(textures[4:8], cover_two, "Paper Grain Texture Pack", "Soft scanned-paper surfaces with matte grain overlays.", square=False)
-    create_cover(textures[:4], thumb, pack["title"], "36 seamless PNG textures.", square=True)
+    subtitle = str(pack.get("shortDescription", "Quiet texture overlays for decks, posters, and creator graphics."))
+    create_cover(textures[:4], cover_one, pack["title"], subtitle, square=False)
+    create_cover(textures[4:8], cover_two, pack["title"], "Seamless PNG textures for layered design work.", square=False)
+    create_cover(textures[:4], thumb, pack["title"], f"{pack['packSize']} seamless PNG textures.", square=True)
 
     license_path = product_files_dir / "LICENSE.txt"
     write_license(license_path)
 
-    zip_path = gumroad_dir / "muted-paper-grain-texture-pack.zip"
+    zip_path = gumroad_dir / f"{slugify(str(pack['title']))}.zip"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(preview_sheet, arcname=preview_sheet.name)
         archive.write(license_path, arcname=license_path.name)
@@ -287,18 +292,6 @@ def main() -> None:
 
     pack.update(
         {
-            "title": "Muted Paper Grain Texture Pack",
-            "shortDescription": "A matte texture pack for brand designers who need quick depth overlays and neutral paper surfaces.",
-            "description": "A set of soft scanned-paper and matte-grain textures for brand systems, poster mockups, and creator graphics. The pack stays muted and flexible so it works as an overlay instead of overpowering the composition. Built for fast drop-in use across Photoshop, Canva, Figma, and presentation decks.",
-            "suggestedPrice": 14,
-            "priceVariants": [11, 14, 18],
-            "tags": [
-                "paper texture pack",
-                "grain overlay",
-                "brand design texture",
-                "gumroad digital download",
-                "poster mockup texture",
-            ],
             "deliverables": [
                 f"{pack['packSize']} seamless textures in PNG format",
                 "Preview sheet image",

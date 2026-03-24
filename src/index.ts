@@ -98,6 +98,7 @@ function usage(): string {
     "  npm run dev -- stage-asset-pack --pack <id>",
     "  npm run dev -- ready-asset-pack --pack <id>",
     "  npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>",
+    "  npm run dev -- autopublish-asset-pack --pack <id>",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
@@ -379,6 +380,13 @@ async function main(): Promise<void> {
       }
       const pack = await digitalAssetFactory.publishPack(packId, productUrl);
       logger.info(`Recorded published asset pack ${pack.title} at ${pack.productUrl}`);
+      break;
+    }
+    case "autopublish-asset-pack": {
+      const packId = typeof flags.pack === "string" ? flags.pack : undefined;
+      const result = await storeAutopilot.autopublishReadyPack(packId);
+      logger.info(`Auto-published ${result.title} at ${result.productUrl}`);
+      console.log(JSON.stringify(result, null, 2));
       break;
     }
     case "autopilot-run-once": {

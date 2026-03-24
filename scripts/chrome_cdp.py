@@ -60,6 +60,19 @@ def http_json(port: int, path: str) -> Any:
         return json.load(response)
 
 
+def open_new_tab(port: int, url: str) -> dict[str, Any]:
+    encoded = urllib.parse.quote(url, safe="")
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/json/new?{encoded}", method="PUT")
+    with urllib.request.urlopen(request, timeout=10) as response:
+        return json.load(response)
+
+
+def close_tab(port: int, tab_id: str) -> None:
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/json/close/{tab_id}", method="PUT")
+    with urllib.request.urlopen(request, timeout=10):
+        return
+
+
 def find_tab(
     tabs: list[dict[str, Any]],
     *,
@@ -339,6 +352,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)

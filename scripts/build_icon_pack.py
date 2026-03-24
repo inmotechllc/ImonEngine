@@ -53,6 +53,10 @@ BODY_FONT = find_font(
 )
 
 
+def slugify(value: str) -> str:
+    return "-".join("".join(ch.lower() if ch.isalnum() else " " for ch in value).split())
+
+
 def draw_background(draw: ImageDraw.ImageDraw, palette: tuple[str, str, str, str]) -> None:
     _, background, secondary, _ = palette
     draw.rounded_rectangle((48, 48, 464, 464), radius=126, fill=background)
@@ -245,8 +249,8 @@ def create_preview_board(source_paths: list[Path], out_path: Path) -> None:
     for index, position in enumerate(positions):
         sample = Image.open(source_paths[index]).convert("RGB").resize((240, 240))
         canvas.paste(sample, position)
-    draw.text((120, 760), "Glassmorphism Icon Set", font=TITLE_FONT, fill="#1F2430")
-    draw.text((120, 840), "80 PNG and SVG icons for indie product interfaces.", font=BODY_FONT, fill="#5E6776")
+    draw.text((120, 760), "Icon preview board", font=TITLE_FONT, fill="#1F2430")
+    draw.text((120, 840), "PNG and SVG assets for product interfaces, launches, and UI systems.", font=BODY_FONT, fill="#5E6776")
     canvas.save(out_path)
 
 
@@ -389,14 +393,15 @@ def main() -> None:
     cover_one = covers_dir / "cover-01.png"
     cover_two = covers_dir / "cover-02.png"
     thumb = covers_dir / "thumbnail-square.png"
-    create_cover(rendered_pngs[:4], cover_one, pack["title"], "Soft glass icons for indie dashboards, SaaS UI, and launch assets.", square=False)
-    create_cover(rendered_pngs[4:8], cover_two, "Glassmorphism Icon Set", "Eight frosted variants across ten core product concepts.", square=False)
-    create_cover(rendered_pngs[:4], thumb, pack["title"], "80 icons in PNG and SVG.", square=True)
+    subtitle = str(pack.get("shortDescription", "Modern icon assets for dashboards, SaaS UI, and launch materials."))
+    create_cover(rendered_pngs[:4], cover_one, pack["title"], subtitle, square=False)
+    create_cover(rendered_pngs[4:8], cover_two, pack["title"], "Eight frosted variants across ten product-ready concepts.", square=False)
+    create_cover(rendered_pngs[:4], thumb, pack["title"], f"{pack['packSize']} icons in PNG and SVG.", square=True)
 
     license_path = product_files_dir / "LICENSE.txt"
     write_license(license_path)
 
-    zip_path = gumroad_dir / "glassmorphism-icon-set-for-indie-builders.zip"
+    zip_path = gumroad_dir / f"{slugify(str(pack['title']))}.zip"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(preview_board, arcname=preview_board.name)
         archive.write(license_path, arcname=license_path.name)
@@ -407,18 +412,6 @@ def main() -> None:
 
     pack.update(
         {
-            "title": "Glassmorphism Icon Set for Indie Builders",
-            "shortDescription": "A polished icon set for app builders who want soft glassmorphism without drawing from scratch.",
-            "description": "An 80-icon bundle for indie builders, SaaS prototypes, and UI experiments. The set leans into soft glassmorphism so it feels modern without looking noisy. Ideal for landing pages, dashboards, and lightweight design systems.",
-            "suggestedPrice": 19,
-            "priceVariants": [15, 19, 24],
-            "tags": [
-                "glassmorphism icons",
-                "svg icon pack",
-                "png icon set",
-                "saas design assets",
-                "gumroad digital download",
-            ],
             "deliverables": [
                 "80 icons in PNG format",
                 "80 icons in SVG format",

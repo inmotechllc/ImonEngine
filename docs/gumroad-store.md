@@ -23,22 +23,37 @@
 - Suggested price: `$12`
 - Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators`
 
-## Ready To Upload
-
 - Product: `Glassmorphism Icon Set for Indie Builders`
-- Status: `ready_for_upload`
-- Upload dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-soft-translucent-surfaces-with-muted-accents-soft-glassmorphism-icon-set-for-indie-builders\gumroad`
+- Product URL: `https://imonengine.gumroad.com/l/dbfftq`
+- Status: `published`
 - Suggested price: `$19`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-soft-translucent-surfaces-with-muted-accents-soft-glassmorphism-icon-set-for-indie-builders`
 
 - Product: `Muted Paper Grain Texture Pack`
-- Status: `ready_for_upload`
-- Upload dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-soft-scanned-paper-and-matte-grain-overlays-muted-paper-grain-textures-for-brand-designers\gumroad`
+- Product URL: `https://imonengine.gumroad.com/l/vjqjxm`
+- Status: `published`
 - Suggested price: `$14`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-soft-scanned-paper-and-matte-grain-overlays-muted-paper-grain-textures-for-brand-designers`
 
 - Product: `Warm Monochrome Desktop Background Pack`
-- Status: `ready_for_upload`
-- Upload dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-warm-gradients-with-soft-shadow-geometry-warm-monochrome-desktop-backgrounds-for-creative-studios\gumroad`
+- Product URL: `https://imonengine.gumroad.com/l/laxvlh`
+- Status: `published`
 - Suggested price: `$9`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-warm-gradients-with-soft-shadow-geometry-warm-monochrome-desktop-backgrounds-for-creative-studios`
+
+- Product: `Charcoal gradients with low-contrast geometry Charcoal developer desktop backgrounds`
+- Product URL: `https://imonengine.gumroad.com/l/sdhts`
+- Status: `published`
+- Suggested price: `$9`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-charcoal-gradients-with-low-contrast-geometry-charcoal-developer-desktop-backgrounds`
+
+- Product: `Muted Paper Grain Texture Pack`
+- Product URL: `https://imonengine.gumroad.com/l/yclwyd`
+- Status: `published`
+- Suggested price: `$14`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-stone-fibers-and-quiet-grain-overlays-stone-paper-textures-for-pitch-decks`
+
+## Ready To Upload
 
 ## Repo-Controlled Autopilot
 
@@ -46,12 +61,14 @@
 - Install local schedule: `scripts/install-windows-autopilot.ps1`
 - VPS wrapper: `scripts/run_vps_autopilot.sh`
 - VPS cron installer: `scripts/install-vps-autopilot.sh`
+- Local Gumroad publisher: `scripts/publish_gumroad_product.py`
 - VPS sync helper: `scripts/sync_vps_repo.py`
 
 ## Browser Recovery
 
 - Keep the signed-in automation browser open for Gumroad and Gmail access.
 - If the Playwright wrapper fails to reattach, recover the session with `python scripts/chrome_cdp.py list-tabs`.
+- Publish the next ready pack through the live browser session with `python scripts/publish_gumroad_product.py --pack-dir <pack-dir>`.
 - Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.
 
 ## Post-Publish Sync Flow
