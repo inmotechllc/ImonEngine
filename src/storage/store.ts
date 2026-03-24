@@ -17,20 +17,32 @@ import type {
   ManagedBusiness,
   VpsResourceSnapshot
 } from "../domain/engine.js";
+import type {
+  CatalogGrowthPolicy,
+  GrowthWorkItem,
+  RevenueAllocationPolicy,
+  RevenueAllocationSnapshot,
+  SalesTransaction
+} from "../domain/store-ops.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../lib/fs.js";
 
 type EntityCollectionMap = {
+  allocationPolicies: RevenueAllocationPolicy[];
   approvals: ApprovalTask[];
   assetPacks: AssetPackRecord[];
   businesses: ManagedBusiness[];
   businessRuns: BusinessRunRecord[];
   clients: ClientJob[];
+  growthQueue: GrowthWorkItem[];
+  growthPolicies: CatalogGrowthPolicy[];
   engineReports: EngineOverviewReport[];
   leads: LeadRecord[];
   offers: OfferConfig[];
   outreach: OutreachDraft[];
+  allocationSnapshots: RevenueAllocationSnapshot[];
   resourceSnapshots: VpsResourceSnapshot[];
   revenueLedger: BusinessLedgerEntry[];
+  salesTransactions: SalesTransaction[];
   retention: RetentionReport[];
   reports: RunReport[];
 };
@@ -41,17 +53,22 @@ export class FileStore {
   async init(): Promise<void> {
     await ensureDir(this.stateDir);
     const collections: Array<keyof EntityCollectionMap> = [
+      "allocationPolicies",
       "approvals",
+      "allocationSnapshots",
       "assetPacks",
       "businesses",
       "businessRuns",
       "clients",
+      "growthPolicies",
+      "growthQueue",
       "engineReports",
       "leads",
       "offers",
       "outreach",
       "resourceSnapshots",
       "revenueLedger",
+      "salesTransactions",
       "retention",
       "reports"
     ];
@@ -135,6 +152,50 @@ export class FileStore {
 
   async saveApproval(task: ApprovalTask): Promise<void> {
     await this.upsert("approvals", task);
+  }
+
+  async getGrowthQueue(): Promise<GrowthWorkItem[]> {
+    return this.readCollection("growthQueue");
+  }
+
+  async saveGrowthWorkItem(item: GrowthWorkItem): Promise<void> {
+    await this.upsert("growthQueue", item);
+  }
+
+  async replaceGrowthQueue(items: GrowthWorkItem[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("growthQueue"), items);
+  }
+
+  async getAllocationPolicies(): Promise<RevenueAllocationPolicy[]> {
+    return this.readCollection("allocationPolicies");
+  }
+
+  async saveAllocationPolicy(policy: RevenueAllocationPolicy): Promise<void> {
+    await this.upsert("allocationPolicies", policy);
+  }
+
+  async getAllocationSnapshots(): Promise<RevenueAllocationSnapshot[]> {
+    return this.readCollection("allocationSnapshots");
+  }
+
+  async saveAllocationSnapshot(snapshot: RevenueAllocationSnapshot): Promise<void> {
+    await this.upsert("allocationSnapshots", snapshot);
+  }
+
+  async getGrowthPolicies(): Promise<CatalogGrowthPolicy[]> {
+    return this.readCollection("growthPolicies");
+  }
+
+  async saveGrowthPolicy(policy: CatalogGrowthPolicy): Promise<void> {
+    await this.upsert("growthPolicies", policy);
+  }
+
+  async getSalesTransactions(): Promise<SalesTransaction[]> {
+    return this.readCollection("salesTransactions");
+  }
+
+  async saveSalesTransaction(transaction: SalesTransaction): Promise<void> {
+    await this.upsert("salesTransactions", transaction);
   }
 
   async getOutreachDrafts(): Promise<OutreachDraft[]> {

@@ -41,6 +41,26 @@ export interface AppConfig {
     gumroadSellerEmail?: string;
     gumroadProfileUrl?: string;
   };
+  storeOps: {
+    catalog: {
+      maxNewPacksPer7Days: number;
+      maxPublishedPacks: number;
+      maxSharePerAssetType: number;
+      maxOpenPackQueue: number;
+    };
+    growth: {
+      postsPerWeek: number;
+      queueDays: number;
+    };
+    finance: {
+      taxReserveRate: number;
+      reinvestmentRate: number;
+      toolsRate: number;
+      refundBufferRate: number;
+      profitHoldRate: number;
+      cashoutThreshold: number;
+    };
+  };
   smtp?: {
     host: string;
     port: number;
@@ -134,6 +154,26 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
     marketplaces: {
       gumroadSellerEmail: process.env.GUMROAD_SELLER_EMAIL,
       gumroadProfileUrl: process.env.GUMROAD_PROFILE_URL
+    },
+    storeOps: {
+      catalog: {
+        maxNewPacksPer7Days: Number(process.env.STORE_MAX_NEW_PACKS_7D ?? "2"),
+        maxPublishedPacks: Number(process.env.STORE_MAX_PUBLISHED_PACKS ?? "36"),
+        maxSharePerAssetType: Number(process.env.STORE_MAX_ASSET_TYPE_SHARE ?? "0.4"),
+        maxOpenPackQueue: Number(process.env.STORE_MAX_OPEN_PACK_QUEUE ?? "2")
+      },
+      growth: {
+        postsPerWeek: Number(process.env.STORE_POSTS_PER_WEEK ?? "6"),
+        queueDays: Number(process.env.STORE_GROWTH_QUEUE_DAYS ?? "7")
+      },
+      finance: {
+        taxReserveRate: Number(process.env.STORE_TAX_RESERVE_RATE ?? "0.2"),
+        reinvestmentRate: Number(process.env.STORE_REINVESTMENT_RATE ?? "0.35"),
+        toolsRate: Number(process.env.STORE_TOOLS_RATE ?? "0.1"),
+        refundBufferRate: Number(process.env.STORE_REFUND_BUFFER_RATE ?? "0.1"),
+        profitHoldRate: Number(process.env.STORE_PROFIT_HOLD_RATE ?? "0.25"),
+        cashoutThreshold: Number(process.env.STORE_CASHOUT_THRESHOLD ?? "100")
+      }
     },
     smtp,
     cloudflare:
