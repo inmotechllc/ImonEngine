@@ -29,7 +29,7 @@ printf '{\n'
 printf '  "display": ":%s",\n' "$DISPLAY_NUMBER"
 printf '  "chromeProfileDir": "%s",\n' "$CHROME_PROFILE_DIR"
 printf '  "xvfbRunning": %s,\n' "$(status_for_pid "Xvfb :${DISPLAY_NUMBER}")"
-printf '  "chromeRunning": %s,\n' "$(status_for_pid "google-chrome.*${CHROME_PROFILE_DIR}")"
+printf '  "chromeRunning": %s,\n' "$(status_for_pid "/opt/google/chrome/chrome.*--remote-debugging-port=${REMOTE_DEBUG_PORT}")"
 printf '  "devtoolsState": "%s",\n' "$devtools_state"
 printf '  "chromeVersion": "%s"\n' "$chrome_version"
 printf '}\n'

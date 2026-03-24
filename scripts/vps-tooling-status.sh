@@ -30,7 +30,7 @@ if pgrep -f "Xvfb :${DISPLAY_NUMBER}" >/dev/null 2>&1; then
   xvfb_running="true"
 fi
 chrome_running="false"
-if pgrep -f "google-chrome.*${CHROME_PROFILE_DIR}" >/dev/null 2>&1; then
+if pgrep -f "/opt/google/chrome/chrome.*--remote-debugging-port=${REMOTE_DEBUG_PORT}" >/dev/null 2>&1; then
   chrome_running="true"
 fi
 devtools_state="down"
