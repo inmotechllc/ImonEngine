@@ -179,8 +179,8 @@ test("digital asset factory seeds Gumroad starter packs", async () => {
   const created = await digitalAssetFactory.seedStarterQueue();
   const packs = await store.getAssetPacks();
 
-  assert.equal(created.length, 3);
-  assert.equal(packs.length, 3);
+  assert.equal(created.length, 5);
+  assert.equal(packs.length, 5);
   assert.ok(packs.every((pack) => pack.marketplace === "gumroad"));
   assert.ok(packs.every((pack) => pack.listingChecklist.length >= 4));
 });

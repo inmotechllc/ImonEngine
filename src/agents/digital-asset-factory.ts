@@ -31,8 +31,83 @@ const STARTER_BRIEFS: AssetPackBrief[] = [
     audience: "indie hackers and app designers",
     marketplace: "gumroad",
     packSize: 80
+  },
+  {
+    niche: "Muted paper grain textures for brand designers",
+    assetType: "texture_pack",
+    style: "soft scanned paper and matte grain overlays",
+    audience: "brand designers and digital creators",
+    marketplace: "gumroad",
+    packSize: 36
+  },
+  {
+    niche: "Warm monochrome desktop backgrounds for creative studios",
+    assetType: "wallpaper_pack",
+    style: "warm gradients with soft shadow geometry",
+    audience: "creative studios and indie marketers",
+    marketplace: "gumroad",
+    packSize: 18
   }
 ];
+
+const REFINED_PACK_COPY: Record<
+  string,
+  {
+    title: string;
+    shortDescription: string;
+    description: string;
+  }
+> = {
+  "Minimal productivity desktop backgrounds": {
+    title: "Minimal Productivity Desktop Background Pack",
+    shortDescription: "A focused set of 24 clean 4K wallpapers built for productivity-minded desktops.",
+    description: [
+      "A 24-image wallpaper pack designed for clean workspaces, focus-heavy desktops, and low-distraction setups.",
+      "The style stays minimal, modern, and easy to live with across monitors and laptop displays.",
+      "Built for Gumroad as a fast-to-ship first product with clear visual value."
+    ].join(" ")
+  },
+  "Neutral Instagram carousel templates for small creators": {
+    title: "Neutral Instagram Carousel Template Pack",
+    shortDescription:
+      "A neutral carousel template pack for creators who want clean posts without custom design work.",
+    description: [
+      "A ready-to-use Instagram carousel template pack for creators, coaches, and solo businesses.",
+      "The layouts use a restrained neutral palette so the pack feels premium instead of generic.",
+      "Made for quick customization and fast publishing."
+    ].join(" ")
+  },
+  "Soft glassmorphism icon set for indie builders": {
+    title: "Glassmorphism Icon Set for Indie Builders",
+    shortDescription:
+      "A polished icon set for app builders who want soft glassmorphism without drawing from scratch.",
+    description: [
+      "An 80-icon bundle for indie builders, SaaS prototypes, and UI experiments.",
+      "The set leans into soft glassmorphism so it feels modern without looking noisy.",
+      "Ideal for landing pages, dashboards, and lightweight design systems."
+    ].join(" ")
+  },
+  "Muted paper grain textures for brand designers": {
+    title: "Muted Paper Grain Texture Pack",
+    shortDescription:
+      "A matte texture pack for brand designers who need quick depth overlays and neutral paper surfaces.",
+    description: [
+      "A set of soft scanned-paper and matte-grain textures for brand systems, poster mockups, and creator graphics.",
+      "The pack stays muted and flexible so it works as an overlay instead of overpowering the composition.",
+      "Built for fast drop-in use across Photoshop, Canva, Figma, and presentation decks."
+    ].join(" ")
+  },
+  "Warm monochrome desktop backgrounds for creative studios": {
+    title: "Warm Monochrome Desktop Background Pack",
+    shortDescription:
+      "A warm desktop wallpaper set for creative teams that want softer screens without clutter.",
+    description: [
+      "A desktop background pack built around warm gradients, gentle shadow geometry, and low-noise composition.",
+      "Made for studio machines, client-facing setups, and calm workspaces that still feel designed.",
+      "The visuals are restrained enough for daily use but polished enough to feel intentional."
+    ].join(" ")
+  }
+};
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -117,63 +192,15 @@ function fallbackBlueprint(brief: AssetPackBrief) {
 }
 
 function refinedTitle(pack: AssetPackRecord): string {
-  if (pack.assetType === "wallpaper_pack") {
-    return "Minimal Productivity Desktop Background Pack";
-  }
-
-  if (pack.assetType === "social_template_pack") {
-    return "Neutral Instagram Carousel Template Pack";
-  }
-
-  if (pack.assetType === "icon_pack") {
-    return "Glassmorphism Icon Set for Indie Builders";
-  }
-
-  return pack.title;
+  return REFINED_PACK_COPY[pack.niche]?.title ?? pack.title;
 }
 
 function refinedShortDescription(pack: AssetPackRecord): string {
-  if (pack.assetType === "wallpaper_pack") {
-    return "A focused set of 24 clean 4K wallpapers built for productivity-minded desktops.";
-  }
-
-  if (pack.assetType === "social_template_pack") {
-    return "A neutral carousel template pack for creators who want clean posts without custom design work.";
-  }
-
-  if (pack.assetType === "icon_pack") {
-    return "A polished icon set for app builders who want soft glassmorphism without drawing from scratch.";
-  }
-
-  return pack.shortDescription;
+  return REFINED_PACK_COPY[pack.niche]?.shortDescription ?? pack.shortDescription;
 }
 
 function refinedDescription(pack: AssetPackRecord): string {
-  if (pack.assetType === "wallpaper_pack") {
-    return [
-      "A 24-image wallpaper pack designed for clean workspaces, focus-heavy desktops, and low-distraction setups.",
-      "The style stays minimal, modern, and easy to live with across monitors and laptop displays.",
-      "Built for Gumroad as a fast-to-ship first product with clear visual value."
-    ].join(" ");
-  }
-
-  if (pack.assetType === "social_template_pack") {
-    return [
-      "A ready-to-use Instagram carousel template pack for creators, coaches, and solo businesses.",
-      "The layouts use a restrained neutral palette so the pack feels premium instead of generic.",
-      "Made for quick customization and fast publishing."
-    ].join(" ");
-  }
-
-  if (pack.assetType === "icon_pack") {
-    return [
-      "An 80-icon bundle for indie builders, SaaS prototypes, and UI experiments.",
-      "The set leans into soft glassmorphism so it feels modern without looking noisy.",
-      "Ideal for landing pages, dashboards, and lightweight design systems."
-    ].join(" ");
-  }
-
-  return pack.description;
+  return REFINED_PACK_COPY[pack.niche]?.description ?? pack.description;
 }
 
 export class DigitalAssetFactoryAgent {

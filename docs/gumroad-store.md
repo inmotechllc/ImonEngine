@@ -9,55 +9,52 @@
 - Active storefront tab: `Store`
 - Active storefront section: `Products`
 
-## First Live Product
+## Live Products
 
 - Product: `Minimal Productivity Desktop Background Pack`
 - Product URL: `https://imonengine.gumroad.com/l/vkiqq`
-- Marketplace category: `Design > Wallpapers`
-- Launch price: `$9`
-- Discover tags:
-  - `desktop wallpaper`
-  - `minimalist wallpaper`
-  - `backgrounds`
-  - `abstract wallpaper`
-
-## No-Spend Decisions
-
-- `Shopify` is deferred.
-- `Stripe` is deferred for direct checkout and can stay out of the critical path while Gumroad is the active storefront.
-- The store uses the free Gumroad profile and the existing Gmail account instead of a paid support inbox.
-
-## Second Live Product
+- Status: `published`
+- Suggested price: `$9`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-clean-gradients-with-subtle-depth-minimal-productivity-desktop-backgrounds`
 
 - Product: `Neutral Instagram Carousel Template Pack`
 - Product URL: `https://imonengine.gumroad.com/l/wvhzrhl`
-- Local pack status: `published`
-- Upload zip: `runtime/asset-store/gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators/gumroad/neutral-instagram-carousel-template-pack.zip`
-- Main cover: `runtime/asset-store/gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators/covers/cover-01.png`
-- Square thumbnail: `runtime/asset-store/gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators/covers/thumbnail-square.png`
-- Live price: `$12`
-- Generated bundle:
-  - editable PowerPoint deck
-  - quick-start PDF
-  - Gumroad cover set
-  - upload zip
+- Status: `published`
+- Suggested price: `$12`
+- Local pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators`
+
+## Ready To Upload
+
+- Product: `Glassmorphism Icon Set for Indie Builders`
+- Status: `ready_for_upload`
+- Upload dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-soft-translucent-surfaces-with-muted-accents-soft-glassmorphism-icon-set-for-indie-builders\gumroad`
+- Suggested price: `$19`
+
+- Product: `Muted Paper Grain Texture Pack`
+- Status: `ready_for_upload`
+- Upload dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-soft-scanned-paper-and-matte-grain-overlays-muted-paper-grain-textures-for-brand-designers\gumroad`
+- Suggested price: `$14`
+
+- Product: `Warm Monochrome Desktop Background Pack`
+- Status: `ready_for_upload`
+- Upload dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-warm-gradients-with-soft-shadow-geometry-warm-monochrome-desktop-backgrounds-for-creative-studios\gumroad`
+- Suggested price: `$9`
+
+## Repo-Controlled Autopilot
+
+- Primary local runner: `scripts/run_local_autopilot.ps1`
+- Install local schedule: `scripts/install-windows-autopilot.ps1`
+- VPS wrapper: `scripts/run_vps_autopilot.sh`
+- VPS cron installer: `scripts/install-vps-autopilot.sh`
+- VPS sync helper: `scripts/sync_vps_repo.py`
 
 ## Browser Recovery
 
-- The recurring automation is still `Store Autopilot` on the local Codex desktop app.
-- If the signed-in automation browser stays open but the Playwright wrapper fails to reattach, recover the session with [chrome_cdp.py](C:/AIWorkspace/Projects/Auto-Funding/scripts/chrome_cdp.py).
-- Typical recovery flow:
-
-```bash
-python scripts/chrome_cdp.py list-tabs
-python scripts/chrome_cdp.py screenshot --tab-url-substring gumroad.com/products --output runtime/browser-check.png
-python scripts/chrome_cdp.py upload --tab-url-substring gumroad.com/products --selector "input[type=file]" --index 0 path\\to\\file.zip
-python scripts/chrome_cdp.py click-button --tab-url-substring gumroad.com/products --text "Save changes"
-```
+- Keep the signed-in automation browser open for Gumroad and Gmail access.
+- If the Playwright wrapper fails to reattach, recover the session with `python scripts/chrome_cdp.py list-tabs`.
+- Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.
 
 ## Post-Publish Sync Flow
-
-After a product is published on Gumroad:
 
 1. Record the public product URL:
 
@@ -76,15 +73,3 @@ npm run dev -- engine-sync
 ```bash
 npm run dev -- vps-artifacts
 ```
-
-## Owner-Only Tasks Still Deferred
-
-- Gumroad payout completion and risk review
-- Any paid business inbox setup
-- Any direct-checkout payment configuration outside Gumroad
-
-## Resume Notes
-
-- The first product is live and exposed on the storefront.
-- The next product in the queue should stay inside the digital asset store lane instead of opening a new business line.
-- If browser automation is reused, keep the dedicated signed-in Gumroad automation session open instead of relying on the local Chrome profile.

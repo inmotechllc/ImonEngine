@@ -1,0 +1,92 @@
+[
+  {
+    "packId": "gumroad-clean-gradients-with-subtle-depth-minimal-productivity-desktop-backgrounds",
+    "title": "Minimal Productivity Desktop Background Pack",
+    "status": "published",
+    "suggestedPrice": 9,
+    "priceVariants": [
+      7,
+      9,
+      12
+    ],
+    "primaryTags": [
+      "desktop wallpaper",
+      "minimalist wallpaper",
+      "productivity background",
+      "gumroad digital download"
+    ],
+    "experiment": "Test clean utility-first positioning with short benefit copy."
+  },
+  {
+    "packId": "gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators",
+    "title": "Neutral Instagram Carousel Template Pack",
+    "status": "published",
+    "suggestedPrice": 12,
+    "priceVariants": [
+      9,
+      12,
+      15
+    ],
+    "primaryTags": [
+      "instagram carousel template",
+      "editable powerpoint template",
+      "neutral social template",
+      "creator marketing"
+    ],
+    "experiment": "Test clean utility-first positioning with short benefit copy."
+  },
+  {
+    "packId": "gumroad-soft-translucent-surfaces-with-muted-accents-soft-glassmorphism-icon-set-for-indie-builders",
+    "title": "Glassmorphism Icon Set for Indie Builders",
+    "status": "ready_for_upload",
+    "suggestedPrice": 19,
+    "priceVariants": [
+      15,
+      19,
+      24
+    ],
+    "primaryTags": [
+      "glassmorphism icons",
+      "svg icon pack",
+      "png icon set",
+      "saas design assets"
+    ],
+    "experiment": "Test higher-price creative asset positioning."
+  },
+  {
+    "packId": "gumroad-soft-scanned-paper-and-matte-grain-overlays-muted-paper-grain-textures-for-brand-designers",
+    "title": "Muted Paper Grain Texture Pack",
+    "status": "ready_for_upload",
+    "suggestedPrice": 14,
+    "priceVariants": [
+      11,
+      14,
+      18
+    ],
+    "primaryTags": [
+      "paper texture pack",
+      "grain overlay",
+      "brand design texture",
+      "gumroad digital download"
+    ],
+    "experiment": "Test clean utility-first positioning with short benefit copy."
+  },
+  {
+    "packId": "gumroad-warm-gradients-with-soft-shadow-geometry-warm-monochrome-desktop-backgrounds-for-creative-studios",
+    "title": "Warm Monochrome Desktop Background Pack",
+    "status": "ready_for_upload",
+    "suggestedPrice": 9,
+    "priceVariants": [
+      7,
+      9,
+      12
+    ],
+    "primaryTags": [
+      "desktop wallpaper",
+      "minimal wallpaper",
+      "gumroad digital download",
+      "4k background pack"
+    ],
+    "experiment": "Test clean utility-first positioning with short benefit copy."
+  }
+]

@@ -14,6 +14,7 @@ import { Deployer } from "./agents/deployer.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
 import { ImonEngineAgent } from "./agents/imon-engine.js";
 import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
+import { StoreAutopilotAgent } from "./agents/store-autopilot.js";
 import { buildAgencySite } from "./services/agency-site.js";
 
 interface Flags {
@@ -97,6 +98,7 @@ function usage(): string {
     "  npm run dev -- stage-asset-pack --pack <id>",
     "  npm run dev -- ready-asset-pack --pack <id>",
     "  npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>",
+    "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
     "  npm run dev -- report",
@@ -117,6 +119,7 @@ async function buildContext() {
   const replyHandler = new ReplyHandlerAgent(ai);
   const imonEngine = new ImonEngineAgent(config, store);
   const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
+  const storeAutopilot = new StoreAutopilotAgent(config, store, digitalAssetFactory, imonEngine);
 
   return {
     config,
@@ -128,7 +131,8 @@ async function buildContext() {
     deployer,
     replyHandler,
     imonEngine,
-    digitalAssetFactory
+    digitalAssetFactory,
+    storeAutopilot
   };
 }
 
@@ -202,7 +206,8 @@ async function main(): Promise<void> {
     deployer,
     replyHandler,
     imonEngine,
-    digitalAssetFactory
+    digitalAssetFactory,
+    storeAutopilot
   } =
     await buildContext();
 
@@ -374,6 +379,14 @@ async function main(): Promise<void> {
       }
       const pack = await digitalAssetFactory.publishPack(packId, productUrl);
       logger.info(`Recorded published asset pack ${pack.title} at ${pack.productUrl}`);
+      break;
+    }
+    case "autopilot-run-once": {
+      const result = await storeAutopilot.runOnce();
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      if (result.details.length > 0) {
+        console.log(JSON.stringify(result, null, 2));
+      }
       break;
     }
     case "report": {

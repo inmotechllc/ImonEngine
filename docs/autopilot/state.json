@@ -1,7 +1,7 @@
 {
   "program": "imonengine-store-autopilot",
   "status": "active",
-  "currentPhase": "phase-01-product-factory-expansion",
+  "currentPhase": "phase-05-final-review-and-notification",
   "browserSession": {
     "required": true,
     "note": "Keep the signed-in ImonEngine browser session open for Gumroad and Gmail access."
@@ -10,31 +10,31 @@
     {
       "id": "phase-01-product-factory-expansion",
       "title": "Product Factory Expansion",
-      "status": "in_progress",
+      "status": "completed",
       "goal": "Finish the second digital asset and grow the store catalog toward five products."
     },
     {
       "id": "phase-02-store-conversion-automation",
       "title": "Store Conversion Automation",
-      "status": "pending",
+      "status": "completed",
       "goal": "Improve storefront conversion and Gumroad-native sales flows."
     },
     {
       "id": "phase-03-growth-automation",
       "title": "Growth Automation",
-      "status": "pending",
+      "status": "completed",
       "goal": "Create no-cost traffic and promotion workflows that support store sales."
     },
     {
       "id": "phase-04-autonomous-operations-hardening",
       "title": "Autonomous Operations Hardening",
-      "status": "pending",
+      "status": "completed",
       "goal": "Improve ImonEngine, VPS workflows, and operational resilience for the store lane."
     },
     {
       "id": "phase-05-final-review-and-notification",
       "title": "Final Review And Notification",
-      "status": "pending",
+      "status": "in_progress",
       "goal": "Close out the roadmap, update docs, sync the VPS, and email completion."
     }
   ],
@@ -44,6 +44,7 @@
     "The local Codex automation `Store Autopilot` is active on an hourly schedule for this workspace.",
     "The current Codex desktop automation runner on this machine is auto-archiving scheduled runs before they create inbox items, so treat the schedule as configured but not yet reliable.",
     "Phase 1 should create at least 3 additional products now that the first two are live.",
-    "If Playwright cannot reattach to the signed-in browser, use the CDP fallback script against the active mcp-chrome session."
+    "If Playwright cannot reattach to the signed-in browser, use the CDP fallback script against the active mcp-chrome session.",
+    "The repo-controlled autopilot runner now handles scheduled phase work without relying on the Codex desktop automation runner."
   ]
 }
