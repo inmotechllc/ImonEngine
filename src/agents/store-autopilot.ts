@@ -483,6 +483,11 @@ export class StoreAutopilotAgent {
       return opsRefresh;
     }
 
+    const growthExecution = await this.executeDueGrowthItem(packs);
+    if (growthExecution) {
+      return growthExecution;
+    }
+
     const fallback = await this.runContinuousQueueWork(packs);
     if (fallback) {
       return fallback;
@@ -670,6 +675,97 @@ export class StoreAutopilotAgent {
     return null;
   }
 
+  async publishGrowthPost(itemId: string): Promise<AutopilotRunResult> {
+    const packs = await this.store.getAssetPacks();
+    const result = await this.executeDueGrowthItem(packs, itemId);
+    if (!result) {
+      throw new Error(`Growth queue item ${itemId} was not found or is not eligible to publish.`);
+    }
+    return result;
+  }
+
+  private async executeDueGrowthItem(
+    packs: AssetPackRecord[],
+    itemId?: string
+  ): Promise<AutopilotRunResult | null> {
+    const queue = await this.store.getGrowthQueue();
+    const now = new Date().toISOString();
+    const due = [...queue]
+      .filter((item) => item.status === "planned" && (itemId ? item.id === itemId : item.scheduledFor <= now))
+      .sort((left, right) => left.scheduledFor.localeCompare(right.scheduledFor))[0];
+
+    if (!due) {
+      return null;
+    }
+
+    try {
+      const result = await this.runPythonScript("publish_growth_post.py", [
+        "--queue-file",
+        path.join(this.config.stateDir, "growthQueue.json"),
+        "--social-profiles-file",
+        path.join(this.config.stateDir, "socialProfiles.json"),
+        "--item-id",
+        due.id
+      ]);
+
+      const postedAt =
+        typeof result.postedAt === "string" && result.postedAt.length > 0 ? result.postedAt : new Date().toISOString();
+      await this.store.saveGrowthWorkItem({
+        ...due,
+        status: "posted",
+        updatedAt: postedAt,
+        notes: [
+          ...due.notes,
+          `Posted automatically on ${postedAt} via ${due.channel}.`,
+          ...(typeof result.pageUrl === "string" && result.pageUrl.length > 0
+            ? [`Automation page URL: ${result.pageUrl}`]
+            : [])
+        ]
+      });
+
+      const refreshedQueue = await this.store.getGrowthQueue();
+      const artifacts = await this.storeOps.writeGrowthArtifacts(packs, refreshedQueue);
+
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: "progress",
+        summary: `Posted ${due.title} through the live ${due.channel} automation path.`,
+        details: [
+          `Growth item: ${due.id}`,
+          `Scheduled for: ${due.scheduledFor}`,
+          ...(typeof result.pageUrl === "string" && result.pageUrl.length > 0
+            ? [`Automation page URL: ${result.pageUrl}`]
+            : []),
+          `Queue JSON: ${artifacts.jsonPath}`,
+          `Queue Markdown: ${artifacts.markdownPath}`
+        ],
+        changed: true
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const skipped = /unsupported/i.test(message);
+      const updatedAt = new Date().toISOString();
+      await this.store.saveGrowthWorkItem({
+        ...due,
+        status: skipped ? "skipped" : due.status,
+        updatedAt,
+        notes: [...due.notes, `${skipped ? "Skipped" : "Attempted"} on ${updatedAt}: ${message}`]
+      });
+      const refreshedQueue = await this.store.getGrowthQueue();
+      const artifacts = await this.storeOps.writeGrowthArtifacts(packs, refreshedQueue);
+
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: skipped ? "progress" : "blocked",
+        summary: skipped
+          ? `Skipped ${due.title} because ${due.channel} is not a live automated channel yet.`
+          : `Could not publish ${due.title} through the ${due.channel} automation path in this run.`,
+        details: [message, `Queue JSON: ${artifacts.jsonPath}`, `Queue Markdown: ${artifacts.markdownPath}`],
+        changed: true
+      };
+    }
+  }
+
   private phaseOneComplete(packs: AssetPackRecord[]): boolean {
     const publishedCount = packs.filter((pack) => pack.status === "published").length;
     const builtCount = packs.filter((pack) => READY_OR_PUBLISHED_STATUSES.includes(pack.status)).length;
@@ -701,6 +797,8 @@ export class StoreAutopilotAgent {
   ): Promise<AutopilotRunResult | null> {
     await this.storeOps.ensureCatalogPolicy();
     await this.storeOps.ensureAllocationPolicy();
+    const socialProfiles = await this.storeOps.ensureSocialProfiles();
+    const socialArtifacts = await this.storeOps.writeSocialArtifacts(socialProfiles);
 
     const existingQueue = await this.store.getGrowthQueue();
     const publishedPacks = packs.filter((pack) => pack.status === "published" && pack.productUrl);
@@ -721,11 +819,13 @@ export class StoreAutopilotAgent {
         return {
           phaseId: "phase-06-continuous-store-operations",
           status: "progress",
-          summary: "Refreshed the store growth queue and channel-ready promo assets.",
+          summary: "Refreshed the store growth queue, social profile registry, and channel-ready promo assets.",
           details: [
             `Planned queue items: ${nextQueue.filter((item) => item.status === "planned").length}`,
             `Queue JSON: ${artifacts.jsonPath}`,
             `Queue Markdown: ${artifacts.markdownPath}`,
+            `Social JSON: ${socialArtifacts.jsonPath}`,
+            `Social Markdown: ${socialArtifacts.markdownPath}`,
             ...marketingRefresh.details
           ],
           changed: true
@@ -737,8 +837,8 @@ export class StoreAutopilotAgent {
       return {
         phaseId: "phase-06-continuous-store-operations",
         status: "progress",
-        summary: "Regenerated growth promo assets for the published catalog.",
-        details: marketingRefresh.details,
+        summary: "Regenerated growth promo assets and refreshed social profile artifacts.",
+        details: [...marketingRefresh.details, `Social JSON: ${socialArtifacts.jsonPath}`, `Social Markdown: ${socialArtifacts.markdownPath}`],
         changed: true
       };
     }
@@ -752,14 +852,18 @@ export class StoreAutopilotAgent {
         .at(-1)?.id;
       const snapshot = await this.storeOps.buildRevenueSnapshot();
       const artifacts = await this.storeOps.writeRevenueArtifacts(snapshot, "Imon Digital Asset Store");
+      const collective = await this.storeOps.buildCollectiveFundSnapshot();
+      const collectiveArtifacts = await this.storeOps.writeCollectiveArtifacts(collective);
       if (previousLatestId !== snapshot.id || force) {
         return {
           phaseId: "phase-06-continuous-store-operations",
           status: "progress",
-          summary: "Updated the revenue allocation report from imported Gumroad and Relay transactions.",
+          summary: "Updated the brand and collective revenue allocation reports from imported Gumroad and Relay transactions.",
           details: [
             `Revenue JSON: ${artifacts.jsonPath}`,
             `Revenue Markdown: ${artifacts.markdownPath}`,
+            `Collective JSON: ${collectiveArtifacts.jsonPath}`,
+            `Collective Markdown: ${collectiveArtifacts.markdownPath}`,
             `Net revenue window: $${snapshot.netRevenue.toFixed(2)}`
           ],
           changed: true
@@ -1006,6 +1110,7 @@ export class StoreAutopilotAgent {
       "- VPS wrapper: `scripts/run_vps_autopilot.sh`",
       "- VPS cron installer: `scripts/install-vps-autopilot.sh`",
       "- Local Gumroad publisher: `scripts/publish_gumroad_product.py`",
+      "- Local Facebook growth publisher: `scripts/publish_growth_post.py`",
       "- VPS sync helper: `scripts/sync_vps_repo.py`",
       "",
       "## Browser Recovery",
@@ -1014,6 +1119,16 @@ export class StoreAutopilotAgent {
       "- If the Playwright wrapper fails to reattach, recover the session with `python scripts/chrome_cdp.py list-tabs`.",
       "- Publish the next ready pack through the live browser session with `python scripts/publish_gumroad_product.py --pack-dir <pack-dir>`.",
       "- Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.",
+      "",
+      "## Growth And Revenue Controls",
+      "",
+      "- Refresh queue + promo assets: `npm run dev -- growth-queue`",
+      "- Publish due Facebook posts from the live queue with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`",
+      "- Refresh the social registry: `npm run dev -- social-profiles`",
+      "- Import Gumroad CSV sales: `npm run dev -- import-gumroad-sales --file <csv>`",
+      "- Import Relay CSV transactions: `npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]`",
+      "- Build revenue report: `npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]`",
+      "- Build collective fund report: `npm run dev -- collective-fund-report [--days 30]`",
       "",
       "## Post-Publish Sync Flow",
       "",
@@ -1049,7 +1164,9 @@ export class StoreAutopilotAgent {
       "## Repeatable Traffic Workflow",
       "",
       "- Generate promo assets with `python scripts/build_growth_assets.py --state-file runtime/state/assetPacks.json --output-dir runtime/marketing`.",
-      "- Use the generated square teasers for X, LinkedIn, Pinterest Idea Pins, and Gumroad profile updates.",
+      "- Use the generated square teasers for the live channel set first: Facebook Page posts from the signed-in `Imon` page.",
+      "- Publish due Facebook posts with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`.",
+      "- X and Pinterest stay blocked until their required birthdate confirmations are completed safely.",
       "- Refresh the scheduled post queue with `npm run dev -- growth-queue`.",
       "- Rotate product focus weekly in this order:",
       ...activeTitles.map((title) => `  - ${title}`),
@@ -1058,14 +1175,13 @@ export class StoreAutopilotAgent {
       "",
       "- Pull the first cover image from each pack.",
       "- Generate three teaser formats: landscape, square, and story.",
-      "- Reuse `captions.md` as the base copy for social posts, Gumroad updates, and email blurbs.",
+      "- Reuse `captions.md` as the base copy for Facebook posts, future X/Pinterest posts, and email blurbs.",
       "",
       "## No-Cost Channels",
       "",
-      "- Gumroad profile updates",
-      "- X posts with one featured asset and one CTA link",
-      "- LinkedIn carousel teasers for the creator-template and icon products",
-      "- Pinterest pins for wallpaper and texture packs",
+      "- Facebook Page posts from the live `Imon` page",
+      "- X posts with one featured asset and one CTA link once the X profile moves from blocked to live",
+      "- Pinterest pins for wallpaper and texture packs once the Pinterest profile moves from blocked to live",
       ""
     ].join("\n");
   }
@@ -1079,14 +1195,7 @@ export class StoreAutopilotAgent {
       ...packs
         .filter((pack) => READY_OR_PUBLISHED_STATUSES.includes(pack.status))
         .map((pack) => {
-          const channel =
-            pack.assetType === "wallpaper_pack"
-              ? "Pinterest + X"
-              : pack.assetType === "icon_pack"
-                ? "LinkedIn + X"
-                : pack.assetType === "texture_pack"
-                  ? "Pinterest + LinkedIn"
-                  : "LinkedIn + Gumroad updates";
+          const channel = "Facebook Page now, X/Pinterest after signup blockers are cleared";
           return `| ${pack.title} | ${pack.assetType} | ${channel} |`;
         }),
       ""
@@ -1102,8 +1211,12 @@ export class StoreAutopilotAgent {
       "- Install with `powershell -ExecutionPolicy Bypass -File scripts/install-windows-autopilot.ps1`.",
       "- The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.",
       "- The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.",
+      "- Due Facebook growth posts are now executed from the local runner before new catalog seeding continues.",
+      "- Browser-backed Facebook posting is handled by `scripts/publish_growth_post.py`.",
       "- Catalog expansion is capped so the store cannot outrun its growth queue and channel bandwidth.",
       "- Revenue imports should flow through `npm run dev -- import-gumroad-sales` and `npm run dev -- import-relay-transactions` before reviewing `npm run dev -- revenue-report`.",
+      "- Remaining post-reinvestment funds are modeled as transfers into the collective ImonEngine fund, and the same reinvestment percentage caps shared tool spend there.",
+      "- Refresh the collective-fund artifact with `npm run dev -- collective-fund-report`.",
       "",
       "## VPS Scheduler",
       "",
@@ -1131,13 +1244,16 @@ export class StoreAutopilotAgent {
       "- `IMON_ENGINE_VPS_PASSWORD`",
       "- `IMON_ENGINE_VPS_REPO_PATH`",
       "- `IMON_ENGINE_VPS_BRANCH`",
+      "- `runtime/state/assetPacks.json`, `growthQueue.json`, `growthPolicies.json`, `allocationPolicies.json`, `allocationSnapshots.json`, `collectiveSnapshots.json`, `salesTransactions.json`, and `socialProfiles.json` are uploaded explicitly after each local run so store-ops state is mirrored to the VPS.",
       "",
       "## Execution Model",
       "",
       "- The local task is the primary scheduler because it can reuse the signed-in browser session when needed.",
       "- The VPS cron job is optional and best for headless build and sync work.",
       "- `scripts/publish_gumroad_product.py` should only run on the local scheduler because it depends on the signed-in Gumroad browser session.",
-      "- `runtime/state/growthQueue.json` and `runtime/ops/revenue-report.json` are the current store-ops control surfaces for growth pacing and reinvestment review.",
+      "- `scripts/publish_growth_post.py` should only run on the local scheduler because it depends on the signed-in Meta browser session.",
+      "- `runtime/ops/social-profiles.md` is the current registry of live vs blocked channel accounts.",
+      "- `runtime/state/growthQueue.json`, `runtime/ops/revenue-report.json`, and `runtime/ops/collective-fund-report.json` are the current store-ops control surfaces for growth pacing and reinvestment review.",
       "- If the browser is closed, the final-phase Gmail delivery will block until the session is reopened.",
       ""
     ].join("\n");
@@ -1179,9 +1295,7 @@ export class StoreAutopilotAgent {
       "STORE_GROWTH_QUEUE_DAYS=7",
       "STORE_TAX_RESERVE_RATE=0.2",
       "STORE_REINVESTMENT_RATE=0.35",
-      "STORE_TOOLS_RATE=0.1",
       "STORE_REFUND_BUFFER_RATE=0.1",
-      "STORE_PROFIT_HOLD_RATE=0.25",
       "STORE_CASHOUT_THRESHOLD=100",
       "APPROVAL_EMAIL=owner@example.com",
       "BUSINESS_NAME=Imon Engine Automation",

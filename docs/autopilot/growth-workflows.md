@@ -3,7 +3,10 @@
 ## Repeatable Traffic Workflow
 
 - Generate promo assets with `python scripts/build_growth_assets.py --state-file runtime/state/assetPacks.json --output-dir runtime/marketing`.
-- Use the generated square teasers for X, LinkedIn, Pinterest Idea Pins, and Gumroad profile updates.
+- Use the generated square teasers for the live channel set first: Facebook Page posts from the signed-in `Imon` page.
+- Publish due Facebook posts with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`.
+- Review channel readiness in `runtime/ops/social-profiles.md`.
+- X and Pinterest remain in the registry but stay blocked until the birthdate confirmation step is completed safely.
 - Refresh the scheduled post queue with `npm run dev -- growth-queue`.
 - Review the live queue in `runtime/ops/growth-queue.md`.
 - Rotate product focus weekly in this order:
@@ -20,14 +23,13 @@
 
 - Pull the first cover image from each pack.
 - Generate three teaser formats: landscape, square, and story.
-- Reuse `captions.md` as the base copy for social posts, Gumroad updates, and email blurbs.
+- Reuse `captions.md` as the base copy for Facebook posts, future X/Pinterest posts, and email blurbs.
 
 ## No-Cost Channels
 
-- Gumroad profile updates
-- X posts with one featured asset and one CTA link
-- LinkedIn carousel teasers for the creator-template and icon products
-- Pinterest pins for wallpaper and texture packs
+- Facebook Page posts from `Imon`
+- X posts with one featured asset and one CTA link once the X profile is live
+- Pinterest pins for wallpaper and texture packs once the Pinterest profile is live
 
 ## Pacing Rules
 

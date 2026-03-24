@@ -448,7 +448,7 @@ export class StoreOpsService {
     businessId = DIGITAL_ASSET_STORE_ID
   ): Promise<Set<GrowthChannel>> {
     const profiles = await this.ensureSocialProfiles(businessId);
-    const channels = new Set<GrowthChannel>(["gumroad_update"]);
+    const channels = new Set<GrowthChannel>();
     for (const profile of profiles) {
       if (profile.status !== "live") {
         continue;
@@ -548,7 +548,7 @@ export class StoreOpsService {
       .sort((left, right) => assetChannelPriority(left.assetType) - assetChannelPriority(right.assetType));
     const existing = await this.store.getGrowthQueue();
     const existingById = new Map(existing.map((item) => [item.id, item]));
-    const keep = existing.filter((item) => item.status === "posted");
+    const keep = [...new Map(existing.filter((item) => item.status === "posted").map((item) => [item.id, item])).values()];
     const queueDays = this.config.storeOps.growth.queueDays;
     const postsPerWeek = this.config.storeOps.growth.postsPerWeek;
     const start = new Date();
@@ -591,7 +591,8 @@ export class StoreOpsService {
       planned.push(item);
     }
 
-    const nextQueue = [...keep, ...planned];
+    const postedIds = new Set(keep.map((item) => item.id));
+    const nextQueue = [...keep, ...planned.filter((item) => !postedIds.has(item.id))];
     await this.store.replaceGrowthQueue(nextQueue);
     return nextQueue;
   }

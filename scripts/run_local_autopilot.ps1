@@ -67,7 +67,9 @@ if ($status) {
           "$repoRoot\\runtime\\state\\growthPolicies.json::/opt/imon-engine/runtime/state/growthPolicies.json",
           "$repoRoot\\runtime\\state\\allocationPolicies.json::/opt/imon-engine/runtime/state/allocationPolicies.json",
           "$repoRoot\\runtime\\state\\allocationSnapshots.json::/opt/imon-engine/runtime/state/allocationSnapshots.json",
-          "$repoRoot\\runtime\\state\\salesTransactions.json::/opt/imon-engine/runtime/state/salesTransactions.json"
+          "$repoRoot\\runtime\\state\\collectiveSnapshots.json::/opt/imon-engine/runtime/state/collectiveSnapshots.json",
+          "$repoRoot\\runtime\\state\\salesTransactions.json::/opt/imon-engine/runtime/state/salesTransactions.json",
+          "$repoRoot\\runtime\\state\\socialProfiles.json::/opt/imon-engine/runtime/state/socialProfiles.json"
         )
 
         $syncArgs = @(
@@ -82,8 +84,10 @@ if ($status) {
         $syncArgs += @(
           "--post-command", "cd /opt/imon-engine && npm run build",
           "--post-command", "cd /opt/imon-engine && npm run dev -- engine-sync",
+          "--post-command", "cd /opt/imon-engine && npm run dev -- social-profiles",
           "--post-command", "cd /opt/imon-engine && npm run dev -- growth-queue",
           "--post-command", "cd /opt/imon-engine && npm run dev -- revenue-report",
+          "--post-command", "cd /opt/imon-engine && npm run dev -- collective-fund-report",
           "--post-command", "cd /opt/imon-engine && npm run dev -- vps-artifacts"
         )
 

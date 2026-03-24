@@ -103,9 +103,12 @@ function usage(): string {
     "  npm run dev -- repair-asset-pack-media --pack <id>",
     "  npm run dev -- repair-asset-pack-content --pack <id>",
     "  npm run dev -- growth-queue",
+    "  npm run dev -- publish-growth-post --item <id>",
     "  npm run dev -- import-gumroad-sales --file <csv>",
     "  npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]",
     "  npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]",
+    "  npm run dev -- collective-fund-report [--days 30]",
+    "  npm run dev -- social-profiles",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
@@ -433,6 +436,16 @@ async function main(): Promise<void> {
       console.log(JSON.stringify({ queueItems: queue.length, ...artifacts }, null, 2));
       break;
     }
+    case "publish-growth-post": {
+      const itemId = String(flags.item ?? "");
+      if (!itemId) {
+        throw new Error("Missing --item for publish-growth-post command.");
+      }
+      const result = await storeAutopilot.publishGrowthPost(itemId);
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     case "import-gumroad-sales": {
       const filePath = String(flags.file ?? "");
       if (!filePath) {
@@ -465,6 +478,21 @@ async function main(): Promise<void> {
       const artifacts = await storeOps.writeRevenueArtifacts(snapshot, business?.name ?? businessId);
       logger.info(`Revenue report generated for ${business?.name ?? businessId}.`);
       console.log(JSON.stringify({ snapshot, artifacts }, null, 2));
+      break;
+    }
+    case "collective-fund-report": {
+      const days = Number(flags.days ?? "30");
+      const snapshot = await storeOps.buildCollectiveFundSnapshot(days);
+      const artifacts = await storeOps.writeCollectiveArtifacts(snapshot);
+      logger.info("Collective ImonEngine fund report generated.");
+      console.log(JSON.stringify({ snapshot, artifacts }, null, 2));
+      break;
+    }
+    case "social-profiles": {
+      const profiles = await storeOps.ensureSocialProfiles();
+      const artifacts = await storeOps.writeSocialArtifacts(profiles);
+      logger.info(`Social profile registry refreshed with ${profiles.length} profile(s).`);
+      console.log(JSON.stringify({ profiles, artifacts }, null, 2));
       break;
     }
     case "report": {

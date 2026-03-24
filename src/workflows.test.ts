@@ -250,6 +250,8 @@ test("store ops import Gumroad and Relay data into a revenue snapshot", async ()
   const gumroadResult = await storeOps.importGumroadSales(gumroadCsv, [first]);
   const relayResult = await storeOps.importRelayTransactions(relayCsv);
   const snapshot = await storeOps.buildRevenueSnapshot();
+  const collective = await storeOps.buildCollectiveFundSnapshot();
+  const profiles = await storeOps.ensureSocialProfiles();
   const report = await imonEngine.sync();
 
   assert.equal(gumroadResult.imported, 1);
@@ -259,5 +261,11 @@ test("store ops import Gumroad and Relay data into a revenue snapshot", async ()
   assert.equal(snapshot.fees, 1);
   assert.equal(snapshot.relayDeposits, 8);
   assert.equal(snapshot.relaySpend, 2.5);
+  assert.equal(snapshot.recommendations.growthReinvestment, 2.8);
+  assert.equal(snapshot.recommendations.collectiveTransfer, 2.8);
+  assert.equal(collective.businessCount, 1);
+  assert.equal(collective.totals.collectiveTransfer, 2.8);
+  assert.ok(profiles.some((profile) => profile.platform === "facebook_page" && profile.status === "live"));
+  assert.ok(profiles.some((profile) => profile.platform === "x" && profile.status === "blocked"));
   assert.ok(report.monthlyRevenue > 0);
 });
