@@ -221,6 +221,23 @@ test("store ops rebalance the next asset type instead of endlessly picking wallp
   assert.notEqual(nextType, "wallpaper_pack");
 });
 
+test("store ops cap new pack generation based on recent creation volume", async () => {
+  const { storeOps } = await setupWorkspace();
+  const now = new Date().toISOString();
+  const packs = [
+    { id: "p1", assetType: "wallpaper_pack", status: "published", niche: "One", title: "One", createdAt: now, updatedAt: now, publishedAt: now },
+    { id: "p2", assetType: "texture_pack", status: "ready_for_upload", niche: "Two", title: "Two", createdAt: now, updatedAt: now },
+    { id: "p3", assetType: "icon_pack", status: "planned", niche: "Three", title: "Three", createdAt: now, updatedAt: now }
+  ] as any;
+
+  const policy = await storeOps.ensureCatalogPolicy();
+  const control = await storeOps.getCatalogControlState(packs, { ...policy, maxNewPacksPer7Days: 2, maxOpenPackQueue: 5 });
+
+  assert.equal(control.createdLast7Days, 3);
+  assert.equal(control.canSeedMore, false);
+  assert.ok(control.reasons.some((reason) => reason.includes("pack generation cap")));
+});
+
 test("store ops reserve Imon for the parent system and scaffold distinct future brand aliases", async () => {
   const { storeOps } = await setupWorkspace();
 

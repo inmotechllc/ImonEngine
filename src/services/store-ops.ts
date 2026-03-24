@@ -516,6 +516,7 @@ export class StoreOpsService {
   ): Promise<{
     policy: CatalogGrowthPolicy;
     openQueueCount: number;
+    createdLast7Days: number;
     publishedCount: number;
     publishedLast7Days: number;
     publishedByType: Partial<Record<DigitalAssetType, number>>;
@@ -524,9 +525,10 @@ export class StoreOpsService {
   }> {
     const activePolicy = policy ?? (await this.ensureCatalogPolicy());
     const openQueueCount = packs.filter((pack) => pack.status !== "published").length;
+    const last7Start = Date.now() - 7 * MS_PER_DAY;
+    const createdLast7Days = packs.filter((pack) => new Date(pack.createdAt).getTime() >= last7Start).length;
     const published = packs.filter((pack) => pack.status === "published");
     const publishedCount = published.length;
-    const last7Start = Date.now() - 7 * MS_PER_DAY;
     const publishedLast7Days = published.filter((pack) => {
       const stamp = pack.publishedAt ?? pack.updatedAt;
       return new Date(stamp).getTime() >= last7Start;
@@ -541,6 +543,11 @@ export class StoreOpsService {
     if (openQueueCount >= activePolicy.maxOpenPackQueue) {
       reasons.push(`Open pack queue is at ${openQueueCount}/${activePolicy.maxOpenPackQueue}.`);
     }
+    if (createdLast7Days >= activePolicy.maxNewPacksPer7Days) {
+      reasons.push(
+        `Created ${createdLast7Days} pack(s) in the last 7 days, hitting the ${activePolicy.maxNewPacksPer7Days} pack generation cap.`
+      );
+    }
     if (publishedLast7Days >= activePolicy.maxNewPacksPer7Days) {
       reasons.push(
         `Published ${publishedLast7Days} pack(s) in the last 7 days, hitting the ${activePolicy.maxNewPacksPer7Days} pack cap.`
@@ -553,6 +560,7 @@ export class StoreOpsService {
     return {
       policy: activePolicy,
       openQueueCount,
+      createdLast7Days,
       publishedCount,
       publishedLast7Days,
       publishedByType,
