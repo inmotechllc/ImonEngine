@@ -32,6 +32,19 @@ BODY_FONT = find_font(
 )
 
 
+def find_cover(pack_dir: Path) -> Path | None:
+    covers_dir = pack_dir / "covers"
+    if not covers_dir.exists():
+        return None
+
+    candidates = sorted(
+        path
+        for path in covers_dir.iterdir()
+        if path.is_file() and path.name.lower().startswith("cover-") and path.suffix.lower() in {".png", ".jpg", ".jpeg"}
+    )
+    return candidates[0] if candidates else None
+
+
 def create_teaser(source: Path, out_path: Path, title: str, subtitle: str, *, size: tuple[int, int]) -> None:
     width, height = size
     canvas = Image.new("RGB", (width, height), "#F6F4F0")
@@ -86,8 +99,8 @@ def main() -> None:
             continue
 
         pack_dir = Path(pack["outputDir"])
-        cover = pack_dir / "covers" / "cover-01.png"
-        if not cover.exists():
+        cover = find_cover(pack_dir)
+        if cover is None:
             continue
 
         pack_output = output_dir / pack["id"]

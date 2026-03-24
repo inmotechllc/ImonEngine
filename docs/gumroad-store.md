@@ -61,6 +61,12 @@
 
 ## Ready To Upload
 
+## Planned Queue
+
+- Product: `Cream poster fibers and matte analog grain Cream poster grain textures for creators`
+- Status: `planned`
+- Pack dir: `C:\AIWorkspace\Projects\Auto-Funding\runtime\asset-store\gumroad-cream-poster-fibers-and-matte-analog-grain-cream-poster-grain-textures-for-creators`
+
 ## Repo-Controlled Autopilot
 
 - Primary local runner: `scripts/run_local_autopilot.ps1`
@@ -78,6 +84,15 @@
 - Repair a published listing's missing thumbnail with `npm run dev -- repair-asset-pack-media --pack <id>`.
 - Repair a published listing's missing download with `npm run dev -- repair-asset-pack-content --pack <id>`.
 - Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.
+
+## Growth And Revenue Controls
+
+- Refresh queue + promo assets: `npm run dev -- growth-queue`
+- Import Gumroad CSV sales: `npm run dev -- import-gumroad-sales --file <csv>`
+- Import Relay CSV transactions: `npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]`
+- Build revenue report: `npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]`
+- Current free-channel queue output: `C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.md`
+- Current revenue output: `C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\revenue-report.md`
 
 ## Post-Publish Sync Flow
 

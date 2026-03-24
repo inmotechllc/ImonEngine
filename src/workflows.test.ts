@@ -14,6 +14,7 @@ import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { FileStore } from "./storage/store.js";
 import { AIClient } from "./openai/client.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
+import { StoreOpsService } from "./services/store-ops.js";
 
 async function setupWorkspace() {
   const root = await mkdtemp(path.join(os.tmpdir(), "auto-funding-"));
@@ -32,6 +33,7 @@ async function setupWorkspace() {
   const replyHandler = new ReplyHandlerAgent(ai);
   const imonEngine = new ImonEngineAgent(config, store);
   const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
+  const storeOps = new StoreOpsService(config, store);
 
   return {
     root,
@@ -42,7 +44,8 @@ async function setupWorkspace() {
     qaReviewer,
     replyHandler,
     imonEngine,
-    digitalAssetFactory
+    digitalAssetFactory,
+    storeOps
   };
 }
 
@@ -196,4 +199,65 @@ test("digital asset factory stages the first pack for production", async () => {
   assert.ok(saved);
   assert.equal(saved?.status, "producing");
   assert.equal(saved?.title, "Minimal Productivity Desktop Background Pack");
+});
+
+test("store ops rebalance the next asset type instead of endlessly picking wallpapers", async () => {
+  const { storeOps } = await setupWorkspace();
+  const now = new Date().toISOString();
+  const packs = [
+    { id: "w1", assetType: "wallpaper_pack", status: "published", niche: "Wall 1", title: "Wall 1", productUrl: "https://example.com/1", publishedAt: now },
+    { id: "w2", assetType: "wallpaper_pack", status: "published", niche: "Wall 2", title: "Wall 2", productUrl: "https://example.com/2", publishedAt: now },
+    { id: "w3", assetType: "wallpaper_pack", status: "published", niche: "Wall 3", title: "Wall 3", productUrl: "https://example.com/3", publishedAt: now },
+    { id: "w4", assetType: "wallpaper_pack", status: "published", niche: "Wall 4", title: "Wall 4", productUrl: "https://example.com/4", publishedAt: now },
+    { id: "t1", assetType: "texture_pack", status: "published", niche: "Texture 1", title: "Texture 1", productUrl: "https://example.com/5", publishedAt: now }
+  ] as any;
+
+  const policy = await storeOps.ensureCatalogPolicy();
+  const nextType = storeOps.selectNextAssetType(packs, { ...policy, maxNewPacksPer7Days: 10 });
+
+  assert.notEqual(nextType, "wallpaper_pack");
+});
+
+test("store ops import Gumroad and Relay data into a revenue snapshot", async () => {
+  const { root, store, imonEngine, digitalAssetFactory, storeOps } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  const packs = await digitalAssetFactory.seedStarterQueue();
+  const first = await digitalAssetFactory.publishPack(
+    packs[0]!.id,
+    "https://imonengine.gumroad.com/l/test-product"
+  );
+
+  const gumroadCsv = path.join(root, "gumroad-sales.csv");
+  const relayCsv = path.join(root, "relay.csv");
+  await writeFile(
+    gumroadCsv,
+    [
+      "Order ID,Product Name,Sale Price,Fee,Creator Earnings,Purchase Date,Currency,Email",
+      `sale-1,${first.title},9,1,8,2026-03-24,USD,buyer@example.com`
+    ].join("\n"),
+    "utf8"
+  );
+  await writeFile(
+    relayCsv,
+    [
+      "Posted Date,Description,Amount,Account",
+      "2026-03-24,Gumroad payout,8.00,Relay Operating",
+      "2026-03-24,Meta Ads,-2.50,Relay Operating"
+    ].join("\n"),
+    "utf8"
+  );
+
+  const gumroadResult = await storeOps.importGumroadSales(gumroadCsv, [first]);
+  const relayResult = await storeOps.importRelayTransactions(relayCsv);
+  const snapshot = await storeOps.buildRevenueSnapshot();
+  const report = await imonEngine.sync();
+
+  assert.equal(gumroadResult.imported, 1);
+  assert.equal(relayResult.imported, 2);
+  assert.equal(snapshot.saleCount, 1);
+  assert.equal(snapshot.grossRevenue, 9);
+  assert.equal(snapshot.fees, 1);
+  assert.equal(snapshot.relayDeposits, 8);
+  assert.equal(snapshot.relaySpend, 2.5);
+  assert.ok(report.monthlyRevenue > 0);
 });

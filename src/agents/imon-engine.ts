@@ -316,12 +316,13 @@ export class ImonEngineAgent {
   }
 
   private async refreshPortfolioMetrics(businesses: ManagedBusiness[]): Promise<ManagedBusiness[]> {
-    const [clients, leads, offers, ledger, assetPacks] = await Promise.all([
+    const [clients, leads, offers, ledger, assetPacks, salesTransactions] = await Promise.all([
       this.store.getClients(),
       this.store.getLeads(),
       this.store.getOffers(),
       this.store.getRevenueLedger(),
-      this.store.getAssetPacks()
+      this.store.getAssetPacks(),
+      this.store.getSalesTransactions()
     ]);
     const agencyMrr = clients
       .filter((client) => client.billingStatus === "retainer_active")
@@ -336,12 +337,37 @@ export class ImonEngineAgent {
     const refreshed: ManagedBusiness[] = [];
 
     for (const business of businesses) {
-      const revenue = ledger
-        .filter((entry) => entry.businessId === business.id && entry.type === "revenue")
-        .reduce((sum, entry) => sum + entry.amount, 0);
-      const costs = ledger
-        .filter((entry) => entry.businessId === business.id && entry.type === "cost")
-        .reduce((sum, entry) => sum + entry.amount, 0);
+      const last30Days = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const salesWindow = salesTransactions.filter(
+        (transaction) =>
+          transaction.businessId === business.id &&
+          new Date(transaction.occurredAt).getTime() >= last30Days
+      );
+      const salesRevenue = salesWindow
+        .filter((transaction) => transaction.type === "sale")
+        .reduce((sum, transaction) => sum + Math.max(0, transaction.netAmount), 0);
+      const salesCosts = salesWindow.reduce((sum, transaction) => {
+        if (transaction.type === "refund") {
+          return sum + Math.abs(transaction.netAmount);
+        }
+        if (transaction.source === "relay" && transaction.netAmount < 0) {
+          return sum + Math.abs(transaction.netAmount);
+        }
+        return sum + Math.max(0, transaction.feeAmount);
+      }, 0);
+
+      const revenue =
+        salesWindow.length > 0
+          ? salesRevenue
+          : ledger
+              .filter((entry) => entry.businessId === business.id && entry.type === "revenue")
+              .reduce((sum, entry) => sum + entry.amount, 0);
+      const costs =
+        salesWindow.length > 0
+          ? salesCosts
+          : ledger
+              .filter((entry) => entry.businessId === business.id && entry.type === "cost")
+              .reduce((sum, entry) => sum + entry.amount, 0);
 
       const next =
         business.id === "auto-funding-agency"

@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import type { AppConfig } from "../config.js";
 import type { AssetPackRecord, AssetPackStatus, DigitalAssetType } from "../domain/digital-assets.js";
 import { exists, readJsonFile, readTextFile, writeJsonFile, writeTextFile } from "../lib/fs.js";
+import { StoreOpsService } from "../services/store-ops.js";
 import { FileStore } from "../storage/store.js";
 import { DigitalAssetFactoryAgent } from "./digital-asset-factory.js";
 import { ImonEngineAgent } from "./imon-engine.js";
@@ -106,6 +107,7 @@ export interface AutopilotRunResult {
 }
 
 export class StoreAutopilotAgent {
+  private readonly storeOps: StoreOpsService;
   private readonly docsDir: string;
   private readonly autopilotDir: string;
   private readonly statePath: string;
@@ -120,6 +122,7 @@ export class StoreAutopilotAgent {
     private readonly digitalAssetFactory: DigitalAssetFactoryAgent,
     private readonly imonEngine: ImonEngineAgent
   ) {
+    this.storeOps = new StoreOpsService(config, store);
     this.docsDir = path.join(this.config.projectRoot, "docs");
     this.autopilotDir = path.join(this.docsDir, "autopilot");
     this.statePath = path.join(this.autopilotDir, "state.json");
@@ -442,6 +445,8 @@ export class StoreAutopilotAgent {
     if (ready) {
       try {
         const published = await this.autopublishReadyPack(ready.id);
+        const refreshedPacks = await this.store.getAssetPacks();
+        await this.refreshStoreOpsArtifacts(refreshedPacks, true);
         return {
           phaseId: state.currentPhase,
           status: "progress",
@@ -471,6 +476,11 @@ export class StoreAutopilotAgent {
           changed: false
         };
       }
+    }
+
+    const opsRefresh = await this.refreshStoreOpsArtifacts(packs);
+    if (opsRefresh) {
+      return opsRefresh;
     }
 
     const fallback = await this.runContinuousQueueWork(packs);
@@ -631,7 +641,18 @@ export class StoreAutopilotAgent {
       };
     }
 
-    const nextBrief = this.getNextContinuousBrief(packs);
+    const catalogState = await this.storeOps.getCatalogControlState(packs);
+    if (!catalogState.canSeedMore) {
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: "idle",
+        summary: "Catalog expansion is paused while the store catches up on growth and pacing constraints.",
+        details: [...leadingDetails, ...catalogState.reasons],
+        changed: false
+      };
+    }
+
+    const nextBrief = this.getNextContinuousBrief(packs, catalogState.policy);
     if (nextBrief) {
       const created = await this.digitalAssetFactory.createPack({
         ...nextBrief,
@@ -655,7 +676,10 @@ export class StoreAutopilotAgent {
     return publishedCount >= 2 && builtCount >= PHASE_ONE_TARGET_PACK_COUNT;
   }
 
-  private getNextContinuousBrief(packs: AssetPackRecord[]): {
+  private getNextContinuousBrief(
+    packs: AssetPackRecord[],
+    policy: Awaited<ReturnType<StoreOpsService["ensureCatalogPolicy"]>>
+  ): {
     niche: string;
     assetType: DigitalAssetType;
     style: string;
@@ -668,16 +692,138 @@ export class StoreAutopilotAgent {
       return queued;
     }
 
-    const generatedWallpapers = packs.filter((pack) =>
-      pack.niche.startsWith("Low-noise desktop backgrounds volume")
-    ).length;
+    return this.storeOps.nextBriefForCatalog(packs, policy);
+  }
+
+  private async refreshStoreOpsArtifacts(
+    packs: AssetPackRecord[],
+    force = false
+  ): Promise<AutopilotRunResult | null> {
+    await this.storeOps.ensureCatalogPolicy();
+    await this.storeOps.ensureAllocationPolicy();
+
+    const existingQueue = await this.store.getGrowthQueue();
+    const publishedPacks = packs.filter((pack) => pack.status === "published" && pack.productUrl);
+    const marketingRefresh = await this.refreshMarketingAssetsIfNeeded(publishedPacks, force);
+    const plannedQueue = existingQueue.filter((item) => item.status === "planned");
+    const knownPackIds = new Set(publishedPacks.map((pack) => pack.id));
+    const queueHasUnknownPack = plannedQueue.some((item) => !knownPackIds.has(item.packId));
+    const queueTooSmall =
+      plannedQueue.length < Math.min(this.config.storeOps.growth.postsPerWeek, publishedPacks.length);
+    const queueNeedsRefresh = force || queueHasUnknownPack || queueTooSmall;
+
+    if (queueNeedsRefresh) {
+      const before = JSON.stringify(existingQueue, null, 2);
+      const nextQueue = await this.storeOps.refreshGrowthQueue(packs);
+      const after = JSON.stringify(nextQueue, null, 2);
+      const artifacts = await this.storeOps.writeGrowthArtifacts(packs, nextQueue);
+      if (before !== after || force || marketingRefresh.refreshed) {
+        return {
+          phaseId: "phase-06-continuous-store-operations",
+          status: "progress",
+          summary: "Refreshed the store growth queue and channel-ready promo assets.",
+          details: [
+            `Planned queue items: ${nextQueue.filter((item) => item.status === "planned").length}`,
+            `Queue JSON: ${artifacts.jsonPath}`,
+            `Queue Markdown: ${artifacts.markdownPath}`,
+            ...marketingRefresh.details
+          ],
+          changed: true
+        };
+      }
+    }
+
+    if (marketingRefresh.refreshed) {
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: "progress",
+        summary: "Regenerated growth promo assets for the published catalog.",
+        details: marketingRefresh.details,
+        changed: true
+      };
+    }
+
+    const transactions = await this.store.getSalesTransactions();
+    if (transactions.length > 0) {
+      const previousSnapshots = await this.store.getAllocationSnapshots();
+      const previousLatestId = previousSnapshots
+        .filter((snapshot) => snapshot.businessId === "imon-digital-asset-store")
+        .sort((left, right) => left.generatedAt.localeCompare(right.generatedAt))
+        .at(-1)?.id;
+      const snapshot = await this.storeOps.buildRevenueSnapshot();
+      const artifacts = await this.storeOps.writeRevenueArtifacts(snapshot, "Imon Digital Asset Store");
+      if (previousLatestId !== snapshot.id || force) {
+        return {
+          phaseId: "phase-06-continuous-store-operations",
+          status: "progress",
+          summary: "Updated the revenue allocation report from imported Gumroad and Relay transactions.",
+          details: [
+            `Revenue JSON: ${artifacts.jsonPath}`,
+            `Revenue Markdown: ${artifacts.markdownPath}`,
+            `Net revenue window: $${snapshot.netRevenue.toFixed(2)}`
+          ],
+          changed: true
+        };
+      }
+    }
+
+    return null;
+  }
+
+  private async refreshMarketingAssetsIfNeeded(
+    publishedPacks: AssetPackRecord[],
+    force: boolean
+  ): Promise<{ refreshed: boolean; details: string[] }> {
+    if (publishedPacks.length === 0) {
+      return { refreshed: false, details: [] };
+    }
+
+    const marketingDir = path.join(this.config.outputDir, "marketing");
+    const manifestPath = path.join(marketingDir, "manifest.json");
+    const manifest = await readJsonFile<Array<{ packId?: string; landscape?: string; square?: string }>>(
+      manifestPath,
+      []
+    );
+    const manifestByPackId = new Map(
+      manifest
+        .filter((entry): entry is { packId: string; landscape?: string; square?: string } => typeof entry.packId === "string")
+        .map((entry) => [entry.packId, entry])
+    );
+
+    let missingAssets = 0;
+    for (const pack of publishedPacks) {
+      const entry = manifestByPackId.get(pack.id);
+      const hasSquare = typeof entry?.square === "string" && (await exists(entry.square));
+      const hasLandscape = typeof entry?.landscape === "string" && (await exists(entry.landscape));
+      if (!entry || !hasSquare || !hasLandscape) {
+        missingAssets += 1;
+      }
+    }
+
+    const needsRefresh = force || manifest.length < publishedPacks.length || missingAssets > 0;
+    if (!needsRefresh) {
+      return { refreshed: false, details: [] };
+    }
+
+    const result = await this.runPythonScript("build_growth_assets.py", [
+      "--state-file",
+      path.join(this.config.stateDir, "assetPacks.json"),
+      "--output-dir",
+      marketingDir
+    ]);
+
+    const assetCount =
+      typeof result.assetCount === "number"
+        ? result.assetCount
+        : Number.parseInt(String(result.assetCount ?? publishedPacks.length), 10);
 
     return {
-      niche: `Low-noise desktop backgrounds volume ${generatedWallpapers + 1}`,
-      assetType: "wallpaper_pack",
-      style: "smoky neutral gradients with subtle geometry",
-      audience: "operators, developers, and creator workspaces",
-      packSize: 14
+      refreshed: true,
+      details: [
+        `Marketing manifest: ${manifestPath}`,
+        `Generated promo asset sets: ${Number.isFinite(assetCount) ? assetCount : publishedPacks.length}`,
+        `Published packs in scope: ${publishedPacks.length}`
+      ]
     };
   }
 
@@ -904,6 +1050,7 @@ export class StoreAutopilotAgent {
       "",
       "- Generate promo assets with `python scripts/build_growth_assets.py --state-file runtime/state/assetPacks.json --output-dir runtime/marketing`.",
       "- Use the generated square teasers for X, LinkedIn, Pinterest Idea Pins, and Gumroad profile updates.",
+      "- Refresh the scheduled post queue with `npm run dev -- growth-queue`.",
       "- Rotate product focus weekly in this order:",
       ...activeTitles.map((title) => `  - ${title}`),
       "",
@@ -955,6 +1102,8 @@ export class StoreAutopilotAgent {
       "- Install with `powershell -ExecutionPolicy Bypass -File scripts/install-windows-autopilot.ps1`.",
       "- The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.",
       "- The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.",
+      "- Catalog expansion is capped so the store cannot outrun its growth queue and channel bandwidth.",
+      "- Revenue imports should flow through `npm run dev -- import-gumroad-sales` and `npm run dev -- import-relay-transactions` before reviewing `npm run dev -- revenue-report`.",
       "",
       "## VPS Scheduler",
       "",
@@ -988,6 +1137,7 @@ export class StoreAutopilotAgent {
       "- The local task is the primary scheduler because it can reuse the signed-in browser session when needed.",
       "- The VPS cron job is optional and best for headless build and sync work.",
       "- `scripts/publish_gumroad_product.py` should only run on the local scheduler because it depends on the signed-in Gumroad browser session.",
+      "- `runtime/state/growthQueue.json` and `runtime/ops/revenue-report.json` are the current store-ops control surfaces for growth pacing and reinvestment review.",
       "- If the browser is closed, the final-phase Gmail delivery will block until the session is reopened.",
       ""
     ].join("\n");
@@ -1021,6 +1171,18 @@ export class StoreAutopilotAgent {
       "GUMROAD_SELLER_EMAIL=imonengine@gmail.com",
       "GUMROAD_USERNAME=imonengine",
       "GUMROAD_PROFILE_URL=imonengine.gumroad.com",
+      "STORE_MAX_NEW_PACKS_7D=2",
+      "STORE_MAX_PUBLISHED_PACKS=36",
+      "STORE_MAX_ASSET_TYPE_SHARE=0.4",
+      "STORE_MAX_OPEN_PACK_QUEUE=2",
+      "STORE_POSTS_PER_WEEK=6",
+      "STORE_GROWTH_QUEUE_DAYS=7",
+      "STORE_TAX_RESERVE_RATE=0.2",
+      "STORE_REINVESTMENT_RATE=0.35",
+      "STORE_TOOLS_RATE=0.1",
+      "STORE_REFUND_BUFFER_RATE=0.1",
+      "STORE_PROFIT_HOLD_RATE=0.25",
+      "STORE_CASHOUT_THRESHOLD=100",
       "APPROVAL_EMAIL=owner@example.com",
       "BUSINESS_NAME=Imon Engine Automation",
       "BUSINESS_PHONE=(914) 714-0656",

@@ -16,6 +16,7 @@ import { ImonEngineAgent } from "./agents/imon-engine.js";
 import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { StoreAutopilotAgent } from "./agents/store-autopilot.js";
 import { buildAgencySite } from "./services/agency-site.js";
+import { StoreOpsService } from "./services/store-ops.js";
 
 interface Flags {
   [key: string]: string | boolean | undefined;
@@ -101,6 +102,10 @@ function usage(): string {
     "  npm run dev -- autopublish-asset-pack --pack <id>",
     "  npm run dev -- repair-asset-pack-media --pack <id>",
     "  npm run dev -- repair-asset-pack-content --pack <id>",
+    "  npm run dev -- growth-queue",
+    "  npm run dev -- import-gumroad-sales --file <csv>",
+    "  npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]",
+    "  npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
@@ -123,6 +128,7 @@ async function buildContext() {
   const imonEngine = new ImonEngineAgent(config, store);
   const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
   const storeAutopilot = new StoreAutopilotAgent(config, store, digitalAssetFactory, imonEngine);
+  const storeOps = new StoreOpsService(config, store);
 
   return {
     config,
@@ -135,7 +141,8 @@ async function buildContext() {
     replyHandler,
     imonEngine,
     digitalAssetFactory,
-    storeAutopilot
+    storeAutopilot,
+    storeOps
   };
 }
 
@@ -210,7 +217,8 @@ async function main(): Promise<void> {
     replyHandler,
     imonEngine,
     digitalAssetFactory,
-    storeAutopilot
+    storeAutopilot,
+    storeOps
   } =
     await buildContext();
 
@@ -415,6 +423,48 @@ async function main(): Promise<void> {
       if (result.details.length > 0) {
         console.log(JSON.stringify(result, null, 2));
       }
+      break;
+    }
+    case "growth-queue": {
+      const packs = await store.getAssetPacks();
+      const queue = await storeOps.refreshGrowthQueue(packs);
+      const artifacts = await storeOps.writeGrowthArtifacts(packs, queue);
+      logger.info(`Growth queue refreshed with ${queue.length} item(s).`);
+      console.log(JSON.stringify({ queueItems: queue.length, ...artifacts }, null, 2));
+      break;
+    }
+    case "import-gumroad-sales": {
+      const filePath = String(flags.file ?? "");
+      if (!filePath) {
+        throw new Error("Missing --file for import-gumroad-sales command.");
+      }
+      const packs = await store.getAssetPacks();
+      const result = await storeOps.importGumroadSales(path.resolve(filePath), packs);
+      logger.info(`Imported ${result.imported} Gumroad transaction(s).`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "import-relay-transactions": {
+      const filePath = String(flags.file ?? "");
+      if (!filePath) {
+        throw new Error("Missing --file for import-relay-transactions command.");
+      }
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "imon-digital-asset-store";
+      const result = await storeOps.importRelayTransactions(path.resolve(filePath), businessId);
+      logger.info(`Imported ${result.imported} Relay transaction(s).`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "revenue-report": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "imon-digital-asset-store";
+      const days = Number(flags.days ?? "30");
+      const snapshot = await storeOps.buildRevenueSnapshot(businessId, days);
+      const business = await store.getManagedBusiness(businessId);
+      const artifacts = await storeOps.writeRevenueArtifacts(snapshot, business?.name ?? businessId);
+      logger.info(`Revenue report generated for ${business?.name ?? businessId}.`);
+      console.log(JSON.stringify({ snapshot, artifacts }, null, 2));
       break;
     }
     case "report": {
