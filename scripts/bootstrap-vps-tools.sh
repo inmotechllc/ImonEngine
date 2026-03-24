@@ -34,7 +34,9 @@ ensure_base_packages() {
     jq \
     lsb-release \
     python3-pip \
+    python3-pil \
     python3-venv \
+    python3-websocket \
     unzip \
     x11-utils \
     xauth \
@@ -92,8 +94,7 @@ ensure_playwright() {
 
 ensure_python_automation_deps() {
   log "Installing Python automation dependencies."
-  python3 -m pip install --break-system-packages --upgrade pip
-  python3 -m pip install --break-system-packages pillow websocket-client
+  apt-get install -y python3-pil python3-websocket
 }
 
 ensure_codex() {
@@ -127,7 +128,9 @@ RUN apt-get update && \
       jq \
       python3 \
       python3-pip \
+      python3-pil \
       python3-venv \
+      python3-websocket \
       unzip \
       x11-utils \
       xauth \
@@ -137,8 +140,6 @@ RUN apt-get update && \
 
 RUN npm install -g @openai/codex playwright && \
     playwright install --with-deps chromium
-
-RUN python3 -m pip install --break-system-packages pillow websocket-client
 
 WORKDIR /workspace
 CMD ["sleep", "infinity"]
