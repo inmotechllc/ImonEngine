@@ -24,6 +24,8 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
+npm run dev -- vps-artifacts
+bash scripts/bootstrap-vps-tools.sh
 npm run build
 npm run dev -- bootstrap
 npm run dev -- engine-sync

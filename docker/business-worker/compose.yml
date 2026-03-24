@@ -1,0 +1,28 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMON_ENGINE_WORKER_IMAGE:-imonengine-business-worker:latest}
+    container_name: ${IMON_ENGINE_WORKER_CONTAINER:-imonengine-business-worker}
+    init: true
+    stdin_open: true
+    tty: true
+    user: root
+    working_dir: /workspace
+    environment:
+      HOME: /root
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      IMON_ENGINE_BUSINESS_ID: ${IMON_ENGINE_BUSINESS_ID:-sandbox}
+      IMON_ENGINE_BUSINESS_NAME: ${IMON_ENGINE_BUSINESS_NAME:-sandbox}
+      IMON_ENGINE_WORKSPACE: /workspace
+      IMON_ENGINE_STATE_DIR: /state
+      IMON_ENGINE_REPO_DIR: /repo
+    volumes:
+      - ${IMON_ENGINE_WORKSPACE_HOST:-/opt/imon-engine/workspaces/sandbox}:/workspace
+      - ${IMON_ENGINE_STATE_HOST:-/opt/imon-engine/runtime/ops/business-workers/sandbox}:/state
+      - ${IMON_ENGINE_REPO_HOST:-/opt/imon-engine}:/repo:ro
+    command:
+      - bash
+      - -lc
+      - sleep infinity
