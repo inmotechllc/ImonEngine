@@ -99,6 +99,7 @@ function usage(): string {
     "  npm run dev -- ready-asset-pack --pack <id>",
     "  npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>",
     "  npm run dev -- autopublish-asset-pack --pack <id>",
+    "  npm run dev -- repair-asset-pack-media --pack <id>",
     "  npm run dev -- repair-asset-pack-content --pack <id>",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
@@ -387,6 +388,15 @@ async function main(): Promise<void> {
       const packId = typeof flags.pack === "string" ? flags.pack : undefined;
       const result = await storeAutopilot.autopublishReadyPack(packId);
       logger.info(`Auto-published ${result.title} at ${result.productUrl}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "repair-asset-pack-media": {
+      const packId = typeof flags.pack === "string" ? flags.pack : undefined;
+      const result = await storeAutopilot.repairPublishedPackMedia(packId);
+      logger.info(
+        `Repaired Gumroad media for ${result.title} at ${result.productUrl} (${result.mediaAttempts ?? 0} upload attempt(s)).`
+      );
       console.log(JSON.stringify(result, null, 2));
       break;
     }

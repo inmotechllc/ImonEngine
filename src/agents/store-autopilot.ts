@@ -90,6 +90,8 @@ export interface AutopilotPublishResult {
   productUrl: string;
   editUrl?: string;
   productId?: string;
+  mediaChanged?: boolean;
+  mediaAttempts?: number;
   contentChanged?: boolean;
   uploadAttempts?: number;
 }
@@ -513,9 +515,52 @@ export class StoreAutopilotAgent {
       productUrl,
       editUrl: typeof publishResult.editUrl === "string" ? publishResult.editUrl : undefined,
       productId: typeof publishResult.productId === "string" ? publishResult.productId : undefined,
+      mediaChanged: Boolean(publishResult.mediaChanged),
+      mediaAttempts: typeof publishResult.mediaAttempts === "number" ? publishResult.mediaAttempts : undefined,
       contentChanged: Boolean(publishResult.contentChanged),
       uploadAttempts:
         typeof publishResult.uploadAttempts === "number" ? publishResult.uploadAttempts : undefined
+    };
+  }
+
+  async repairPublishedPackMedia(packId?: string): Promise<AutopilotPublishResult> {
+    const packs = await this.store.getAssetPacks();
+    const pack =
+      (packId ? packs.find((candidate) => candidate.id === packId) : undefined) ??
+      packs.find((candidate) => candidate.status === "published" && candidate.productUrl);
+
+    if (!pack) {
+      throw new Error("No published asset pack with a product URL is available to repair.");
+    }
+    if (!pack.productUrl) {
+      throw new Error(`Asset pack ${pack.id} does not have a Gumroad product URL yet.`);
+    }
+
+    const match = pack.productUrl.match(/\/l\/([^/?#]+)/);
+    const productId = match?.[1];
+    if (!productId) {
+      throw new Error(`Could not determine a Gumroad product id from ${pack.productUrl}.`);
+    }
+
+    const repairResult = await this.runPythonScript("publish_gumroad_product.py", [
+      "--pack-dir",
+      pack.outputDir,
+      "--product-id",
+      productId,
+      "--media-only"
+    ]);
+
+    return {
+      packId: pack.id,
+      title: pack.title,
+      productUrl: String(repairResult.productUrl ?? pack.productUrl),
+      editUrl: typeof repairResult.editUrl === "string" ? repairResult.editUrl : undefined,
+      productId: typeof repairResult.productId === "string" ? repairResult.productId : productId,
+      mediaChanged: Boolean(repairResult.mediaChanged),
+      mediaAttempts: typeof repairResult.mediaAttempts === "number" ? repairResult.mediaAttempts : undefined,
+      contentChanged: Boolean(repairResult.contentChanged),
+      uploadAttempts:
+        typeof repairResult.uploadAttempts === "number" ? repairResult.uploadAttempts : undefined
     };
   }
 

@@ -25,6 +25,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Repair or verify the content tab for an existing product instead of creating a new one.",
     )
+    parser.add_argument(
+        "--media-only",
+        action="store_true",
+        help="Repair or verify the product media tab for an existing product instead of creating a new one.",
+    )
     parser.add_argument("--port", type=int)
     return parser.parse_args()
 
@@ -94,7 +99,7 @@ def collect_publish_assets(pack_dir: Path, pack: dict[str, Any]) -> dict[str, An
         "source_zip_path": source_zip_path,
         "temp_dir": temp_dir,
         "cover_files": cover_files[:2],
-        "thumbnail_file": thumbnail_file,
+        "thumbnail_file": thumbnail_file or (cover_files[0] if cover_files else None),
     }
 
 
@@ -294,13 +299,141 @@ def populate_product_tab(page: CdpPage, pack: dict[str, Any], cover_files: list[
     set_input_by_index(page, "input[type='text']", 0, str(pack["title"]))
     replace_editor_text(page, "[contenteditable='true']", compose_description(pack))
     set_input_by_index(page, "input[placeholder=\"You'll get...\"]", 0, compose_summary(pack))
-    if cover_files:
-        page.upload_files("input[type=file]", 0, [str(path.resolve()) for path in cover_files])
-        time.sleep(4)
     action = click_primary_action(page)
     if action is None:
         raise RuntimeError("Could not save Gumroad product details.")
     time.sleep(3)
+
+
+def read_product_media_state(page: CdpPage) -> dict[str, Any]:
+    state = page.evaluate(
+        """
+(() => {
+  const images = [...document.querySelectorAll('img')];
+  const buttonTexts = [...document.querySelectorAll('button, label')]
+    .map((node) => (node.innerText || node.getAttribute('aria-label') || '').trim().toLowerCase())
+    .filter(Boolean);
+  return {
+    hasThumbnail: images.some((img) => (img.alt || '').trim().toLowerCase() === 'thumbnail image'),
+    largeImageCount: images.filter((img) => (img.naturalWidth || 0) >= 1000 && (img.naturalHeight || 0) >= 600).length,
+    hasCoverUpload: buttonTexts.some((text) => text === 'add cover' || text === 'upload images or videos'),
+    hasThumbnailUpload: buttonTexts.some((text) => text === 'upload'),
+    bodySnippet: (document.body.innerText || '').slice(0, 1200)
+  };
+})()
+"""
+    )
+    if not isinstance(state, dict):
+        return {
+            "hasThumbnail": False,
+            "largeImageCount": 0,
+            "hasCoverUpload": False,
+            "hasThumbnailUpload": False,
+            "bodySnippet": "",
+        }
+    return state
+
+
+def product_media_ready(state: dict[str, Any], *, require_covers: bool, require_thumbnail: bool) -> bool:
+    has_covers = int(state.get("largeImageCount", 0)) > 0
+    has_thumbnail = bool(state.get("hasThumbnail"))
+    return (not require_covers or has_covers) and (not require_thumbnail or has_thumbnail)
+
+
+def wait_for_product_media(
+    page: CdpPage,
+    *,
+    require_covers: bool,
+    require_thumbnail: bool,
+    timeout: float = 90.0,
+) -> dict[str, Any]:
+    deadline = time.time() + timeout
+    last_state: dict[str, Any] | None = None
+    while time.time() < deadline:
+        last_state = read_product_media_state(page)
+        if product_media_ready(last_state, require_covers=require_covers, require_thumbnail=require_thumbnail):
+            return last_state
+        time.sleep(1.0)
+    details = last_state.get("bodySnippet", "") if last_state else ""
+    raise RuntimeError(f"Timed out waiting for Gumroad product media. {details}")
+
+
+def ensure_product_media(
+    page: CdpPage,
+    edit_url: str,
+    cover_files: list[Path],
+    thumbnail_file: Path | None,
+    *,
+    attempts: int = 3,
+) -> dict[str, Any]:
+    page.navigate(edit_url)
+    wait_until(page, "location.pathname.includes('/edit') && document.body.innerText.includes('Thumbnail')", timeout=30)
+    initial_state = read_product_media_state(page)
+    if product_media_ready(
+        initial_state,
+        require_covers=bool(cover_files),
+        require_thumbnail=bool(thumbnail_file),
+    ):
+        return {"changed": False, "state": initial_state, "attempts": 0}
+
+    changed = False
+    last_state = initial_state
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        page.navigate(edit_url)
+        wait_until(page, "location.pathname.includes('/edit') && document.body.innerText.includes('Thumbnail')", timeout=30)
+        last_state = read_product_media_state(page)
+
+        try:
+            if cover_files and int(last_state.get("largeImageCount", 0)) == 0:
+                page.upload_files(
+                    "input[type=file][multiple][accept*='.jpeg']",
+                    0,
+                    [str(path.resolve()) for path in cover_files],
+                )
+                last_state = wait_for_product_media(page, require_covers=True, require_thumbnail=False)
+                changed = True
+
+            if thumbnail_file and not bool(last_state.get("hasThumbnail")):
+                page.upload_files(
+                    "input[type=file][accept*='.jpeg']:not([multiple])",
+                    0,
+                    [str(thumbnail_file.resolve())],
+                )
+                last_state = wait_for_product_media(
+                    page,
+                    require_covers=bool(cover_files) or int(last_state.get("largeImageCount", 0)) > 0,
+                    require_thumbnail=True,
+                )
+                changed = True
+        except Exception as error:
+            last_error = error
+            time.sleep(2)
+            continue
+
+        if changed:
+            action = click_primary_action(page)
+            if action is None:
+                raise RuntimeError("Could not save Gumroad product media.")
+            time.sleep(3)
+
+        page.navigate(edit_url)
+        wait_until(page, "location.pathname.includes('/edit') && document.body.innerText.includes('Thumbnail')", timeout=30)
+        last_state = read_product_media_state(page)
+        if product_media_ready(
+            last_state,
+            require_covers=bool(cover_files),
+            require_thumbnail=bool(thumbnail_file),
+        ):
+            return {"changed": changed, "state": last_state, "attempts": attempt if changed else 0}
+
+    details = last_state.get("bodySnippet", "") if isinstance(last_state, dict) else ""
+    if last_error:
+        raise RuntimeError(
+            f"Gumroad product media was still incomplete after {attempts} attempt(s). "
+            f"{last_error} {details}"
+        ) from last_error
+    raise RuntimeError(f"Gumroad product media was still incomplete after {attempts} attempt(s). {details}")
 
 
 def read_content_tab_state(page: CdpPage, zip_path: Path) -> dict[str, Any]:
@@ -466,8 +599,10 @@ def main() -> int:
     args = parse_args()
     if args.product_id and args.edit_url:
         raise SystemExit("Pass either --product-id or --edit-url, not both.")
-    if (args.product_id or args.edit_url) and not args.content_only:
-        raise SystemExit("Existing Gumroad products are only supported with --content-only.")
+    if args.content_only and args.media_only:
+        raise SystemExit("Use either --content-only or --media-only, not both.")
+    if (args.product_id or args.edit_url) and not (args.content_only or args.media_only):
+        raise SystemExit("Existing Gumroad products are only supported with --content-only or --media-only.")
 
     pack_dir = Path(args.pack_dir).resolve()
     manifest = read_manifest(pack_dir)
@@ -484,27 +619,48 @@ def main() -> int:
     try:
         page.enable()
         content_result: dict[str, Any]
+        media_result: dict[str, Any]
         if edit_base_url:
-            content_result = ensure_content_tab(page, edit_base_url, assets["zip_path"])
+            if args.media_only:
+                media_result = ensure_product_media(page, edit_base_url, assets["cover_files"], assets["thumbnail_file"])
+                content_result = {"changed": False, "attempts": 0}
+            else:
+                content_result = ensure_content_tab(page, edit_base_url, assets["zip_path"])
+                media_result = {"changed": False, "attempts": 0}
         else:
             edit_url = create_product(page, str(manifest["title"]), int(manifest["suggestedPrice"]))
             edit_base_url = edit_url.split("/content")[0].split("/receipt")[0].split("/share")[0]
             populate_product_tab(page, manifest, assets["cover_files"])
+            media_result = ensure_product_media(page, edit_base_url, assets["cover_files"], assets["thumbnail_file"])
             content_result = ensure_content_tab(page, edit_base_url, assets["zip_path"])
             populate_receipt_tab(page, edit_base_url, compose_receipt(manifest))
             publish_if_needed(page, edit_base_url)
 
-        page.navigate(f"{edit_base_url}/content")
-        wait_until(
-            page,
-            "location.pathname.endsWith('/edit/content') && !!document.querySelector('input[type=file]')",
-            timeout=30,
-        )
-        verification = read_content_tab_state(page, assets["zip_path"])
-        if not content_tab_ready(verification):
+        if not args.media_only:
+            page.navigate(f"{edit_base_url}/content")
+            wait_until(
+                page,
+                "location.pathname.endsWith('/edit/content') && !!document.querySelector('input[type=file]')",
+                timeout=30,
+            )
+            verification = read_content_tab_state(page, assets["zip_path"])
+            if not content_tab_ready(verification):
+                raise RuntimeError(
+                    "Gumroad content verification failed after upload. "
+                    f"{verification.get('bodySnippet', '')}"
+                )
+
+        page.navigate(edit_base_url)
+        wait_until(page, "location.pathname.includes('/edit') && document.body.innerText.includes('Thumbnail')", timeout=30)
+        media_verification = read_product_media_state(page)
+        if not product_media_ready(
+            media_verification,
+            require_covers=bool(assets["cover_files"]),
+            require_thumbnail=bool(assets["thumbnail_file"]),
+        ):
             raise RuntimeError(
-                "Gumroad content verification failed after upload. "
-                f"{verification.get('bodySnippet', '')}"
+                "Gumroad product media verification failed after upload. "
+                f"{media_verification.get('bodySnippet', '')}"
             )
 
         page.navigate(edit_base_url)
@@ -513,13 +669,15 @@ def main() -> int:
         print(
             json.dumps(
                 {
-                    "status": "verified" if args.content_only else "published",
+                    "status": "verified" if (args.content_only or args.media_only) else "published",
                     "packId": manifest["id"],
                     "productId": product_id,
                     "productUrl": product_url,
                     "editUrl": final_edit_url,
                     "zipPath": str(assets["zip_path"]),
                     "sourceZipPath": str(assets["source_zip_path"]),
+                    "mediaChanged": bool(media_result.get("changed")),
+                    "mediaAttempts": int(media_result.get("attempts", 0)),
                     "contentChanged": bool(content_result.get("changed")),
                     "uploadAttempts": int(content_result.get("attempts", 0)),
                 },
