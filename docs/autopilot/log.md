@@ -8,5 +8,6 @@
 - Published the second digital asset bundle: `Neutral Instagram Carousel Template Pack`.
 - Confirmed the local recurring automation `Store Autopilot` exists on disk and still points at this workspace.
 - Added a Chrome DevTools fallback script so future runs can recover the signed-in browser session when the Playwright wrapper cannot reattach.
+- Observed that the Codex desktop automation scheduler on this machine is firing on schedule but auto-archiving runs before it creates a real thread or inbox item.
 - Added the reusable social template pack generator and documented the autopilot phase chain.
 - Defined the phased autopilot roadmap and handoff protocol.

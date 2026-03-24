@@ -42,6 +42,7 @@
     "The first Gumroad product is live.",
     "The second Gumroad product is live and should be tracked as published inside ImonEngine.",
     "The local Codex automation `Store Autopilot` is active on an hourly schedule for this workspace.",
+    "The current Codex desktop automation runner on this machine is auto-archiving scheduled runs before they create inbox items, so treat the schedule as configured but not yet reliable.",
     "Phase 1 should create at least 3 additional products now that the first two are live.",
     "If Playwright cannot reattach to the signed-in browser, use the CDP fallback script against the active mcp-chrome session."
   ]
