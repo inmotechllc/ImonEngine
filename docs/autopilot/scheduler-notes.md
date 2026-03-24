@@ -15,6 +15,7 @@
 - The VPS cron job is optional and best for headless build and sync work.
 - `scripts/publish_gumroad_product.py` should only run on the local scheduler because it depends on the signed-in Gumroad browser session.
 - `scripts/publish_growth_post.py` should only run on the local scheduler because it depends on the signed-in Meta browser session.
+- `runtime/state/growthQueue.json` should be uploaded from local and not regenerated on the VPS, so scheduled post ids stay aligned with the browser host.
 - `scripts/build_growth_assets.py` is now refreshed from the local runner whenever new published packs are missing promo assets.
 - `runtime/ops/growth-queue.md` is the operator-facing post queue for free distribution channels.
 - `runtime/ops/social-profiles.md` is the current live-vs-blocked registry for channel accounts.

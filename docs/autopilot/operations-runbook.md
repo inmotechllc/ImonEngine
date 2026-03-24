@@ -28,6 +28,7 @@
   - `runtime/marketing/manifest.json`
   - `runtime/ops/social-profiles.json`
   - `runtime/ops/social-profiles.md`
+- `growthQueue.json` is authored by the local scheduler and uploaded to the VPS as-is; the VPS should not regenerate it because the local browser host is the source of truth for posting cadence.
 - Revenue tracking now has its own runtime outputs:
   - `runtime/ops/revenue-report.json`
   - `runtime/ops/revenue-report.md`

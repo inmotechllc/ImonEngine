@@ -85,7 +85,6 @@ if ($status) {
           "--post-command", "cd /opt/imon-engine && npm run build",
           "--post-command", "cd /opt/imon-engine && npm run dev -- engine-sync",
           "--post-command", "cd /opt/imon-engine && npm run dev -- social-profiles",
-          "--post-command", "cd /opt/imon-engine && npm run dev -- growth-queue",
           "--post-command", "cd /opt/imon-engine && npm run dev -- revenue-report",
           "--post-command", "cd /opt/imon-engine && npm run dev -- collective-fund-report",
           "--post-command", "cd /opt/imon-engine && npm run dev -- vps-artifacts"
