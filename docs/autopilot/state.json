@@ -1,6 +1,6 @@
 {
   "program": "imonengine-store-autopilot",
-  "status": "active",
+  "status": "completed",
   "currentPhase": "phase-05-final-review-and-notification",
   "browserSession": {
     "required": true,
@@ -34,7 +34,7 @@
     {
       "id": "phase-05-final-review-and-notification",
       "title": "Final Review And Notification",
-      "status": "in_progress",
+      "status": "completed",
       "goal": "Close out the roadmap, update docs, sync the VPS, and email completion."
     }
   ],
