@@ -15,6 +15,7 @@ import { FileStore } from "./storage/store.js";
 import { AIClient } from "./openai/client.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
 import { StoreOpsService } from "./services/store-ops.js";
+import { VentureStudioService } from "./services/venture-studio.js";
 
 async function setupWorkspace() {
   const root = await mkdtemp(path.join(os.tmpdir(), "auto-funding-"));
@@ -34,6 +35,7 @@ async function setupWorkspace() {
   const imonEngine = new ImonEngineAgent(config, store);
   const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
   const storeOps = new StoreOpsService(config, store);
+  const ventureStudio = new VentureStudioService(config, store);
 
   return {
     root,
@@ -45,7 +47,8 @@ async function setupWorkspace() {
     replyHandler,
     imonEngine,
     digitalAssetFactory,
-    storeOps
+    storeOps,
+    ventureStudio
   };
 }
 
@@ -282,4 +285,35 @@ test("store ops import Gumroad and Relay data into a revenue snapshot", async ()
   assert.ok(profiles.some((profile) => profile.platform === "facebook_page" && profile.status === "live"));
   assert.ok(profiles.some((profile) => profile.platform === "x" && profile.status === "blocked"));
   assert.ok(report.monthlyRevenue > 0);
+});
+
+test("venture studio builds weekly launch windows and brand blueprints from the live template", async () => {
+  const { imonEngine, storeOps, ventureStudio } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  await storeOps.ensureSocialProfiles();
+  await storeOps.ensureSocialProfiles("imon-pod-store", "Canvas Current");
+
+  const snapshot = await ventureStudio.buildSnapshot();
+  const podBlueprint = snapshot.blueprints.find((blueprint) => blueprint.businessId === "imon-pod-store");
+  const firstWindow = snapshot.launchWindows[0];
+  const firstWindowInNy = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false
+  }).formatToParts(new Date(firstWindow!.startsAt));
+  const firstWindowWeekday = firstWindowInNy.find((part) => part.type === "weekday")?.value;
+  const firstWindowHour = Number(firstWindowInNy.find((part) => part.type === "hour")?.value ?? "0");
+
+  assert.equal(snapshot.nextLaunchMode, "weekly");
+  assert.equal(snapshot.createdBrandCount, 2);
+  assert.ok(firstWindow);
+  assert.equal(firstWindowWeekday, "Mon");
+  assert.ok(firstWindowHour >= 7 && firstWindowHour <= 8);
+  assert.ok(podBlueprint);
+  assert.equal(podBlueprint?.businessName, "Canvas Current");
+  assert.equal(podBlueprint?.aliasEmail, "imonengine+canvascurrent@gmail.com");
+  assert.equal(snapshot.policy.systemReinvestmentCapRate, 0.35);
+  assert.ok(snapshot.capitalExperimentTracks.every((track) => track.stage !== "live_ops"));
 });

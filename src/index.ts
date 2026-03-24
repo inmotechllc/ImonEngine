@@ -17,6 +17,7 @@ import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { StoreAutopilotAgent } from "./agents/store-autopilot.js";
 import { buildAgencySite } from "./services/agency-site.js";
 import { StoreOpsService } from "./services/store-ops.js";
+import { VentureStudioService } from "./services/venture-studio.js";
 
 interface Flags {
   [key: string]: string | boolean | undefined;
@@ -109,6 +110,7 @@ function usage(): string {
     "  npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]",
     "  npm run dev -- collective-fund-report [--days 30]",
     "  npm run dev -- social-profiles",
+    "  npm run dev -- venture-studio [--business <id>]",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
@@ -132,6 +134,7 @@ async function buildContext() {
   const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
   const storeAutopilot = new StoreAutopilotAgent(config, store, digitalAssetFactory, imonEngine);
   const storeOps = new StoreOpsService(config, store);
+  const ventureStudio = new VentureStudioService(config, store);
 
   return {
     config,
@@ -145,7 +148,8 @@ async function buildContext() {
     imonEngine,
     digitalAssetFactory,
     storeAutopilot,
-    storeOps
+    storeOps,
+    ventureStudio
   };
 }
 
@@ -221,7 +225,8 @@ async function main(): Promise<void> {
     imonEngine,
     digitalAssetFactory,
     storeAutopilot,
-    storeOps
+    storeOps,
+    ventureStudio
   } =
     await buildContext();
 
@@ -232,8 +237,9 @@ async function main(): Promise<void> {
       await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
       await orchestrator.getReports().generateRunReport(["Bootstrap completed.", "ImonEngine portfolio seeded."]);
       await imonEngine.writeVpsArtifacts();
+      await ventureStudio.writeArtifacts();
       logger.info(
-        "Seeded offers, bootstrapped ImonEngine, generated approval tasks, built the agency site, and wrote initial reports."
+        "Seeded offers, bootstrapped ImonEngine, generated approval tasks, built the agency site, and refreshed venture-studio artifacts."
       );
       break;
     }
@@ -322,6 +328,7 @@ async function main(): Promise<void> {
     }
     case "engine-sync": {
       const report = await imonEngine.sync();
+      await ventureStudio.writeArtifacts();
       logger.info(
         `Engine synced. ${report.businessCounts.active} active, ${report.businessCounts.ready} ready, recommended concurrency ${report.recommendedConcurrency}.`
       );
@@ -352,7 +359,8 @@ async function main(): Promise<void> {
     }
     case "vps-artifacts": {
       const artifacts = await imonEngine.writeVpsArtifacts();
-      logger.info(`Wrote VPS artifacts to ${artifacts.manifestPath}`);
+      const ventureArtifacts = await ventureStudio.writeArtifacts();
+      logger.info(`Wrote VPS artifacts to ${artifacts.manifestPath} and venture snapshot to ${ventureArtifacts.snapshotJsonPath}`);
       break;
     }
     case "seed-asset-packs": {
@@ -422,6 +430,7 @@ async function main(): Promise<void> {
     }
     case "autopilot-run-once": {
       const result = await storeAutopilot.runOnce();
+      await ventureStudio.writeArtifacts();
       logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
       if (result.details.length > 0) {
         console.log(JSON.stringify(result, null, 2));
@@ -493,6 +502,26 @@ async function main(): Promise<void> {
       const artifacts = await storeOps.writeSocialArtifacts(profiles);
       logger.info(`Social profile registry refreshed with ${profiles.length} profile(s).`);
       console.log(JSON.stringify({ profiles, artifacts }, null, 2));
+      break;
+    }
+    case "venture-studio": {
+      const snapshot = await ventureStudio.buildSnapshot();
+      const artifacts = await ventureStudio.writeArtifacts(snapshot);
+      const businessId = typeof flags.business === "string" ? flags.business : undefined;
+      logger.info(`Venture studio snapshot refreshed in ${artifacts.snapshotJsonPath}.`);
+      console.log(
+        JSON.stringify(
+          businessId
+            ? {
+                blueprint: snapshot.blueprints.find((blueprint) => blueprint.businessId === businessId) ?? null,
+                policy: snapshot.policy,
+                launchWindows: snapshot.launchWindows
+              }
+            : { snapshot, artifacts },
+          null,
+          2
+        )
+      );
       break;
     }
     case "report": {

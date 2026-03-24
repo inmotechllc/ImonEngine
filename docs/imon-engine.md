@@ -2,6 +2,8 @@
 
 ImonEngine is the parent portfolio layer for this repo. It sits above the original agency workflow and manages a ranked set of AI businesses while watching VPS pressure, launch readiness, and consolidated revenue.
 
+It now also has a `venture studio` layer that turns the first live store into a reusable business template, enforces launch windows for new brands, and keeps speculative capital ideas in paper-only mode until the operating businesses produce real profit.
+
 ## Managed Business Order
 
 1. Digital asset store
@@ -28,6 +30,9 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- businesses`
 - `npm run dev -- engine-sync`
 - `npm run dev -- engine-report`
+- `npm run dev -- venture-studio`
+- `npm run dev -- venture-studio --business <id>`
+- `npm run dev -- autopilot-run-once`
 - `npm run dev -- activate-business --business <id>`
 - `npm run dev -- pause-business --business <id>`
 - `npm run dev -- vps-artifacts`
@@ -46,6 +51,18 @@ The first two businesses are marked `ready` by default because they have the lig
 - `runtime/state/resourceSnapshots.json`
 - `runtime/state/revenueLedger.json`
 - `runtime/state/engineReports.json`
+- `runtime/ops/venture-studio.json`
+- `runtime/ops/venture-calendar.json`
+- `runtime/ops/venture-blueprints/`
+
+## Venture Rules
+
+- The first live store is the template, not the forever-public brand for every future business.
+- New brands should launch only during Monday morning creation windows in `America/New_York`.
+- Before five created brands exist, launch windows stay weekly.
+- After five created brands exist, launch windows slow to the first Monday of each month.
+- Brand reinvestment and shared-system reinvestment should use the same percentage cap.
+- Capital-market ideas such as stocks, crypto, forex, or mining stay in research or paper-only mode until profitable operating businesses build enough reserve.
 
 ## VPS Flow
 
@@ -53,7 +70,10 @@ The first two businesses are marked `ready` by default because they have the lig
 2. Fill in `.env`.
 3. Run `scripts/bootstrap-vps.sh`.
 4. Run `scripts/install-cron.sh` to keep `engine-sync` scheduled.
-5. Review `runtime/ops/engine-overview.json` and `runtime/state/approvals.json`.
+5. Start the persistent VPS browser with `scripts/vps-browser-start.sh` when a virtual display session is needed.
+6. Verify Docker, Chrome, Playwright, Codex CLI, and DevTools with `scripts/vps-tooling-status.sh`.
+7. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
+8. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, and `runtime/ops/venture-studio.json`.
 
 ## Gumroad Publish Flow
 

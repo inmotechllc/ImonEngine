@@ -32,9 +32,13 @@
 7. After the product is published on Gumroad, record it with `npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>`.
 8. Run `npm run dev -- engine-sync` so ImonEngine reflects the published product.
 9. Run `npm run dev -- vps-artifacts` if the VPS reports or cron-facing artifacts need a refresh.
-10. Fill only the setup tasks that apply to the currently active businesses. Stripe and business email can wait while the digital asset store is the only live lane.
-11. Import a real prospect list with `npm run dev -- prospect --input <file>`.
-12. Review outreach drafts in `runtime/state/outreach.json`.
-13. Convert a paying client with `create-client`, then build and QA the site.
-14. Add Cloudflare credentials and run `deploy`.
-15. For VPS staging, copy the repo to the server and run `scripts/bootstrap-vps.sh`, then `scripts/install-cron.sh`.
+10. Run `npm run dev -- venture-studio` to refresh the current launch windows, business blueprints, and capital-experiment policy.
+11. Fill only the setup tasks that apply to the currently active businesses. Stripe and business email can wait while the digital asset store is the only live lane.
+12. Import a real prospect list with `npm run dev -- prospect --input <file>`.
+13. Review outreach drafts in `runtime/state/outreach.json`.
+14. Convert a paying client with `create-client`, then build and QA the site.
+15. Add Cloudflare credentials and run `deploy`.
+16. For VPS staging, copy the repo to the server and run `scripts/bootstrap-vps.sh`, then `scripts/install-cron.sh`.
+17. Start the persistent VPS Chrome profile with `scripts/vps-browser-start.sh` if you need browser-based auth or automation on the server.
+18. Verify the VPS toolchain with `scripts/vps-tooling-status.sh`.
+19. Start isolated business sandboxes with `scripts/business-worker-start.sh <business-id> "<business-name>"` when a new brand needs its own containerized workspace.

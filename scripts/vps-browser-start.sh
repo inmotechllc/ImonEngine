@@ -45,6 +45,8 @@ start_chrome() {
     --user-data-dir="$CHROME_PROFILE_DIR" \
     --remote-debugging-address=127.0.0.1 \
     --remote-debugging-port="$REMOTE_DEBUG_PORT" \
+    --no-sandbox \
+    --disable-setuid-sandbox \
     --no-first-run \
     --no-default-browser-check \
     --disable-background-networking \
