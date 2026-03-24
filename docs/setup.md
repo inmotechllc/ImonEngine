@@ -27,9 +27,13 @@
 2. Review `runtime/ops/engine-overview.json` and `runtime/state/businesses.json`.
 3. Review `runtime/state/approvals.json`.
 4. If the digital asset store is your first live lane, add `GUMROAD_SELLER_EMAIL` first and run `npm run dev -- seed-asset-packs`.
-5. Fill only the setup tasks that apply to the currently active businesses. Stripe and business email can wait while the digital asset store is the only live lane.
-6. Import a real prospect list with `npm run dev -- prospect --input <file>`.
-7. Review outreach drafts in `runtime/state/outreach.json`.
-8. Convert a paying client with `create-client`, then build and QA the site.
-9. Add Cloudflare credentials and run `deploy`.
-10. For VPS staging, copy the repo to the server and run `scripts/bootstrap-vps.sh`, then `scripts/install-cron.sh`.
+5. Stage the chosen pack with `npm run dev -- stage-asset-pack --pack <id>`.
+6. After the product is published on Gumroad, record it with `npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>`.
+7. Run `npm run dev -- engine-sync` so ImonEngine reflects the published product.
+8. Run `npm run dev -- vps-artifacts` if the VPS reports or cron-facing artifacts need a refresh.
+9. Fill only the setup tasks that apply to the currently active businesses. Stripe and business email can wait while the digital asset store is the only live lane.
+10. Import a real prospect list with `npm run dev -- prospect --input <file>`.
+11. Review outreach drafts in `runtime/state/outreach.json`.
+12. Convert a paying client with `create-client`, then build and QA the site.
+13. Add Cloudflare credentials and run `deploy`.
+14. For VPS staging, copy the repo to the server and run `scripts/bootstrap-vps.sh`, then `scripts/install-cron.sh`.

@@ -32,6 +32,8 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- pause-business --business <id>`
 - `npm run dev -- vps-artifacts`
 - `npm run dev -- seed-asset-packs`
+- `npm run dev -- stage-asset-pack --pack <id>`
+- `npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>`
 - `npm run dev -- asset-packs`
 
 ## State Files
@@ -51,3 +53,11 @@ The first two businesses are marked `ready` by default because they have the lig
 3. Run `scripts/bootstrap-vps.sh`.
 4. Run `scripts/install-cron.sh` to keep `engine-sync` scheduled.
 5. Review `runtime/ops/engine-overview.json` and `runtime/state/approvals.json`.
+
+## Gumroad Publish Flow
+
+1. Stage the selected pack.
+2. Publish it on Gumroad.
+3. Record the live URL with `publish-asset-pack`.
+4. Run `engine-sync`.
+5. Review `runtime/ops/engine-overview.json` again before moving to the next pack.
