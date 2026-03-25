@@ -91,6 +91,12 @@ interface RoadblockNotificationState {
   notifiedAt?: string;
 }
 
+interface RoadblockGuidance {
+  category: string;
+  requiredFromOwner: string[];
+  continueAfterCompletion: string[];
+}
+
 export interface AutopilotPublishResult {
   packId: string;
   title: string;
@@ -1494,19 +1500,117 @@ export class StoreAutopilotAgent {
   }
 
   private composeRoadblockEmail(result: AutopilotRunResult): string {
+    const guidance = this.deriveRoadblockGuidance(result);
+    const remoteDesktopUrl = this.config.engine.hostPrimaryIp
+      ? `http://${this.config.engine.hostPrimaryIp}:6080/vnc.html?autoconnect=1&resize=scale`
+      : "";
+
     return [
       `ImonEngine hit a roadblock on ${new Date().toISOString()}.`,
       "",
       `Phase: ${result.phaseId}`,
       `Status: ${result.status}`,
+      `Roadblock type: ${guidance.category}`,
       `Summary: ${result.summary}`,
       "",
       "Details:",
       ...result.details.map((detail) => `- ${detail}`),
       "",
+      "Required from you:",
+      ...guidance.requiredFromOwner.map((detail) => `- ${detail}`),
+      "",
+      "How Imon continues after you complete the steps:",
+      ...guidance.continueAfterCompletion.map((detail) => `- ${detail}`),
+      "",
       `Run report: ${this.runReportPath}`,
-      "If the VPS browser is in use, check the remote desktop session and Gmail tab before rerunning."
+      ...(remoteDesktopUrl ? [`VPS remote desktop: ${remoteDesktopUrl}`] : []),
+      "If the VPS browser is involved, keep the server-side Chrome profile open and signed in after you finish the owner step."
     ].join("\n");
+  }
+
+  private deriveRoadblockGuidance(result: AutopilotRunResult): RoadblockGuidance {
+    const combined = [result.summary, ...result.details].join("\n").toLowerCase();
+    const manualRetrySteps = [
+      "Leave the relevant account signed in on the VPS Chrome profile when you are done.",
+      "Imon will retry automatically on the next VPS cron run at minute 15 of the hour.",
+      "If you want an immediate retry, run `cd /opt/imon-engine && bash scripts/run_vps_autopilot.sh` on the VPS."
+    ];
+
+    if (combined.includes("meta_page_access_token") || combined.includes("pages_manage_posts")) {
+      return {
+        category: "Meta Page API setup",
+        requiredFromOwner: [
+          "Finish the Meta app setup or approval flow needed for Page posting.",
+          "Generate a Facebook Page access token with `pages_manage_posts` for the live Page.",
+          "Save `META_PAGE_ACCESS_TOKEN` in `/opt/imon-engine/.env` on the VPS.",
+          "If the page id changed, also confirm `META_PAGE_ID` in `/opt/imon-engine/.env`."
+        ],
+        continueAfterCompletion: [
+          "No Meta browser login is required after the token is in place.",
+          ...manualRetrySteps
+        ]
+      };
+    }
+
+    if (combined.includes("meta graph api request failed")) {
+      return {
+        category: "Meta API permission or approval issue",
+        requiredFromOwner: [
+          "Check the Meta app dashboard error details for the current permission or review blocker.",
+          "Confirm the app has the required Page posting permission approved for the intended use case.",
+          "Refresh or replace the Page access token in `/opt/imon-engine/.env` if Meta invalidated it."
+        ],
+        continueAfterCompletion: [
+          "Keep the same Page id and token in the VPS `.env` after you finish the Meta-side fix.",
+          ...manualRetrySteps
+        ]
+      };
+    }
+
+    if (combined.includes("arkose") || combined.includes("manual solve")) {
+      return {
+        category: "Platform challenge or anti-bot checkpoint",
+        requiredFromOwner: [
+          "Open the affected platform in the active browser session and solve the challenge manually.",
+          "Finish any required verification or account completion steps without creating a new profile unless the platform forces it.",
+          "Leave the account signed in when the challenge is cleared."
+        ],
+        continueAfterCompletion: manualRetrySteps
+      };
+    }
+
+    if (combined.includes("no active chrome remote debugging port") || combined.includes("no browser tabs are available")) {
+      return {
+        category: "Server-side browser session unavailable",
+        requiredFromOwner: [
+          "Open the VPS remote desktop and confirm the server-side Chrome window is running.",
+          "Sign back into Gmail, Gumroad, Pinterest, or any other browser-backed account that the blocked task needs.",
+          "Leave the VPS Chrome session open after sign-in."
+        ],
+        continueAfterCompletion: manualRetrySteps
+      };
+    }
+
+    if (combined.includes("could not publish") || combined.includes("auto-publish skipped")) {
+      return {
+        category: "Publishing workflow blocked",
+        requiredFromOwner: [
+          "Review the blocker details above to identify the specific account or platform issue.",
+          "Complete any missing sign-in, verification, or publishing prerequisite on the affected platform.",
+          "Leave the relevant account signed in if the platform still depends on a browser session."
+        ],
+        continueAfterCompletion: manualRetrySteps
+      };
+    }
+
+    return {
+      category: "General owner approval",
+      requiredFromOwner: [
+        "Review the blocker details above and complete the missing approval, sign-in, or platform step.",
+        "Leave any browser-backed account signed in after the fix if the workflow still depends on the live session."
+      ],
+      continueAfterCompletion: manualRetrySteps
+    };
   }
 
   private async writeRunReport(result: AutopilotRunResult): Promise<void> {
