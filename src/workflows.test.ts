@@ -243,13 +243,17 @@ test("store ops reserve Imon for the parent system and scaffold distinct future 
 
   const profiles = await storeOps.ensureSocialProfiles("imon-pod-store");
   const gmailAlias = profiles.find((profile) => profile.platform === "gmail_alias");
-  const xProfile = profiles.find((profile) => profile.platform === "x");
+  const facebookPage = profiles.find((profile) => profile.platform === "facebook_page");
+  const instagramLanes = profiles.filter((profile) => profile.platform === "instagram_account");
 
   assert.equal(gmailAlias?.brandName, "Canvas Current");
   assert.equal(gmailAlias?.emailAlias, "imonengine+canvascurrent@gmail.com");
-  assert.equal(xProfile?.status, "planned");
-  assert.ok(xProfile?.notes.some((note) => note.includes("simulated clicks")));
-  assert.ok(xProfile?.notes.some((note) => note.includes("manual solve")));
+  assert.equal(facebookPage?.status, "planned");
+  assert.ok(facebookPage?.notes.some((note) => note.includes("umbrella Facebook Page")));
+  assert.equal(instagramLanes.length, 4);
+  assert.ok(instagramLanes.every((profile) => profile.role === "niche_lane"));
+  assert.ok(instagramLanes.every((profile) => profile.parentProfileId === "imon-pod-store-facebook-page"));
+  assert.ok(instagramLanes.every((profile) => profile.notes.some((note) => note.includes("ten accounts"))));
 });
 
 test("store ops import Gumroad and Relay data into a revenue snapshot", async () => {
@@ -324,13 +328,17 @@ test("venture studio builds weekly launch windows and brand blueprints from the 
   const firstWindowHour = Number(firstWindowInNy.find((part) => part.type === "hour")?.value ?? "0");
 
   assert.equal(snapshot.nextLaunchMode, "weekly");
-  assert.equal(snapshot.createdBrandCount, 2);
+  assert.equal(snapshot.createdBrandCount, 1);
   assert.ok(firstWindow);
   assert.equal(firstWindowWeekday, "Mon");
   assert.ok(firstWindowHour >= 7 && firstWindowHour <= 8);
   assert.ok(podBlueprint);
   assert.equal(podBlueprint?.businessName, "Canvas Current");
   assert.equal(podBlueprint?.aliasEmail, "imonengine+canvascurrent@gmail.com");
+  assert.equal(podBlueprint?.socialArchitecture.facebookStrategy, "umbrella_brand");
+  assert.equal(podBlueprint?.socialArchitecture.instagramStrategy, "niche_accounts");
+  assert.equal(podBlueprint?.socialArchitecture.niches.length, 4);
+  assert.ok(snapshot.policy.socialRules.some((rule) => rule.includes("umbrella brand")));
   assert.equal(snapshot.policy.systemReinvestmentCapRate, 0.35);
   assert.ok(snapshot.capitalExperimentTracks.every((track) => track.stage !== "live_ops"));
 });

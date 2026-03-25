@@ -2,8 +2,9 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parse } from "csv-parse/sync";
 import type { AppConfig } from "../config.js";
+import { DEFAULT_MANAGED_BUSINESSES } from "../domain/defaults.js";
 import type { AssetPackRecord, DigitalAssetType } from "../domain/digital-assets.js";
-import type { BusinessLedgerEntry } from "../domain/engine.js";
+import type { BusinessCategory, BusinessLedgerEntry, ManagedBusiness } from "../domain/engine.js";
 import type {
   CatalogGrowthPolicy,
   CollectiveFundSnapshot,
@@ -14,7 +15,7 @@ import type {
   SalesTransaction,
   SalesTransactionType
 } from "../domain/store-ops.js";
-import type { SocialProfileRecord } from "../domain/social.js";
+import type { SocialProfileRecord, SocialProfileRole, SocialPlatform } from "../domain/social.js";
 import { writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
 import { FileStore } from "../storage/store.js";
@@ -30,6 +31,76 @@ const DEFAULT_BRAND_NAMES: Record<string, string> = {
   "imon-micro-saas-factory": "QuietPivot",
   "imon-pod-store": "Canvas Current",
   "auto-funding-agency": "Northline Growth Systems"
+};
+
+const DEFAULT_BUSINESS_SEEDS = new Map(DEFAULT_MANAGED_BUSINESSES.map((seed) => [seed.id, seed]));
+
+const STRATEGIC_FACEBOOK_CATEGORIES = new Set<BusinessCategory>([
+  "faceless_social_brand",
+  "micro_saas_factory",
+  "print_on_demand_store"
+]);
+
+const PINTEREST_FIT_CATEGORIES = new Set<BusinessCategory>([
+  "digital_asset_store",
+  "niche_content_site",
+  "print_on_demand_store"
+]);
+
+const X_FIT_CATEGORIES = new Set<BusinessCategory>([
+  "digital_asset_store",
+  "niche_content_site",
+  "faceless_social_brand",
+  "micro_saas_factory"
+]);
+
+type SocialLaneSeed = {
+  id: string;
+  name: string;
+  focus: string;
+};
+
+type SocialBlueprint = {
+  umbrellaBrandName: string;
+  umbrellaAliasEmail: string;
+  umbrellaHandleStem: string;
+  instagramLimitPerDevice: number;
+  defaults: Array<Omit<SocialProfileRecord, "createdAt" | "updatedAt">>;
+};
+
+const CATEGORY_INSTAGRAM_LANES: Partial<Record<BusinessCategory, SocialLaneSeed[]>> = {
+  faceless_social_brand: [
+    { id: "visual-explainers", name: "Visual Explainers", focus: "hook-first explainers and pattern breakdown clips" },
+    { id: "operator-habits", name: "Operator Habits", focus: "routines, systems, and productivity content" },
+    { id: "trend-remixes", name: "Trend Remixes", focus: "trend-aware remixes adapted to the umbrella brand voice" }
+  ],
+  micro_saas_factory: [
+    { id: "workflow-agents", name: "Workflow Agents", focus: "small tools that remove repetitive workflow friction" },
+    { id: "creator-ops", name: "Creator Ops", focus: "utilities for creators, consultants, and solo operators" },
+    { id: "insight-dashboards", name: "Insight Dashboards", focus: "light analytics and visibility tools" }
+  ],
+  print_on_demand_store: [
+    { id: "abstract-art", name: "Abstract Art", focus: "modern abstract art and atmospheric compositions" },
+    { id: "sacred-symbols", name: "Sacred Symbols", focus: "religious and spiritual symbol sets presented respectfully" },
+    { id: "graphic-tees", name: "Graphic Tees", focus: "statement graphics and typographic apparel motifs" },
+    { id: "childrens-designs", name: "Children's Designs", focus: "playful illustrations and kid-friendly patterns" }
+  ]
+};
+
+const BUSINESS_INSTAGRAM_LANES: Partial<Record<string, SocialLaneSeed[]>> = {
+  "imon-faceless-social-brand": CATEGORY_INSTAGRAM_LANES.faceless_social_brand ?? [],
+  "imon-micro-saas-factory": CATEGORY_INSTAGRAM_LANES.micro_saas_factory ?? [],
+  "imon-pod-store": CATEGORY_INSTAGRAM_LANES.print_on_demand_store ?? []
+};
+
+const PLATFORM_SORT_ORDER: Record<SocialPlatform, number> = {
+  gmail_alias: 0,
+  gumroad: 1,
+  meta_business: 2,
+  facebook_page: 3,
+  instagram_account: 4,
+  pinterest: 5,
+  x: 6
 };
 
 const GROWTH_CHANNEL_PRIORITY: Record<DigitalAssetType, GrowthChannel[]> = {
@@ -262,6 +333,42 @@ function buildAlias(baseEmail: string, brandName: string): string {
   return `${local}+${slugify(brandName).replace(/-/g, "")}@${domain}`;
 }
 
+function dedupeNotes(...groups: Array<string[] | undefined>): string[] {
+  return [...new Set(groups.flatMap((group) => group ?? []).filter(Boolean))];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function sortProfiles(left: SocialProfileRecord, right: SocialProfileRecord): number {
+  const platformOrder = PLATFORM_SORT_ORDER[left.platform] - PLATFORM_SORT_ORDER[right.platform];
+  if (platformOrder !== 0) {
+    return platformOrder;
+  }
+  const roleOrder = `${left.role ?? ""}`.localeCompare(`${right.role ?? ""}`);
+  if (roleOrder !== 0) {
+    return roleOrder;
+  }
+  return left.id.localeCompare(right.id);
+}
+
+function instagramLanesForBusiness(businessId: string, category?: BusinessCategory): SocialLaneSeed[] {
+  return BUSINESS_INSTAGRAM_LANES[businessId] ?? (category ? CATEGORY_INSTAGRAM_LANES[category] ?? [] : []);
+}
+
+function defaultBusinessSeed(businessId: string): Pick<ManagedBusiness, "id" | "name" | "category"> | undefined {
+  const seed = DEFAULT_BUSINESS_SEEDS.get(businessId);
+  if (!seed) {
+    return undefined;
+  }
+  return {
+    id: seed.id,
+    name: seed.name,
+    category: seed.category
+  };
+}
+
 export interface SalesImportResult {
   imported: number;
   ledgerEntriesCreated: number;
@@ -273,191 +380,324 @@ export class StoreOpsService {
     private readonly store: FileStore
   ) {}
 
+  private async resolveBusinessProfile(
+    businessId: string,
+    brandName: string
+  ): Promise<Pick<ManagedBusiness, "id" | "name" | "category">> {
+    const stored = await this.store.getManagedBusiness(businessId);
+    const fallback = defaultBusinessSeed(businessId);
+    return {
+      id: businessId,
+      name: stored?.name ?? fallback?.name ?? brandName,
+      category: stored?.category ?? fallback?.category ?? "digital_asset_store"
+    };
+  }
+
+  private buildSocialBlueprint(
+    business: Pick<ManagedBusiness, "id" | "name" | "category">,
+    brandName: string,
+    baseEmail: string
+  ): SocialBlueprint {
+    const umbrellaBrandName = business.id === DIGITAL_ASSET_STORE_ID ? DIGITAL_ASSET_BRAND_NAME : brandName;
+    const umbrellaAliasEmail = buildAlias(baseEmail, umbrellaBrandName);
+    const umbrellaHandleStem = slugify(umbrellaBrandName).replace(/-/g, "");
+
+    if (business.id === DIGITAL_ASSET_STORE_ID) {
+      return {
+        umbrellaBrandName,
+        umbrellaAliasEmail,
+        umbrellaHandleStem,
+        instagramLimitPerDevice: 10,
+        defaults: [
+          {
+            id: `${business.id}-gmail-alias`,
+            businessId: business.id,
+            brandName,
+            emailAlias: umbrellaAliasEmail,
+            platform: "gmail_alias",
+            role: "umbrella_brand",
+            handle: umbrellaAliasEmail,
+            status: "live",
+            notes: ["Alias routes into the primary ImonEngine Gmail inbox."]
+          },
+          {
+            id: `${business.id}-gumroad`,
+            businessId: business.id,
+            brandName,
+            emailAlias: umbrellaAliasEmail,
+            platform: "gumroad",
+            role: "marketplace",
+            handle: "imonengine",
+            profileUrl: this.config.marketplaces.gumroadProfileUrl
+              ? `https://${this.config.marketplaces.gumroadProfileUrl.replace(/^https?:\/\//, "")}`
+              : "https://imonengine.gumroad.com",
+            status: "live",
+            notes: [
+              "Primary store for this business.",
+              "This is the legacy first-business exception; future brands should not reuse the Imon name."
+            ]
+          },
+          {
+            id: `${business.id}-meta-business`,
+            businessId: business.id,
+            brandName,
+            emailAlias: umbrellaAliasEmail,
+            platform: "meta_business",
+            role: "umbrella_brand",
+            externalId: "1042144572314434",
+            profileUrl: "https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=1042144572314434",
+            status: "live",
+            notes: ["Signed-in Meta Business Suite workspace."]
+          },
+          {
+            id: `${business.id}-facebook-page`,
+            businessId: business.id,
+            brandName,
+            emailAlias: umbrellaAliasEmail,
+            platform: "facebook_page",
+            role: "umbrella_brand",
+            handle: "Imon",
+            externalId: "61577389319663",
+            profileUrl: "https://www.facebook.com/profile.php?id=61577389319663",
+            status: "live",
+            notes: [
+              "Current Facebook Page for the digital asset store business.",
+              "Legacy exception: this page already exists and can stay attached to the first store."
+            ]
+          },
+          {
+            id: `${business.id}-x`,
+            businessId: business.id,
+            brandName,
+            emailAlias: umbrellaAliasEmail,
+            platform: "x",
+            role: "distribution",
+            handle: "imon",
+            status: "blocked",
+            blocker:
+              "X signup reaches an Arkose Labs anti-bot challenge after form entry and should hand off to the owner for a manual solve when it appears.",
+            notes: [
+              "Use the alias email plus visual or simulated clicks for the normal signup flow.",
+              "If Arkose appears, pause for a manual owner solve and then resume automation."
+            ]
+          },
+          {
+            id: `${business.id}-pinterest`,
+            businessId: business.id,
+            brandName,
+            emailAlias: umbrellaAliasEmail,
+            platform: "pinterest",
+            role: "distribution",
+            handle: "imonengineimon",
+            profileUrl: "https://www.pinterest.com/imonengineimon/",
+            status: "live",
+            notes: [
+              "Pinterest business profile is live for the digital asset store.",
+              "Primary board: Imon Digital Assets."
+            ]
+          }
+        ]
+      };
+    }
+
+    const defaults: Array<Omit<SocialProfileRecord, "createdAt" | "updatedAt">> = [
+      {
+        id: `${business.id}-gmail-alias`,
+        businessId: business.id,
+        brandName,
+        emailAlias: umbrellaAliasEmail,
+        platform: "gmail_alias",
+        role: "umbrella_brand",
+        handle: umbrellaAliasEmail,
+        status: "live",
+        notes: [
+          "Alias routes into the primary ImonEngine Gmail inbox.",
+          "Reserve ImonEngine and Imon for the parent system, not for this brand."
+        ]
+      }
+    ];
+
+    const umbrellaRootProfileId = STRATEGIC_FACEBOOK_CATEGORIES.has(business.category)
+      ? `${business.id}-facebook-page`
+      : `${business.id}-gmail-alias`;
+
+    if (STRATEGIC_FACEBOOK_CATEGORIES.has(business.category)) {
+      defaults.push(
+        {
+          id: `${business.id}-meta-business`,
+          businessId: business.id,
+          brandName,
+          emailAlias: umbrellaAliasEmail,
+          platform: "meta_business",
+          role: "umbrella_brand",
+          status: "planned",
+          notes: [
+            `Add ${brandName} to the parent Meta Business portfolio as an umbrella asset instead of creating a new personal account.`,
+            "Use this shared asset to support future Page, ad-account, and app-level permissions for the umbrella business."
+          ]
+        },
+        {
+          id: `${business.id}-facebook-page`,
+          businessId: business.id,
+          brandName,
+          emailAlias: umbrellaAliasEmail,
+          platform: "facebook_page",
+          role: "umbrella_brand",
+          handle: brandName,
+          status: "planned",
+          notes: [
+            `Create a single umbrella Facebook Page named ${brandName} under the parent Meta account.`,
+            "Use this page sparingly and strategically for scalable offers, umbrella ad campaigns, or Shopify/POD lanes."
+          ]
+        }
+      );
+    }
+
+    const instagramLanes = instagramLanesForBusiness(business.id, business.category);
+    if (instagramLanes.length > 0) {
+      defaults.push(
+        ...instagramLanes.map((lane) => {
+          const laneBrandName = `${brandName} ${lane.name}`;
+          const laneAlias = buildAlias(baseEmail, laneBrandName);
+          const laneHandle = slugify(laneBrandName).replace(/-/g, "");
+          return {
+            id: `${business.id}-instagram-${lane.id}`,
+            businessId: business.id,
+            brandName,
+            emailAlias: laneAlias,
+            platform: "instagram_account" as const,
+            role: "niche_lane" as SocialProfileRole,
+            laneId: lane.id,
+            laneName: lane.name,
+            parentProfileId: umbrellaRootProfileId,
+            handle: laneHandle,
+            status: "planned" as const,
+            notes: [
+              `Create a niche Instagram account for ${lane.name} using ${laneAlias}.`,
+              `This lane focuses on ${lane.focus}.`,
+              "Keep niche Instagram clusters under ten accounts per device or browser profile before rotating to a fresh environment."
+            ]
+          };
+        })
+      );
+    } else {
+      defaults.push({
+        id: `${business.id}-instagram-core`,
+        businessId: business.id,
+        brandName,
+        emailAlias: umbrellaAliasEmail,
+        platform: "instagram_account",
+        role: "umbrella_brand",
+        parentProfileId: umbrellaRootProfileId,
+        handle: umbrellaHandleStem,
+        status: "planned",
+        notes: [
+          `Create a primary Instagram account for ${brandName} using ${umbrellaAliasEmail}.`,
+          "Keep the account attached to the umbrella brand until there is a strong reason to split it into niche handles."
+        ]
+      });
+    }
+
+    if (X_FIT_CATEGORIES.has(business.category)) {
+      defaults.push({
+        id: `${business.id}-x`,
+        businessId: business.id,
+        brandName,
+        emailAlias: umbrellaAliasEmail,
+        platform: "x",
+        role: "distribution",
+        handle: umbrellaHandleStem,
+        status: "planned",
+        notes: [
+          `Use ${umbrellaAliasEmail} for signup and prefer visual input or simulated clicks instead of brittle DOM assumptions.`,
+          "If Arkose appears, hand off to the owner for a manual solve and then resume automation."
+        ]
+      });
+    }
+
+    if (PINTEREST_FIT_CATEGORIES.has(business.category)) {
+      defaults.push({
+        id: `${business.id}-pinterest`,
+        businessId: business.id,
+        brandName,
+        emailAlias: umbrellaAliasEmail,
+        platform: "pinterest",
+        role: "distribution",
+        handle: `imonengine${umbrellaHandleStem}`.slice(0, 30),
+        status: "planned",
+        notes: [
+          `Create a Pinterest business profile for ${brandName} once the brand has enough creative inventory.`,
+          `Default board suggestion: ${brandName} Collections.`
+        ]
+      });
+    }
+
+    return {
+      umbrellaBrandName,
+      umbrellaAliasEmail,
+      umbrellaHandleStem,
+      instagramLimitPerDevice: 10,
+      defaults
+    };
+  }
+
   async ensureSocialProfiles(
     businessId = DIGITAL_ASSET_STORE_ID,
     brandName = defaultBrandNameForBusiness(businessId)
   ): Promise<SocialProfileRecord[]> {
     const baseEmail = this.config.marketplaces.gumroadSellerEmail ?? "imonengine@gmail.com";
-    const emailAlias = buildAlias(baseEmail, brandName);
+    const business = await this.resolveBusinessProfile(businessId, brandName);
     const now = nowIso();
     const existing = await this.store.getSocialProfiles();
     const current = existing.filter((profile) => profile.businessId === businessId);
-    const byPlatform = new Map(current.map((profile) => [profile.platform, profile]));
-
-    const brandHandle = slugify(brandName).replace(/-/g, "");
-    const defaults: Array<Omit<SocialProfileRecord, "createdAt" | "updatedAt">> =
-      businessId === DIGITAL_ASSET_STORE_ID
-        ? [
-            {
-              id: `${businessId}-gmail-alias`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "gmail_alias",
-              handle: emailAlias,
-              status: "live",
-              notes: ["Alias routes into the primary ImonEngine Gmail inbox."]
-            },
-            {
-              id: `${businessId}-gumroad`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "gumroad",
-              handle: "imonengine",
-              profileUrl: this.config.marketplaces.gumroadProfileUrl
-                ? `https://${this.config.marketplaces.gumroadProfileUrl.replace(/^https?:\/\//, "")}`
-                : "https://imonengine.gumroad.com",
-              status: "live",
-              notes: [
-                "Primary store for this business.",
-                "This is the legacy first-business exception; future brands should not reuse the Imon name."
-              ]
-            },
-            {
-              id: `${businessId}-meta-business`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "meta_business",
-              externalId: "1042144572314434",
-              profileUrl: "https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=1042144572314434",
-              status: "live",
-              notes: ["Signed-in Meta Business Suite workspace."]
-            },
-            {
-              id: `${businessId}-facebook-page`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "facebook_page",
-              handle: "Imon",
-              externalId: "61577389319663",
-              profileUrl: "https://www.facebook.com/profile.php?id=61577389319663",
-              status: "live",
-              notes: ["Current Facebook Page for the digital asset store business."]
-            },
-            {
-              id: `${businessId}-x`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "x",
-              handle: "imon",
-              status: "blocked",
-              blocker:
-                "X signup reaches an Arkose Labs anti-bot challenge after form entry and should hand off to the owner for a manual solve when it appears.",
-              notes: [
-                "Use the alias email plus visual or simulated clicks for the normal signup flow.",
-                "If Arkose appears, pause for a manual owner solve and then resume automation."
-              ]
-            },
-            {
-              id: `${businessId}-pinterest`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "pinterest",
-              handle: "imonengineimon",
-              profileUrl: "https://www.pinterest.com/imonengineimon/",
-              status: "live",
-              notes: [
-                "Pinterest business profile is live for the digital asset store.",
-                "Primary board: Imon Digital Assets."
-              ]
-            }
-          ]
-        : [
-            {
-              id: `${businessId}-gmail-alias`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "gmail_alias",
-              handle: emailAlias,
-              status: "live",
-              notes: [
-                "Alias routes into the primary ImonEngine Gmail inbox.",
-                "Reserve ImonEngine and Imon for the parent system, not for this brand."
-              ]
-            },
-            {
-              id: `${businessId}-facebook-page`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "facebook_page",
-              handle: brandName,
-              status: "planned",
-              notes: [
-                `Create a dedicated Facebook Page named ${brandName} under the parent Meta account.`,
-                `Use ${emailAlias} for any related signup or verification emails.`
-              ]
-            },
-            {
-              id: `${businessId}-meta-business`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "meta_business",
-              status: "planned",
-              notes: [
-                `Add ${brandName} as its own Page/asset under the parent Meta account after the page exists.`,
-                "Do not create a second personal Meta account for the brand."
-              ]
-            },
-            {
-              id: `${businessId}-x`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "x",
-              handle: brandHandle,
-              status: "planned",
-              notes: [
-                `Use ${emailAlias} for signup and prefer visual input or simulated clicks instead of brittle DOM assumptions.`,
-                "If Arkose appears, hand off to the owner for a manual solve and then resume automation."
-              ]
-            },
-            {
-              id: `${businessId}-pinterest`,
-              businessId,
-              brandName,
-              emailAlias,
-              platform: "pinterest",
-              handle: `imonengine${brandHandle}`,
-              status: "planned",
-              notes: [
-                `Create a dedicated Pinterest business profile for ${brandName} once the brand has enough creative inventory.`,
-                `Default board suggestion: ${brandName} Digital Assets.`
-              ]
-            }
-          ];
+    const byId = new Map(current.map((profile) => [profile.id, profile]));
+    const blueprint = this.buildSocialBlueprint(business, brandName, baseEmail);
+    const defaults = blueprint.defaults;
 
     const saved: SocialProfileRecord[] = [];
     for (const profile of defaults) {
-      const existingProfile = byPlatform.get(profile.platform);
-      const preserveLiveProfile = existingProfile?.status === "live";
+      const existingProfile = byId.get(profile.id);
       const next: SocialProfileRecord = {
         ...profile,
         createdAt: existingProfile?.createdAt ?? now,
         updatedAt: now,
-        status: preserveLiveProfile ? existingProfile.status : profile.status,
-        blocker: preserveLiveProfile ? existingProfile.blocker ?? profile.blocker : profile.blocker,
-        handle: preserveLiveProfile ? existingProfile.handle ?? profile.handle : profile.handle ?? existingProfile?.handle,
-        profileUrl: preserveLiveProfile
-          ? existingProfile.profileUrl ?? profile.profileUrl
-          : profile.profileUrl ?? existingProfile?.profileUrl,
-        externalId: preserveLiveProfile
-          ? existingProfile.externalId ?? profile.externalId
-          : profile.externalId ?? existingProfile?.externalId,
-        notes: preserveLiveProfile && existingProfile?.notes?.length ? existingProfile.notes : profile.notes
+        status: existingProfile?.status ?? profile.status,
+        blocker: existingProfile?.blocker ?? profile.blocker,
+        role: existingProfile?.role ?? profile.role,
+        laneId: existingProfile?.laneId ?? profile.laneId,
+        laneName: existingProfile?.laneName ?? profile.laneName,
+        parentProfileId: existingProfile?.parentProfileId ?? profile.parentProfileId,
+        handle: existingProfile?.handle ?? profile.handle,
+        profileUrl: existingProfile?.profileUrl ?? profile.profileUrl,
+        externalId: existingProfile?.externalId ?? profile.externalId,
+        notes: dedupeNotes(profile.notes, existingProfile?.notes)
       };
       await this.store.saveSocialProfile(next);
       saved.push(next);
     }
 
-    return saved.sort((left, right) => left.platform.localeCompare(right.platform));
+    const knownIds = new Set(defaults.map((profile) => profile.id));
+    const retained = current.filter((profile) => !knownIds.has(profile.id));
+    return [...saved, ...retained].sort(sortProfiles);
+  }
+
+  async scaffoldPortfolioSocialProfiles(): Promise<SocialProfileRecord[]> {
+    const managed = await this.store.getManagedBusinesses();
+    const businessIndex = new Map(managed.map((business) => [business.id, business.name]));
+    const businessIds = uniqueStrings([
+      DIGITAL_ASSET_STORE_ID,
+      ...DEFAULT_MANAGED_BUSINESSES.map((business) => business.id),
+      ...managed.map((business) => business.id)
+    ]);
+
+    const allProfiles: SocialProfileRecord[] = [];
+    for (const businessId of businessIds) {
+      const brandName = businessIndex.get(businessId) ?? defaultBrandNameForBusiness(businessId);
+      const profiles = await this.ensureSocialProfiles(businessId, brandName);
+      allProfiles.push(...profiles);
+    }
+
+    return allProfiles.sort(sortProfiles);
   }
 
   async ensureCatalogPolicy(businessId = DIGITAL_ASSET_STORE_ID): Promise<CatalogGrowthPolicy> {
@@ -771,12 +1011,17 @@ export class StoreOpsService {
     const markdown = [
       "# Social Profiles",
       "",
-      ...profiles.map((profile) =>
+      ...profiles
+        .sort(sortProfiles)
+        .map((profile) =>
         [
-          `## ${profile.platform}`,
+          `## ${profile.brandName} · ${profile.platform}${profile.laneName ? ` · ${profile.laneName}` : ""}`,
           `- Brand: ${profile.brandName}`,
           `- Alias: ${profile.emailAlias}`,
           `- Status: ${profile.status}`,
+          ...(profile.role ? [`- Role: ${profile.role}`] : []),
+          ...(profile.laneName ? [`- Lane: ${profile.laneName}`] : []),
+          ...(profile.parentProfileId ? [`- Parent profile: ${profile.parentProfileId}`] : []),
           ...(profile.handle ? [`- Handle: ${profile.handle}`] : []),
           ...(profile.profileUrl ? [`- URL: ${profile.profileUrl}`] : []),
           ...(profile.blocker ? [`- Blocker: ${profile.blocker}`] : []),

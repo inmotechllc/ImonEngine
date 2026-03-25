@@ -1,6 +1,6 @@
 # Venture Studio
 
-ImonEngine now has a portfolio-level venture studio layer on top of the first live store. The current digital asset business is the working template, and future businesses should copy its structure without copying its public brand.
+ImonEngine now has a portfolio-level venture studio layer on top of the first live store. The current digital asset business is the working template, and future businesses should copy its operating structure without copying its public brand.
 
 ## Broad Plan
 
@@ -8,8 +8,9 @@ ImonEngine now has a portfolio-level venture studio layer on top of the first li
 2. Score candidate businesses by automation fit, speed to first sale, growth surface, and support burden.
 3. Launch one new brand per approved window.
 4. Use broad startup phases so each lane can choose tactics without breaking portfolio policy.
-5. Reinvest a capped share of brand profit into the brand and move the remainder into the collective ImonEngine fund.
-6. Keep capital-market experiments paper-only until operating businesses create real reserves.
+5. Funnel scalable niches into one umbrella brand when they can share a Facebook page, ad account, or storefront backend.
+6. Reinvest a capped share of brand profit into the brand and move the remainder into the collective ImonEngine fund.
+7. Keep capital-market experiments paper-only until operating businesses create real reserves.
 
 ## Launch Policy
 
@@ -19,6 +20,13 @@ ImonEngine now has a portfolio-level venture studio layer on top of the first li
 - After five created brands exist, new-brand windows slow to the first Monday of each month.
 - Future brands must use their own distinct names and plus-tag aliases such as `imonengine+canvascurrent@gmail.com`.
 - `ImonEngine` and `Imon` stay reserved for the parent system and the legacy first store.
+
+## Social Architecture Policy
+
+- Use Facebook Pages only at the umbrella-brand level for scalable lanes, the parent system, and Shopify/POD businesses.
+- When a business supports multiple niches, route those niches through one umbrella Facebook Page and create separate niche Instagram accounts beneath it.
+- Niche Instagram accounts should use plus-tag aliases derived from the umbrella brand and lane name.
+- Keep Instagram niche clusters to ten accounts or fewer per device or browser profile before rotating to another environment.
 
 ## Broad Startup Phases
 
@@ -51,6 +59,7 @@ ImonEngine now has a portfolio-level venture studio layer on top of the first li
 
 - `npm run dev -- venture-studio`
 - `npm run dev -- venture-studio --business <id>`
+- `npm run dev -- social-profiles`
 - `npm run dev -- autopilot-run-once`
 
 ## Runtime Artifacts

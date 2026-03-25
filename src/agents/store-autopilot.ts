@@ -123,7 +123,7 @@ export class StoreAutopilotAgent {
   private readonly docsDir: string;
   private readonly autopilotDir: string;
   private readonly statePath: string;
-  private readonly logPath: string;
+  private readonly historyPath: string;
   private readonly runReportPath: string;
   private readonly roadblockNotificationPath: string;
   private readonly gumroadStoreDocPath: string;
@@ -139,7 +139,7 @@ export class StoreAutopilotAgent {
     this.docsDir = path.join(this.config.projectRoot, "docs");
     this.autopilotDir = path.join(this.docsDir, "autopilot");
     this.statePath = path.join(this.autopilotDir, "state.json");
-    this.logPath = path.join(this.autopilotDir, "log.md");
+    this.historyPath = path.join(this.config.opsDir, "autopilot-history.md");
     this.runReportPath = path.join(this.config.opsDir, "autopilot-last-run.json");
     this.roadblockNotificationPath = path.join(this.config.opsDir, "autopilot-roadblock-notification.json");
     this.gumroadStoreDocPath = path.join(this.docsDir, "gumroad-store.md");
@@ -818,7 +818,7 @@ export class StoreAutopilotAgent {
   ): Promise<AutopilotRunResult | null> {
     await this.storeOps.ensureCatalogPolicy();
     await this.storeOps.ensureAllocationPolicy();
-    const socialProfiles = await this.storeOps.ensureSocialProfiles();
+    const socialProfiles = await this.storeOps.scaffoldPortfolioSocialProfiles();
     const socialArtifacts = await this.storeOps.writeSocialArtifacts(socialProfiles);
 
     const existingQueue = await this.store.getGrowthQueue();
@@ -1229,34 +1229,35 @@ export class StoreAutopilotAgent {
     return [
       "# Operations Runbook",
       "",
-      "## Local Scheduler",
+      "## VPS Scheduler",
       "",
-      "- Install with `powershell -ExecutionPolicy Bypass -File scripts/install-windows-autopilot.ps1`.",
-      "- The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.",
-      "- The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.",
-      "- Due Facebook and Pinterest growth posts are executed from the active runner before new catalog seeding continues.",
+      "- Install with `sudo bash scripts/install-vps-autopilot.sh` inside `/opt/imon-engine`.",
+      "- `scripts/run_vps_autopilot.sh` is the primary hourly runner and should own publishing, posting, roadblock email, and runtime-state updates.",
+      "- The VPS runner can safely handle Gmail, Gumroad, Pinterest, and any other browser-backed flow once the server-side Chrome profile is signed in through the remote desktop layer.",
       "- `scripts/publish_growth_post.py` prefers the Meta Graph API for Facebook when `META_PAGE_ACCESS_TOKEN` is present, and falls back to the signed-in browser only when no token is configured.",
       "- Reserve `ImonEngine` and `Imon` for the parent system or the legacy first store only; every future business should get its own creative brand name and plus-tag alias.",
+      "- Use one umbrella Facebook Page only for scalable businesses, the parent system, or Shopify/POD lanes that can share one ad surface across multiple niches.",
+      "- When a business benefits from multiple niches, keep one umbrella Page and create separate niche Instagram accounts using `imonengine+<brand><niche>@gmail.com` aliases.",
+      "- Keep each Instagram cluster to ten accounts or fewer per device or browser profile before rotating into a fresh environment.",
       "- X signup should prefer visual-input or simulated-click flows; if Arkose appears, hand the challenge to the owner and then resume automation after it is solved.",
       "- Catalog expansion is capped so the store cannot outrun its growth queue and channel bandwidth.",
-      "- `growthQueue.json` is authored by the local scheduler and uploaded to the VPS as-is; the VPS should not regenerate it because the local browser host is the source of truth for posting cadence.",
+      "- `growthQueue.json`, `socialProfiles.json`, and the revenue snapshots are now authored on the VPS and treated as the primary runtime state.",
       "- Revenue imports should flow through `npm run dev -- import-gumroad-sales` and `npm run dev -- import-relay-transactions` before reviewing `npm run dev -- revenue-report`.",
       "- Remaining post-reinvestment funds are modeled as transfers into the collective ImonEngine fund, and the same reinvestment percentage caps shared tool spend there.",
       "- Refresh the collective-fund artifact with `npm run dev -- collective-fund-report`.",
       "",
-        "## VPS Scheduler",
+      "## Local Fallback",
         "",
-        "- Install with `sudo bash scripts/install-vps-autopilot.sh` inside `/opt/imon-engine`.",
-        "- The VPS runner is safe for headless phases and runtime sync work.",
-        "- Browser-dependent tasks can run on the VPS once the server-side Chrome profile is signed in through `scripts/vps-remote-desktop-start.sh`.",
-        "- Use `scripts/vps-remote-desktop-status.sh` to confirm that x11vnc and noVNC are up before relying on server-side Gmail, Pinterest, or marketplace automation.",
-        "- Meta/Facebook no longer needs a VPS browser login when `META_PAGE_ACCESS_TOKEN` is configured for the page.",
+      "- `scripts/run_local_autopilot.ps1` is now a manual fallback, not the primary scheduler.",
+      "- If you temporarily re-enable the Windows task, treat it as an emergency backup only and disable it again after the VPS path is healthy.",
+      "- Use `scripts/vps-remote-desktop-status.sh` to confirm that x11vnc and noVNC are up before relying on server-side Gmail, Pinterest, marketplace automation, or VPS-hosted signups.",
+      "- Meta/Facebook no longer needs a VPS browser login when `META_PAGE_ACCESS_TOKEN` is configured for the page.",
         "",
         "## Runtime Rules",
       "",
       "- `runtime/` is local operational state and remains git-ignored.",
       "- Durable instructions belong in `docs/autopilot/` and tracked scripts belong in `scripts/`.",
-      "- The authoritative secrets stay on the VPS `.env`; local scheduler-only sync secrets should be injected through local environment variables instead of tracked files.",
+      "- The authoritative secrets and primary browser cookies stay on the VPS `.env` and `/opt/imon-engine/.chrome-profile`.",
       ""
     ].join("\n");
   }
@@ -1265,25 +1266,21 @@ export class StoreAutopilotAgent {
     return [
       "# Scheduler Notes",
       "",
-      "## Required Environment Variables For Local VPS Sync",
+      "## Required Environment Variables For VPS Posting",
       "",
-      "- `IMON_ENGINE_VPS_HOST`",
-      "- `IMON_ENGINE_VPS_USER`",
-      "- `IMON_ENGINE_VPS_PASSWORD`",
-      "- `IMON_ENGINE_VPS_REPO_PATH`",
-      "- `IMON_ENGINE_VPS_BRANCH`",
-      "- `runtime/state/assetPacks.json`, `growthQueue.json`, `growthPolicies.json`, `allocationPolicies.json`, `allocationSnapshots.json`, `collectiveSnapshots.json`, `salesTransactions.json`, and `socialProfiles.json` are uploaded explicitly after each local run so store-ops state is mirrored to the VPS.",
+      "- `META_PAGE_ID`",
+      "- `META_PAGE_ACCESS_TOKEN`",
+      "- `APPROVAL_EMAIL`",
+      "- A signed-in VPS Chrome profile for Gmail, Gumroad, Pinterest, and any other browser-backed services.",
       "",
         "## Execution Model",
         "",
-        "- The local task is the primary scheduler when browser-only accounts still live there.",
-        "- The VPS cron job can take over browser-dependent work once the server-side Chrome profile is signed in and the remote desktop stack is up.",
-        "- `scripts/publish_gumroad_product.py` can run on the local scheduler or the VPS, as long as the matching signed-in browser session is available.",
-        "- `scripts/publish_growth_post.py` can run on the local scheduler or the VPS; Facebook prefers `META_PAGE_ACCESS_TOKEN`, while Pinterest still uses the matching signed-in browser session.",
-        "- `runtime/state/growthQueue.json` should be uploaded from local and not regenerated on the VPS, so scheduled post ids stay aligned with the browser host.",
-        "- `runtime/ops/social-profiles.md` is the current registry of live vs blocked channel accounts.",
-        "- `runtime/state/growthQueue.json`, `runtime/ops/revenue-report.json`, and `runtime/ops/collective-fund-report.json` are the current store-ops control surfaces for growth pacing and reinvestment review.",
-        "- If the browser is closed, Gmail delivery, Pinterest, and any server-side marketplace automation will block until the session is reopened.",
+        "- The VPS cron job is the primary scheduler.",
+        "- `scripts/run_vps_autopilot.sh` should pull the latest code when the worktree is clean, then execute one store-autopilot work unit on the server.",
+        "- `scripts/publish_gumroad_product.py` and `scripts/publish_growth_post.py` should run on the VPS whenever the matching server-side session exists.",
+        "- `runtime/state/growthQueue.json`, `socialProfiles.json`, and the finance snapshots are now authoritative on the VPS and should not depend on a laptop-side mirror to keep moving.",
+        "- `runtime/ops/social-profiles.md` is the current registry of live vs blocked channel accounts, including umbrella Facebook assets and niche Instagram lanes.",
+        "- If the VPS browser is closed, Gmail delivery, Pinterest, Gumroad publishing, and any browser-backed signup or posting flow will block until the session is reopened.",
         "- When the runner hits a real roadblock, it should email `APPROVAL_EMAIL` through the signed-in ImonEngine Gmail session, with throttling so repeated blockers do not spam you.",
         ""
       ].join("\n");
@@ -1402,7 +1399,7 @@ export class StoreAutopilotAgent {
       currentPhase: "phase-01-product-factory-expansion",
       browserSession: {
         required: true,
-        note: "Keep the signed-in ImonEngine browser session open for Gumroad and Gmail access."
+        note: "Keep the signed-in VPS Chrome profile open for Gmail, Gumroad, Pinterest, and any other browser-backed accounts."
       },
       phases: [],
       notes: []
@@ -1434,14 +1431,14 @@ export class StoreAutopilotAgent {
   }
 
   private async appendLog(result: AutopilotRunResult): Promise<void> {
-    const existing = await readTextFile(this.logPath);
+    const existing = (await exists(this.historyPath)) ? await readTextFile(this.historyPath) : "";
     const timestamp = new Date().toISOString();
     const detailLines = result.details.map((detail) => `  - ${detail}`).join("\n");
     const entry = [`- ${timestamp} [${result.phaseId}] ${result.status.toUpperCase()}: ${result.summary}`, detailLines]
       .filter(Boolean)
       .join("\n");
     const next = `${existing.trimEnd()}\n${entry}\n`;
-    await writeTextFile(this.logPath, next);
+    await writeTextFile(this.historyPath, next);
   }
 
   private async maybeNotifyRoadblock(result: AutopilotRunResult): Promise<void> {

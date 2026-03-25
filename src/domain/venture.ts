@@ -36,6 +36,40 @@ export interface VentureAgentRole {
   autonomyRules: string[];
 }
 
+export type VentureFacebookStrategy = "legacy_live" | "umbrella_brand" | "avoid_by_default";
+
+export type VentureInstagramStrategy = "single_brand" | "niche_accounts";
+
+export interface VentureNicheLane {
+  id: string;
+  name: string;
+  focus: string;
+  aliasEmail: string;
+  handleStem: string;
+  notes: string[];
+}
+
+export interface VentureSocialAccountPlan {
+  platform: string;
+  ownership: "umbrella_brand" | "niche_lane" | "minimal";
+  quantity: number;
+  aliasPattern: string;
+  purpose: string;
+  notes: string[];
+}
+
+export interface VentureSocialArchitecture {
+  umbrellaBrandName: string;
+  umbrellaAliasEmail: string;
+  umbrellaHandleStem: string;
+  facebookStrategy: VentureFacebookStrategy;
+  instagramStrategy: VentureInstagramStrategy;
+  maxInstagramAccountsPerDevice: number;
+  niches: VentureNicheLane[];
+  accountPlan: VentureSocialAccountPlan[];
+  notes: string[];
+}
+
 export interface VentureSelectionScore {
   automationFit: number;
   revenuePotential: number;
@@ -61,6 +95,7 @@ export interface VentureBlueprint {
   startupPhases: VentureStartupPhase[];
   cadence: VentureCadencePlan;
   growthFocus: string[];
+  socialArchitecture: VentureSocialArchitecture;
   reinvestment: {
     brandRate: number;
     collectiveCapRate: number;
@@ -102,6 +137,7 @@ export interface VentureStudioPolicy {
     launchWindowLocal: string;
     oneNewBrandPerWindow: boolean;
   };
+  socialRules: string[];
   cadenceRules: string[];
   capitalRules: string[];
 }

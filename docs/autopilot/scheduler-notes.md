@@ -1,25 +1,25 @@
 # Scheduler Notes
 
-## Required Environment Variables For Local VPS Sync
+## Required Environment Variables For VPS Posting
 
-- `IMON_ENGINE_VPS_HOST`
-- `IMON_ENGINE_VPS_USER`
-- `IMON_ENGINE_VPS_PASSWORD`
-- `IMON_ENGINE_VPS_REPO_PATH`
-- `IMON_ENGINE_VPS_BRANCH`
-- `runtime/state/assetPacks.json`, `growthQueue.json`, `growthPolicies.json`, `allocationPolicies.json`, `allocationSnapshots.json`, `collectiveSnapshots.json`, `salesTransactions.json`, and `socialProfiles.json` are uploaded explicitly after each local run so store-ops state is mirrored to the VPS.
+- `META_PAGE_ID`
+- `META_PAGE_ACCESS_TOKEN`
+- `APPROVAL_EMAIL`
+- a signed-in VPS Chrome profile for Gmail, Gumroad, Pinterest, and any other browser-backed services
 
 ## Execution Model
 
-- The local task is the primary scheduler when browser-only accounts still live there.
-- The VPS cron job can now handle headless build/sync work and browser work once the server-side Chrome profile is signed in.
-- `scripts/publish_gumroad_product.py` should only run on the local scheduler because it depends on the signed-in Gumroad browser session.
-- `scripts/publish_growth_post.py` can run on the local scheduler or the VPS; Facebook prefers `META_PAGE_ACCESS_TOKEN`, while Pinterest still depends on the signed-in browser session.
-- `runtime/state/growthQueue.json` should be uploaded from local and not regenerated on the VPS, so scheduled post ids stay aligned with the browser host.
-- `scripts/build_growth_assets.py` is now refreshed from the local runner whenever new published packs are missing promo assets.
-- `runtime/ops/growth-queue.md` is the operator-facing post queue for free distribution channels.
-- `runtime/ops/social-profiles.md` is the current live-vs-blocked registry for channel accounts.
-- `runtime/ops/revenue-report.md` becomes meaningful after Gumroad and Relay CSV imports are added.
-- `runtime/ops/collective-fund-report.md` is the current view of what brands can transfer into the shared ImonEngine fund and how much shared tool spend is allowed.
-- Catalog growth is intentionally capped so publishing volume does not outrun free traffic capacity.
-- If the browser is closed, Gmail delivery, Pinterest, and any server-side marketplace automation will block until the session is reopened.
+- The VPS cron job is the primary scheduler.
+- `scripts/run_vps_autopilot.sh` should pull the latest code when the worktree is clean, then execute one store-autopilot work unit on the server.
+- `scripts/publish_gumroad_product.py` and `scripts/publish_growth_post.py` should run on the VPS whenever the matching server-side session exists.
+- `growthQueue.json`, `socialProfiles.json`, and the finance snapshots are authoritative on the VPS and should not depend on a laptop-side mirror to keep moving.
+- `runtime/ops/social-profiles.md` is the current registry of live vs blocked channel accounts, including umbrella Facebook assets and niche Instagram lanes.
+- `runtime/ops/revenue-report.md` and `runtime/ops/collective-fund-report.md` are the current control surfaces for reinvestment review.
+- If the VPS browser is closed, Gmail delivery, Pinterest, Gumroad publishing, and any browser-backed signup or posting flow will block until the session is reopened.
+- When the runner hits a real roadblock, it should email `APPROVAL_EMAIL` through the signed-in ImonEngine Gmail session, with throttling so repeated blockers do not spam you.
+
+## Local Fallback
+
+- The Windows task is no longer the default scheduler.
+- Keep `ImonEngineStoreAutopilot` disabled unless the VPS runner is down.
+- The Codex desktop automation should remain paused so it does not race the VPS cron job.

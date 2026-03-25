@@ -56,6 +56,8 @@ Default behavior:
 
 This lets ImonEngine keep browser cookies and account sessions on the VPS instead of rebuilding them every run.
 
+Because the VPS is now the primary scheduler, Gmail, Gumroad, Pinterest, and any other browser-backed services should stay signed into this server-side Chrome profile instead of depending on a local machine.
+
 ## Codex CLI On VPS
 
 Use `scripts/vps-codex-login.sh` after the VPS browser is running. It starts the browser if needed, then opens the Codex authentication flow against the saved Chrome profile so the CLI can be used directly from the server.
@@ -83,7 +85,7 @@ Each worker mounts:
 
 ## Operating Rule
 
-- Use the local machine for browser-dependent work when the signed-in consumer accounts only exist there.
 - Use the VPS browser when the account session should persist on the server.
 - Use the VPS remote desktop when you need to log into the server-side Chrome profile yourself.
 - Use a business worker container when a new brand needs isolated dependencies, code, or experimental tooling.
+- Keep the local Windows scheduler disabled unless the VPS runner is unavailable.

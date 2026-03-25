@@ -109,7 +109,7 @@ function usage(): string {
     "  npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]",
     "  npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]",
     "  npm run dev -- collective-fund-report [--days 30]",
-    "  npm run dev -- social-profiles",
+    "  npm run dev -- social-profiles [--business <id>] [--all]",
     "  npm run dev -- venture-studio [--business <id>]",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
@@ -498,7 +498,10 @@ async function main(): Promise<void> {
       break;
     }
     case "social-profiles": {
-      const profiles = await storeOps.ensureSocialProfiles();
+      const businessId = typeof flags.business === "string" ? flags.business : undefined;
+      const profiles = businessId
+        ? await storeOps.ensureSocialProfiles(businessId)
+        : await storeOps.scaffoldPortfolioSocialProfiles();
       const artifacts = await storeOps.writeSocialArtifacts(profiles);
       logger.info(`Social profile registry refreshed with ${profiles.length} profile(s).`);
       console.log(JSON.stringify({ profiles, artifacts }, null, 2));

@@ -6,10 +6,14 @@ import type {
   VentureAgentRole,
   VentureBlueprint,
   VentureCadencePlan,
+  VentureFacebookStrategy,
+  VentureInstagramStrategy,
   VentureLaunchMode,
   VentureLaunchWindow,
+  VentureNicheLane,
   VentureRangeTarget,
   VentureRiskMode,
+  VentureSocialArchitecture,
   VentureStartupPhase,
   VentureStudioSnapshot
 } from "../domain/venture.js";
@@ -45,6 +49,12 @@ type CategoryProfile = {
     activeDays: RangeShape;
     notes: string[];
   };
+};
+
+type NicheSeed = {
+  id: string;
+  name: string;
+  focus: string;
 };
 
 const CATEGORY_PROFILES: Record<BusinessCategory, CategoryProfile> = {
@@ -134,6 +144,31 @@ const CATEGORY_PROFILES: Record<BusinessCategory, CategoryProfile> = {
   }
 };
 
+const CATEGORY_NICHE_TEMPLATES: Partial<Record<BusinessCategory, NicheSeed[]>> = {
+  faceless_social_brand: [
+    { id: "visual-explainers", name: "Visual Explainers", focus: "short explainers, pattern breakdowns, and hook-first concept clips" },
+    { id: "operator-habits", name: "Operator Habits", focus: "systems, routines, and workflow content for ambitious operators" },
+    { id: "trend-remixes", name: "Trend Remixes", focus: "trend-aware remixes that adapt proven formats to the umbrella brand voice" }
+  ],
+  micro_saas_factory: [
+    { id: "workflow-agents", name: "Workflow Agents", focus: "small tools that remove repetitive task friction" },
+    { id: "creator-ops", name: "Creator Ops", focus: "utilities for creators, consultants, and solo operators" },
+    { id: "insight-dashboards", name: "Insight Dashboards", focus: "light analytics and visibility tools around recurring business questions" }
+  ],
+  print_on_demand_store: [
+    { id: "abstract-art", name: "Abstract Art", focus: "modern abstract art and atmospheric compositions" },
+    { id: "sacred-symbols", name: "Sacred Symbols", focus: "religious and spiritual symbol collections presented respectfully" },
+    { id: "graphic-tees", name: "Graphic Tees", focus: "statement graphics and typographic apparel motifs" },
+    { id: "childrens-designs", name: "Children's Designs", focus: "playful illustrations and kid-friendly pattern sets" }
+  ]
+};
+
+const BUSINESS_NICHE_TEMPLATES: Partial<Record<string, NicheSeed[]>> = {
+  "imon-pod-store": CATEGORY_NICHE_TEMPLATES.print_on_demand_store ?? [],
+  "imon-faceless-social-brand": CATEGORY_NICHE_TEMPLATES.faceless_social_brand ?? [],
+  "imon-micro-saas-factory": CATEGORY_NICHE_TEMPLATES.micro_saas_factory ?? []
+};
+
 function hashSeed(seed: string): number {
   let hash = 2166136261;
   for (let index = 0; index < seed.length; index += 1) {
@@ -153,6 +188,10 @@ function pick(minimum: number, maximum: number, seed: string): number {
 function buildAlias(baseEmail: string, brandName: string): string {
   const [local, domain] = baseEmail.split("@");
   return local && domain ? `${local}+${slugify(brandName).replace(/-/g, "")}@${domain}` : baseEmail;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function weekKey(date: Date): string {
@@ -343,6 +382,153 @@ function rolesFor(business: ManagedBusiness, aliasEmail: string): VentureAgentRo
   ];
 }
 
+function nicheSeedsForBusiness(business: ManagedBusiness): NicheSeed[] {
+  return BUSINESS_NICHE_TEMPLATES[business.id] ?? CATEGORY_NICHE_TEMPLATES[business.category] ?? [];
+}
+
+function socialArchitectureForBusiness(
+  business: ManagedBusiness,
+  baseEmail: string
+): VentureSocialArchitecture {
+  const legacyStore = business.id === TEMPLATE_SOURCE_BUSINESS_ID;
+  const scalableUmbrella = new Set<BusinessCategory>([
+    "faceless_social_brand",
+    "micro_saas_factory",
+    "print_on_demand_store"
+  ]);
+  const umbrellaBrandName = legacyStore ? "Imon" : business.name;
+  const umbrellaAliasEmail = buildAlias(baseEmail, umbrellaBrandName);
+  const umbrellaHandleStem = slugify(umbrellaBrandName).replace(/-/g, "");
+  const facebookStrategy: VentureFacebookStrategy = legacyStore
+    ? "legacy_live"
+    : scalableUmbrella.has(business.category)
+      ? "umbrella_brand"
+      : "avoid_by_default";
+  const instagramStrategy: VentureInstagramStrategy =
+    scalableUmbrella.has(business.category) ? "niche_accounts" : "single_brand";
+  const nicheSeeds = nicheSeedsForBusiness(business);
+  const niches: VentureNicheLane[] =
+    instagramStrategy === "niche_accounts"
+      ? nicheSeeds.map((lane) => {
+          const laneBrandName = `${umbrellaBrandName} ${lane.name}`;
+          return {
+            id: `${business.id}-${lane.id}`,
+            name: lane.name,
+            focus: lane.focus,
+            aliasEmail: buildAlias(baseEmail, laneBrandName),
+            handleStem: slugify(laneBrandName).replace(/-/g, ""),
+            notes: [
+              "Use this lane as a niche-specific Instagram identity under the umbrella brand.",
+              "Route signup codes and recovery emails through the plus-tag alias."
+            ]
+          };
+        })
+      : [
+          {
+            id: `${business.id}-core`,
+            name: `${umbrellaBrandName} Core`,
+            focus: "the main brand identity for the lane",
+            aliasEmail: umbrellaAliasEmail,
+            handleStem: umbrellaHandleStem,
+            notes: ["Use the umbrella brand directly instead of splitting it into multiple niche identities."]
+          }
+        ];
+
+  const accountPlan = [
+    {
+      platform: "gmail_alias",
+      ownership: "minimal" as const,
+      quantity: 1,
+      aliasPattern: umbrellaAliasEmail,
+      purpose: "Receive signup codes, platform alerts, and support notifications for the brand.",
+      notes: ["All aliases still route into the primary ImonEngine inbox."]
+    },
+    ...(facebookStrategy !== "avoid_by_default"
+      ? [
+          {
+            platform: "meta_business",
+            ownership: "umbrella_brand" as const,
+            quantity: 1,
+            aliasPattern: umbrellaAliasEmail,
+            purpose: "Manage the umbrella Facebook asset, ad access, and future test users.",
+            notes: ["Prefer one umbrella Meta portfolio asset per scalable business instead of one page per niche."]
+          },
+          {
+            platform: "facebook_page",
+            ownership: "umbrella_brand" as const,
+            quantity: 1,
+            aliasPattern: umbrellaAliasEmail,
+            purpose: "Run ads and public Facebook content for the umbrella brand across all attached niches.",
+            notes: ["Use Facebook sparingly and strategically for scalable umbrellas, the parent system, or Shopify/POD lanes."]
+          }
+        ]
+      : []),
+    {
+      platform: "instagram_account",
+      ownership: instagramStrategy === "niche_accounts" ? ("niche_lane" as const) : ("umbrella_brand" as const),
+      quantity: instagramStrategy === "niche_accounts" ? niches.length : 1,
+      aliasPattern:
+        instagramStrategy === "niche_accounts"
+          ? `${umbrellaAliasEmail.replace("@", "+<niche>@")}`
+          : umbrellaAliasEmail,
+      purpose:
+        instagramStrategy === "niche_accounts"
+          ? "Create alternate Instagram identities for each niche beneath the umbrella brand."
+          : "Maintain a single Instagram identity for the brand when niche splitting is unnecessary.",
+      notes: [
+        "Instagram niche accounts should use plus-tag aliases tied to the brand and niche name.",
+        "Keep the total under 10 Instagram accounts per device or browser environment before rotating to another isolated profile."
+      ]
+    },
+    ...(business.category === "digital_asset_store" || business.category === "print_on_demand_store"
+      ? [
+          {
+            platform: "pinterest",
+            ownership: "umbrella_brand" as const,
+            quantity: 1,
+            aliasPattern: umbrellaAliasEmail,
+            purpose: "Drive evergreen discovery for visual products and collections.",
+            notes: ["Pinterest stays useful for digital asset previews, mockups, and POD catalog discovery."]
+          }
+        ]
+      : []),
+    ...(business.category !== "print_on_demand_store"
+      ? [
+          {
+            platform: "x",
+            ownership: "umbrella_brand" as const,
+            quantity: 1,
+            aliasPattern: umbrellaAliasEmail,
+            purpose: "Test hook-driven text and media distribution when the platform trusts the account.",
+            notes: ["Use simulated clicks or visual input during signup, then pause for manual completion if Arkose appears."]
+          }
+        ]
+      : [])
+  ];
+
+  return {
+    umbrellaBrandName,
+    umbrellaAliasEmail,
+    umbrellaHandleStem,
+    facebookStrategy,
+    instagramStrategy,
+    maxInstagramAccountsPerDevice: 10,
+    niches,
+    accountPlan,
+    notes: uniqueStrings([
+      legacyStore
+        ? "This is the legacy first store, so the existing Imon brand and Facebook Page remain active."
+        : "ImonEngine is the parent system name and should not be reused as the public brand for this business.",
+      facebookStrategy === "umbrella_brand"
+        ? "Use one Facebook Page at the umbrella level, then route multiple niches through that ad and content surface."
+        : "Avoid creating a new Facebook Page until the lane proves it benefits from a shared paid-growth surface.",
+      instagramStrategy === "niche_accounts"
+        ? "Create separate Instagram accounts per niche using plus-tag aliases so the umbrella brand can test multiple angles without spawning extra Facebook Pages."
+        : "Use one Instagram account for the brand until there is clear evidence that niche splitting improves reach or conversion."
+    ])
+  };
+}
+
 function capitalTracks(reinvestmentRate: number): CapitalExperimentTrack[] {
   return [
     {
@@ -380,7 +566,12 @@ export class VentureStudioService {
     const profiles = await this.store.getSocialProfiles();
     const createdBrandIds = new Set(
       profiles
-        .filter((profile) => profile.status !== "planned" && !EXCLUDED_BUSINESS_IDS.has(profile.businessId))
+        .filter(
+          (profile) =>
+            profile.status !== "planned" &&
+            profile.platform !== "gmail_alias" &&
+            !EXCLUDED_BUSINESS_IDS.has(profile.businessId)
+        )
         .map((profile) => profile.businessId)
     );
     for (const business of businesses) {
@@ -398,7 +589,8 @@ export class VentureStudioService {
     const mode = launchMode(createdBrandCount);
     const blueprints = businesses.filter((business) => business.id !== "auto-funding-agency").map((business) => {
       const profile = CATEGORY_PROFILES[business.category];
-      const aliasEmail = buildAlias(baseEmail, business.name);
+      const socialArchitecture = socialArchitectureForBusiness(business, baseEmail);
+      const aliasEmail = socialArchitecture.umbrellaAliasEmail;
       const cadenceSeed = `${business.id}-${weekKey(now)}`;
       const cadence: VentureCadencePlan = {
         coreOutput: target(profile.cadence.coreOutput, `${cadenceSeed}-core`),
@@ -407,7 +599,7 @@ export class VentureStudioService {
         activeDays: target(profile.cadence.activeDays, `${cadenceSeed}-days`),
         notes: profile.cadence.notes
       };
-      const handleStem = slugify(business.name).replace(/-/g, "");
+      const handleStem = socialArchitecture.umbrellaHandleStem;
       const composite = scoreComposite(business);
       const blueprint: VentureBlueprint = {
         businessId: business.id,
@@ -428,10 +620,15 @@ export class VentureStudioService {
           composite
         },
         stack: [...business.platforms, ...profile.stack],
-        signupTargets: profile.signups,
+        signupTargets: uniqueStrings([
+          ...profile.signups,
+          ...(socialArchitecture.facebookStrategy === "umbrella_brand" ? ["umbrella Facebook page"] : []),
+          ...(socialArchitecture.instagramStrategy === "niche_accounts" ? ["niche Instagram accounts"] : ["brand Instagram account"])
+        ]),
         startupPhases: phasesFor(business, aliasEmail),
         cadence,
         growthFocus: profile.growth,
+        socialArchitecture,
         reinvestment: {
           brandRate: this.config.storeOps.finance.reinvestmentRate,
           collectiveCapRate: this.config.storeOps.finance.reinvestmentRate,
@@ -466,7 +663,8 @@ export class VentureStudioService {
         lessons: [
           "Start with automation-friendly monetization and low-support distribution.",
           "Use the live store as the template for payout tracking, social account handling, and reinvestment loops.",
-          "Keep browser-dependent automation in persistent local or virtual-display sessions."
+          "Keep browser-dependent automation in persistent local or virtual-display sessions.",
+          "Use umbrella Facebook surfaces only when multiple niches can share the same scalable acquisition engine."
         ]
       },
       broadPlan: [
@@ -474,6 +672,7 @@ export class VentureStudioService {
         "Score candidate businesses by automation fit, speed to first sale, growth surface, and support burden.",
         "Launch one new brand per approved window, weekly at first and monthly after five created brands.",
         "Use broad startup phases so each lane can choose tactics without breaking system policy.",
+        "Funnel scalable niches into one umbrella brand when they can share a Facebook page, ad account, or storefront backend.",
         "Reinvest a capped share of brand profit back into the brand and move the remainder into the collective system fund.",
         "Keep capital-market experiments paper-only until operating businesses create real reserves."
       ],
@@ -487,6 +686,11 @@ export class VentureStudioService {
           launchWindowLocal: "07:00-09:00 America/New_York",
           oneNewBrandPerWindow: true
         },
+        socialRules: [
+          "Reserve Facebook Pages for umbrella brands, the parent system, and physical or otherwise scalable storefronts.",
+          "When a business can support multiple niches, funnel them into one umbrella brand and give each niche its own plus-tag Instagram identity.",
+          "Keep Instagram niche clusters to ten accounts or fewer per device or browser environment before moving to a fresh profile."
+        ],
         cadenceRules: [
           "Use a random number inside each allowed range for products, posts, and stories every week.",
           "Feed posts stay capped at one per day maximum.",
@@ -558,6 +762,7 @@ export class VentureStudioService {
       `- Brand creation window: ${snapshot.policy.creationRules.launchWindowLocal}`,
       `- Slowdown threshold: ${snapshot.policy.creationRules.preSlowdownBrandCount} created brands`,
       `- Brand/system reinvestment cap: ${Math.round(snapshot.policy.systemReinvestmentCapRate * 100)}%`,
+      ...snapshot.policy.socialRules.map((rule) => `- ${rule}`),
       ...snapshot.policy.cadenceRules.map((rule) => `- ${rule}`),
       "",
       "## Business Blueprints",
@@ -567,6 +772,8 @@ export class VentureStudioService {
         `- Medium: ${blueprint.medium}`,
         `- Risk mode: ${blueprint.riskPolicy.mode}`,
         `- Composite score: ${blueprint.selectionScore.composite}`,
+        `- Facebook strategy: ${blueprint.socialArchitecture.facebookStrategy}`,
+        `- Instagram strategy: ${blueprint.socialArchitecture.instagramStrategy} (${blueprint.socialArchitecture.niches.length} lane(s))`,
         `- This week's randomized cadence: ${blueprint.cadence.coreOutput.selected} ${blueprint.cadence.coreOutput.label} ${blueprint.cadence.coreOutput.period}; ${blueprint.cadence.feedPosts.selected} ${blueprint.cadence.feedPosts.label} ${blueprint.cadence.feedPosts.period}; ${blueprint.cadence.storiesOrReels.selected} ${blueprint.cadence.storiesOrReels.label} ${blueprint.cadence.storiesOrReels.period}.`,
         "- Startup phases:",
         ...blueprint.startupPhases.map((phase) => `  - ${phase.title}`),
@@ -638,6 +845,36 @@ export class VentureStudioService {
       "",
       "## Growth Focus",
       ...blueprint.growthFocus.map((item) => `- ${item}`),
+      "",
+      "## Social Architecture",
+      `- Umbrella brand: ${blueprint.socialArchitecture.umbrellaBrandName}`,
+      `- Umbrella alias: ${blueprint.socialArchitecture.umbrellaAliasEmail}`,
+      `- Facebook strategy: ${blueprint.socialArchitecture.facebookStrategy}`,
+      `- Instagram strategy: ${blueprint.socialArchitecture.instagramStrategy}`,
+      `- Max Instagram accounts per device: ${blueprint.socialArchitecture.maxInstagramAccountsPerDevice}`,
+      ...blueprint.socialArchitecture.notes.map((note) => `- Note: ${note}`),
+      "",
+      "### Social Account Plan",
+      ...blueprint.socialArchitecture.accountPlan.flatMap((plan) => [
+        `- ${plan.platform}: ${plan.quantity} (${plan.ownership})`,
+        `  Purpose: ${plan.purpose}`,
+        `  Alias pattern: ${plan.aliasPattern}`,
+        ...plan.notes.map((note) => `  Note: ${note}`)
+      ]),
+      "",
+      ...(blueprint.socialArchitecture.niches.length > 0
+        ? [
+            "### Niche Lanes",
+            ...blueprint.socialArchitecture.niches.flatMap((lane) => [
+              `- ${lane.name}`,
+              `  Focus: ${lane.focus}`,
+              `  Alias: ${lane.aliasEmail}`,
+              `  Handle stem: ${lane.handleStem}`,
+              ...lane.notes.map((note) => `  Note: ${note}`)
+            ]),
+            ""
+          ]
+        : []),
       "",
       "## Reinvestment Rules",
       `- Brand reinvestment cap: ${Math.round(blueprint.reinvestment.brandRate * 100)}%`,
