@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
 import subprocess
 import sys
@@ -32,26 +33,57 @@ def _run_powershell(command: str) -> str:
     return result.stdout
 
 
+def _port_has_devtools(port: int) -> bool:
+    try:
+        http_json(port, "/json/version")
+    except Exception:
+        return False
+    return True
+
+
+def _candidate_ports() -> list[int]:
+    ports: list[int] = []
+    for env_name in (
+        "CHROME_REMOTE_DEBUGGING_PORT",
+        "VPS_CHROME_REMOTE_DEBUGGING_PORT",
+        "REMOTE_DEBUG_PORT",
+    ):
+        value = os.environ.get(env_name)
+        if value and value.isdigit():
+            ports.append(int(value))
+
+    if sys.platform == "win32":
+        try:
+            command = (
+                "Get-CimInstance Win32_Process | "
+                "Where-Object { $_.Name -eq 'chrome.exe' -and "
+                "$_.CommandLine -match '--remote-debugging-port=' } | "
+                "Select-Object -ExpandProperty CommandLine"
+            )
+            output = _run_powershell(command)
+            for line in output.splitlines():
+                match = re.search(r"--remote-debugging-port=(\d+)", line)
+                if match:
+                    ports.append(int(match.group(1)))
+        except RuntimeError:
+            pass
+
+    ports.extend([9222, 9223, 9229])
+    deduped: list[int] = []
+    for port in ports:
+        if port not in deduped:
+            deduped.append(port)
+    return deduped
+
+
 def detect_mcp_chrome_port() -> int:
-    command = (
-        "Get-CimInstance Win32_Process | "
-        "Where-Object { $_.Name -eq 'chrome.exe' -and "
-        "$_.CommandLine -match 'ms-playwright\\\\mcp-chrome' -and "
-        "$_.CommandLine -match '--remote-debugging-port=' } | "
-        "Select-Object -ExpandProperty CommandLine"
+    for port in _candidate_ports():
+        if _port_has_devtools(port):
+            return port
+    raise RuntimeError(
+        "No active Chrome remote debugging port was found. "
+        "Keep the automation browser open first."
     )
-    output = _run_powershell(command)
-    ports = []
-    for line in output.splitlines():
-        match = re.search(r"--remote-debugging-port=(\d+)", line)
-        if match:
-            ports.append(int(match.group(1)))
-    if not ports:
-        raise RuntimeError(
-            "No active mcp-chrome remote debugging port was found. "
-            "Keep the automation browser open first."
-        )
-    return ports[-1]
 
 
 def http_json(port: int, path: str) -> Any:

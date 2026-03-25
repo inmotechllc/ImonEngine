@@ -25,6 +25,21 @@ Use the VPS browser helpers when a workflow needs a saved Chrome profile or DevT
 - Stop: `scripts/vps-browser-stop.sh`
 - Full tooling check: `scripts/vps-tooling-status.sh`
 
+## Remote Desktop For The VPS Browser
+
+The browser profile on the VPS now supports a remote desktop layer on top of the same Xvfb display.
+
+- Start: `scripts/vps-remote-desktop-start.sh`
+- Status: `scripts/vps-remote-desktop-status.sh`
+- Stop: `scripts/vps-remote-desktop-stop.sh`
+
+Default ports:
+
+- VNC backend: `5900` on `127.0.0.1`
+- noVNC web UI: `6080`
+
+The noVNC session is wired to the existing Chrome profile, so once you sign into Gumroad, Gmail, Meta, or Pinterest there, server-side automation can reuse the same cookies even when your local machine is offline.
+
 Default behavior:
 
 - Xvfb display: `:99`
@@ -62,4 +77,5 @@ Each worker mounts:
 
 - Use the local machine for browser-dependent work when the signed-in consumer accounts only exist there.
 - Use the VPS browser when the account session should persist on the server.
+- Use the VPS remote desktop when you need to log into the server-side Chrome profile yourself.
 - Use a business worker container when a new brand needs isolated dependencies, code, or experimental tooling.

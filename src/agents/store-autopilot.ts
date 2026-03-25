@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { AppConfig } from "../config.js";
@@ -85,6 +86,11 @@ interface JsonResult {
   [key: string]: unknown;
 }
 
+interface RoadblockNotificationState {
+  signature?: string;
+  notifiedAt?: string;
+}
+
 export interface AutopilotPublishResult {
   packId: string;
   title: string;
@@ -113,6 +119,7 @@ export class StoreAutopilotAgent {
   private readonly statePath: string;
   private readonly logPath: string;
   private readonly runReportPath: string;
+  private readonly roadblockNotificationPath: string;
   private readonly gumroadStoreDocPath: string;
   private readonly localEnvExamplePath: string;
 
@@ -128,6 +135,7 @@ export class StoreAutopilotAgent {
     this.statePath = path.join(this.autopilotDir, "state.json");
     this.logPath = path.join(this.autopilotDir, "log.md");
     this.runReportPath = path.join(this.config.opsDir, "autopilot-last-run.json");
+    this.roadblockNotificationPath = path.join(this.config.opsDir, "autopilot-roadblock-notification.json");
     this.gumroadStoreDocPath = path.join(this.docsDir, "gumroad-store.md");
     this.localEnvExamplePath = path.join(this.config.projectRoot, ".env.example");
   }
@@ -185,6 +193,7 @@ export class StoreAutopilotAgent {
     if (result.changed || result.status !== "idle") {
       await this.appendLog(result);
     }
+    await this.maybeNotifyRoadblock(result);
     await this.writeRunReport(result);
     return result;
   }
@@ -1222,13 +1231,14 @@ export class StoreAutopilotAgent {
       "- Remaining post-reinvestment funds are modeled as transfers into the collective ImonEngine fund, and the same reinvestment percentage caps shared tool spend there.",
       "- Refresh the collective-fund artifact with `npm run dev -- collective-fund-report`.",
       "",
-      "## VPS Scheduler",
-      "",
-      "- Install with `sudo bash scripts/install-vps-autopilot.sh` inside `/opt/imon-engine`.",
-      "- The VPS runner is safe for headless phases and runtime sync work.",
-      "- Browser-dependent tasks should stay on the local runner because the signed-in Gumroad and Gmail session lives there.",
-      "",
-      "## Runtime Rules",
+        "## VPS Scheduler",
+        "",
+        "- Install with `sudo bash scripts/install-vps-autopilot.sh` inside `/opt/imon-engine`.",
+        "- The VPS runner is safe for headless phases and runtime sync work.",
+        "- Browser-dependent tasks can run on the VPS once the server-side Chrome profile is signed in through `scripts/vps-remote-desktop-start.sh`.",
+        "- Use `scripts/vps-remote-desktop-status.sh` to confirm that x11vnc and noVNC are up before relying on server-side Gmail or marketplace automation.",
+        "",
+        "## Runtime Rules",
       "",
       "- `runtime/` is local operational state and remains git-ignored.",
       "- Durable instructions belong in `docs/autopilot/` and tracked scripts belong in `scripts/`.",
@@ -1250,19 +1260,20 @@ export class StoreAutopilotAgent {
       "- `IMON_ENGINE_VPS_BRANCH`",
       "- `runtime/state/assetPacks.json`, `growthQueue.json`, `growthPolicies.json`, `allocationPolicies.json`, `allocationSnapshots.json`, `collectiveSnapshots.json`, `salesTransactions.json`, and `socialProfiles.json` are uploaded explicitly after each local run so store-ops state is mirrored to the VPS.",
       "",
-      "## Execution Model",
-      "",
-      "- The local task is the primary scheduler because it can reuse the signed-in browser session when needed.",
-      "- The VPS cron job is optional and best for headless build and sync work.",
-      "- `scripts/publish_gumroad_product.py` should only run on the local scheduler because it depends on the signed-in Gumroad browser session.",
-      "- `scripts/publish_growth_post.py` should only run on the local scheduler because it depends on the signed-in Meta and Pinterest browser session.",
-      "- `runtime/state/growthQueue.json` should be uploaded from local and not regenerated on the VPS, so scheduled post ids stay aligned with the browser host.",
-      "- `runtime/ops/social-profiles.md` is the current registry of live vs blocked channel accounts.",
-      "- `runtime/state/growthQueue.json`, `runtime/ops/revenue-report.json`, and `runtime/ops/collective-fund-report.json` are the current store-ops control surfaces for growth pacing and reinvestment review.",
-      "- If the browser is closed, the final-phase Gmail delivery will block until the session is reopened.",
-      ""
-    ].join("\n");
-  }
+        "## Execution Model",
+        "",
+        "- The local task is the primary scheduler because it can reuse the signed-in browser session when needed.",
+        "- The VPS cron job can take over browser-dependent work once the server-side Chrome profile is signed in and the remote desktop stack is up.",
+        "- `scripts/publish_gumroad_product.py` can run on the local scheduler or the VPS, as long as the matching signed-in browser session is available.",
+        "- `scripts/publish_growth_post.py` can run on the local scheduler or the VPS, as long as the matching signed-in Meta or Pinterest browser session is available.",
+        "- `runtime/state/growthQueue.json` should be uploaded from local and not regenerated on the VPS, so scheduled post ids stay aligned with the browser host.",
+        "- `runtime/ops/social-profiles.md` is the current registry of live vs blocked channel accounts.",
+        "- `runtime/state/growthQueue.json`, `runtime/ops/revenue-report.json`, and `runtime/ops/collective-fund-report.json` are the current store-ops control surfaces for growth pacing and reinvestment review.",
+        "- If the browser is closed, Gmail delivery and any server-side marketplace automation will block until the session is reopened.",
+        "- When the runner hits a real roadblock, it should email `APPROVAL_EMAIL` through the signed-in ImonEngine Gmail session, with throttling so repeated blockers do not spam you.",
+        ""
+      ].join("\n");
+    }
 
   private async refreshLiveCatalogDocs(): Promise<void> {
     const packs = await this.store.getAssetPacks();
@@ -1289,6 +1300,9 @@ export class StoreAutopilotAgent {
       "IMON_ENGINE_VPS_PASSWORD=",
       "IMON_ENGINE_VPS_REPO_PATH=/opt/imon-engine",
       "IMON_ENGINE_VPS_BRANCH=main",
+      "VPS_VNC_PASSWORD=",
+      "VPS_VNC_PORT=5900",
+      "VPS_NOVNC_PORT=6080",
       "GUMROAD_SELLER_EMAIL=imonengine@gmail.com",
       "GUMROAD_USERNAME=imonengine",
       "GUMROAD_PROFILE_URL=imonengine.gumroad.com",
@@ -1411,6 +1425,77 @@ export class StoreAutopilotAgent {
       .join("\n");
     const next = `${existing.trimEnd()}\n${entry}\n`;
     await writeTextFile(this.logPath, next);
+  }
+
+  private async maybeNotifyRoadblock(result: AutopilotRunResult): Promise<void> {
+    if (!this.isRoadblockResult(result)) {
+      return;
+    }
+
+    const recipient = this.config.business.approvalEmail?.trim();
+    if (!recipient || recipient === "owner@example.com") {
+      return;
+    }
+
+    const signature = createHash("sha1")
+      .update(JSON.stringify({ phaseId: result.phaseId, summary: result.summary, details: result.details }))
+      .digest("hex");
+    const state = await readJsonFile<RoadblockNotificationState>(this.roadblockNotificationPath, {});
+    const lastNotifiedAt = state.notifiedAt ? new Date(state.notifiedAt).getTime() : 0;
+    const withinThrottleWindow = Date.now() - lastNotifiedAt < 6 * 60 * 60 * 1000;
+    if (state.signature === signature && withinThrottleWindow) {
+      return;
+    }
+
+    const bodyPath = path.join(this.config.notificationDir, "roadblock-email-latest.md");
+    await writeTextFile(bodyPath, this.composeRoadblockEmail(result));
+
+    await this.runPythonScript("send_gmail_message.py", [
+      "--to",
+      recipient,
+      "--subject",
+      `ImonEngine roadblock: ${result.phaseId}`,
+      "--body-file",
+      bodyPath
+    ]);
+
+    await writeJsonFile(this.roadblockNotificationPath, {
+      signature,
+      notifiedAt: new Date().toISOString()
+    } satisfies RoadblockNotificationState);
+  }
+
+  private isRoadblockResult(result: AutopilotRunResult): boolean {
+    if (result.status === "blocked") {
+      return true;
+    }
+
+    return result.details.some((detail) =>
+      [
+        "Auto-publish skipped",
+        "manual solve",
+        "No active Chrome remote debugging port",
+        "No browser tabs are available",
+        "Arkose",
+        "Could not publish"
+      ].some((needle) => detail.includes(needle))
+    );
+  }
+
+  private composeRoadblockEmail(result: AutopilotRunResult): string {
+    return [
+      `ImonEngine hit a roadblock on ${new Date().toISOString()}.`,
+      "",
+      `Phase: ${result.phaseId}`,
+      `Status: ${result.status}`,
+      `Summary: ${result.summary}`,
+      "",
+      "Details:",
+      ...result.details.map((detail) => `- ${detail}`),
+      "",
+      `Run report: ${this.runReportPath}`,
+      "If the VPS browser is in use, check the remote desktop session and Gmail tab before rerunning."
+    ].join("\n");
   }
 
   private async writeRunReport(result: AutopilotRunResult): Promise<void> {

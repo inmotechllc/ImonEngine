@@ -33,13 +33,16 @@ ensure_base_packages() {
     gnupg \
     jq \
     lsb-release \
+    novnc \
     python3-pip \
     python3-pil \
     python3-venv \
     python3-websocket \
     unzip \
+    websockify \
     x11-utils \
     xauth \
+    x11vnc \
     xvfb \
     xz-utils
 }
@@ -208,6 +211,8 @@ main() {
   log "docker version"
   log "docker compose version"
   log "google-chrome --version"
+  log "x11vnc -version"
+  log "novnc_proxy --help"
   log "xvfb-run --help"
   log "playwright --version"
   log "codex --version"
