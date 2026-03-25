@@ -223,3 +223,31 @@ RuntimeError: Timed out waiting for browser condition.
 
   - Queue JSON: C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.json
   - Queue Markdown: C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.md
+- 2026-03-25T14:09:55.560Z [phase-06-continuous-store-operations] BLOCKED: Could not publish Neutral Instagram Carousel Template Pack on facebook_page through the facebook_page automation path in this run.
+  - Command failed: python C:\AIWorkspace\Projects\Auto-Funding\scripts\publish_growth_post.py --queue-file C:\AIWorkspace\Projects\Auto-Funding\runtime\state\growthQueue.json --social-profiles-file C:\AIWorkspace\Projects\Auto-Funding\runtime\state\socialProfiles.json --item-id gumroad-editorial-beige-and-monochrome-layouts-neutral-instagram-carousel-templates-for-small-creators-facebook-page-2026-03-25t13-00-00-000z
+Traceback (most recent call last):
+  File "C:\AIWorkspace\Projects\Auto-Funding\scripts\publish_growth_post.py", line 662, in <module>
+    main()
+    ~~~~^^
+  File "C:\AIWorkspace\Projects\Auto-Funding\scripts\publish_growth_post.py", line 637, in main
+    result = post_to_facebook(
+        page,
+    ...<2 lines>...
+        social_profiles=social_profiles,
+    )
+  File "C:\AIWorkspace\Projects\Auto-Funding\scripts\publish_growth_post.py", line 381, in post_to_facebook
+    wait_until(
+    ~~~~~~~~~~^
+        page,
+        ^^^^^
+    ...<2 lines>...
+        timeout=45.0,
+        ^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\AIWorkspace\Projects\Auto-Funding\scripts\publish_growth_post.py", line 69, in wait_until
+    raise RuntimeError("Timed out waiting for browser condition.")
+RuntimeError: Timed out waiting for browser condition.
+
+  - Queue JSON: C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.json
+  - Queue Markdown: C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.md
