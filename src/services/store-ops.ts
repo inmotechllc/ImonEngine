@@ -29,7 +29,7 @@ const DEFAULT_BRAND_NAMES: Record<string, string> = {
   "imon-niche-content-sites": "Northbeam Atlas",
   "imon-faceless-social-brand": "Velora Echo",
   "imon-micro-saas-factory": "QuietPivot",
-  "imon-pod-store": "Canvas Current",
+  "imon-pod-store": "Imonic",
   "auto-funding-agency": "Northline Growth Systems"
 };
 
@@ -90,7 +90,7 @@ const CATEGORY_INSTAGRAM_LANES: Partial<Record<BusinessCategory, SocialLaneSeed[
 const BUSINESS_INSTAGRAM_LANES: Partial<Record<string, SocialLaneSeed[]>> = {
   "imon-faceless-social-brand": CATEGORY_INSTAGRAM_LANES.faceless_social_brand ?? [],
   "imon-micro-saas-factory": CATEGORY_INSTAGRAM_LANES.micro_saas_factory ?? [],
-  "imon-pod-store": CATEGORY_INSTAGRAM_LANES.print_on_demand_store ?? []
+  "imon-pod-store": []
 };
 
 const PLATFORM_SORT_ORDER: Record<SocialPlatform, number> = {
@@ -335,6 +335,41 @@ function buildAlias(baseEmail: string, brandName: string): string {
 
 function dedupeNotes(...groups: Array<string[] | undefined>): string[] {
   return [...new Set(groups.flatMap((group) => group ?? []).filter(Boolean))];
+}
+
+function mergeProfileNotes(
+  profile: Omit<SocialProfileRecord, "createdAt" | "updatedAt">,
+  existingProfile?: SocialProfileRecord
+): string[] {
+  if (profile.status === "planned") {
+    return profile.notes ?? [];
+  }
+
+  if (!existingProfile?.notes?.length) {
+    return profile.notes ?? [];
+  }
+
+  const identityChanged =
+    existingProfile.brandName !== profile.brandName ||
+    existingProfile.emailAlias !== profile.emailAlias ||
+    existingProfile.handle !== profile.handle ||
+    existingProfile.laneName !== profile.laneName;
+
+  if (!identityChanged) {
+    return dedupeNotes(profile.notes, existingProfile.notes);
+  }
+
+  const staleTokens = [
+    existingProfile.brandName,
+    existingProfile.emailAlias,
+    existingProfile.handle,
+    existingProfile.laneName
+  ].filter((value): value is string => Boolean(value));
+
+  const preservedNotes = existingProfile.notes.filter(
+    (note) => !staleTokens.some((token) => note.includes(token))
+  );
+  return dedupeNotes(profile.notes, preservedNotes);
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -658,27 +693,22 @@ export class StoreOpsService {
     for (const profile of defaults) {
       const existingProfile = byId.get(profile.id);
       const next: SocialProfileRecord = {
+        ...existingProfile,
         ...profile,
         createdAt: existingProfile?.createdAt ?? now,
         updatedAt: now,
         status: existingProfile?.status ?? profile.status,
         blocker: existingProfile?.blocker ?? profile.blocker,
-        role: existingProfile?.role ?? profile.role,
-        laneId: existingProfile?.laneId ?? profile.laneId,
-        laneName: existingProfile?.laneName ?? profile.laneName,
-        parentProfileId: existingProfile?.parentProfileId ?? profile.parentProfileId,
-        handle: existingProfile?.handle ?? profile.handle,
         profileUrl: existingProfile?.profileUrl ?? profile.profileUrl,
         externalId: existingProfile?.externalId ?? profile.externalId,
-        notes: dedupeNotes(profile.notes, existingProfile?.notes)
+        notes: mergeProfileNotes(profile, existingProfile)
       };
-      await this.store.saveSocialProfile(next);
       saved.push(next);
     }
 
-    const knownIds = new Set(defaults.map((profile) => profile.id));
-    const retained = current.filter((profile) => !knownIds.has(profile.id));
-    return [...saved, ...retained].sort(sortProfiles);
+    const remainder = existing.filter((profile) => profile.businessId !== businessId);
+    await this.store.replaceSocialProfiles([...remainder, ...saved].sort(sortProfiles));
+    return saved.sort(sortProfiles);
   }
 
   async scaffoldPortfolioSocialProfiles(): Promise<SocialProfileRecord[]> {

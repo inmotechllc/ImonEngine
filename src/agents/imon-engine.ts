@@ -44,7 +44,9 @@ export class ImonEngineAgent {
 
   async sync(): Promise<EngineOverviewReport> {
     const engine = await this.ensureEngineState();
+    await this.seedManagedBusinesses();
     const businesses = await this.getPortfolioBusinesses();
+    await this.ensureBusinessApprovals(businesses);
     const snapshot = await this.monitor.captureSnapshot({
       activeBusinesses: businesses.filter((business) => business.stage === "active").length,
       readyBusinesses: businesses.filter((business) => business.stage === "ready").length
@@ -296,10 +298,22 @@ export class ImonEngineAgent {
       };
     }
 
+    const dynamicNotes = current.notes.filter(
+      (note) =>
+        note.startsWith("Imonic plan refreshed") ||
+        note.startsWith("Primary alias:") ||
+        note.includes("launch dossier lives under runtime/ops/pod-businesses/")
+    );
+
     return {
       ...template,
       stage: current.stage,
-      launchBlockers: current.stage === "active" ? [] : template.launchBlockers,
+      launchBlockers:
+        current.stage === "active"
+          ? []
+          : current.launchBlockers.length > 0
+            ? current.launchBlockers
+            : template.launchBlockers,
       metrics: {
         ...template.metrics,
         currentMonthlyRevenue: current.metrics.currentMonthlyRevenue,
@@ -310,6 +324,7 @@ export class ImonEngineAgent {
         lastRunAt: current.metrics.lastRunAt,
         nextRunAt: current.metrics.nextRunAt
       },
+      notes: [...template.notes, ...dynamicNotes.filter((note) => !template.notes.includes(note))],
       createdAt: current.createdAt,
       updatedAt: timestamp
     };

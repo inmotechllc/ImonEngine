@@ -1320,6 +1320,13 @@ export class StoreAutopilotAgent {
       "META_GRAPH_API_VERSION=v23.0",
       "META_PAGE_ID=",
       "META_PAGE_ACCESS_TOKEN=",
+      "SHOPIFY_STORE_DOMAIN=",
+      "SHOPIFY_ADMIN_ACCESS_TOKEN=",
+      "SHOPIFY_STOREFRONT_ACCESS_TOKEN=",
+      "SHOPIFY_LOCATION_ID=",
+      "PRINTIFY_API_TOKEN=",
+      "PRINTIFY_SHOP_ID=",
+      "PRINTFUL_API_TOKEN=",
       "STORE_MAX_NEW_PACKS_7D=2",
       "STORE_MAX_PUBLISHED_PACKS=36",
       "STORE_MAX_ASSET_TYPE_SHARE=0.4",
@@ -1559,6 +1566,40 @@ export class StoreAutopilotAgent {
         ],
         continueAfterCompletion: [
           "Keep the same Page id and token in the VPS `.env` after you finish the Meta-side fix.",
+          ...manualRetrySteps
+        ]
+      };
+    }
+
+    if (
+      combined.includes("shopify_store_domain") ||
+      combined.includes("shopify_admin_access_token") ||
+      combined.includes("shopify store setup")
+    ) {
+      return {
+        category: "Shopify store setup",
+        requiredFromOwner: [
+          "Create or finish the Shopify store for the affected brand and leave the admin signed into the VPS Chrome profile if browser work is still required.",
+          "Save `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_ACCESS_TOKEN` in `/opt/imon-engine/.env` on the VPS.",
+          "If storefront reads are needed later, add `SHOPIFY_STOREFRONT_ACCESS_TOKEN` after the admin token is confirmed."
+        ],
+        continueAfterCompletion: [
+          "Imon can resume product creation and Shopify publishing as soon as the store credentials are live.",
+          ...manualRetrySteps
+        ]
+      };
+    }
+
+    if (combined.includes("printify") || combined.includes("printful") || combined.includes("pod vendor")) {
+      return {
+        category: "Print-on-demand vendor setup",
+        requiredFromOwner: [
+          "Connect at least one POD vendor account for the brand.",
+          "Save the vendor API token in `/opt/imon-engine/.env` as `PRINTIFY_API_TOKEN` or `PRINTFUL_API_TOKEN`.",
+          "If the vendor requires browser-only setup, leave the account signed into the VPS Chrome profile when you are done."
+        ],
+        continueAfterCompletion: [
+          "Imon can resume merchandise syncing and product generation once one POD vendor path is live.",
           ...manualRetrySteps
         ]
       };

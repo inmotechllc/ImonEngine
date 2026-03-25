@@ -220,6 +220,10 @@ export class FileStore {
     await this.upsert("socialProfiles", profile);
   }
 
+  async replaceSocialProfiles(profiles: SocialProfileRecord[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("socialProfiles"), profiles);
+  }
+
   async getOutreachDrafts(): Promise<OutreachDraft[]> {
     return this.readCollection("outreach");
   }

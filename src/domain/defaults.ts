@@ -326,30 +326,30 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
   },
   {
     id: "imon-pod-store",
-    name: "Canvas Current",
+    name: "Imonic",
     module: "pod-lab",
     category: "print_on_demand_store",
     launchPriority: 5,
     stage: "scaffolded",
     summary:
-      "Design-driven store for print-on-demand products with AI-generated artwork, descriptions, and niche testing.",
+      "Digital-art storefront for original AI-generated illustrations translated into print-on-demand products through a Shopify-led catalog.",
     rolloutReason:
-      "Still automatable, but it requires more third-party setup and operational review than digital-only products.",
-    revenueModel: "Product margin from print-on-demand orders",
-    platforms: ["Shopify", "Printful", "Printify", "Marketplaces"],
+      "Higher setup burden than digital downloads, but it is the clearest next test of whether Imon can convert original art into a real physical-product business.",
+    revenueModel: "Shopify product margin from print-on-demand orders",
+    platforms: ["Shopify", "Printify", "Printful", "Instagram", "Pinterest", "Meta"],
     automationFocus: [
-      "Generate design batches and mockups",
-      "Write product descriptions and tags",
-      "Test niche bundles and pricing",
-      "Track return patterns and ad readiness"
+      "Generate original digital-art designs from a reference style dossier",
+      "Create product-ready mockups, descriptions, and merchandising copy",
+      "Schedule daily Shopify product additions without duplicating design and product pairs",
+      "Coordinate carousel, story, and reel promotion around published products"
     ],
     ownerActions: [
-      "Connect POD vendor accounts",
-      "Set shipping and tax defaults",
-      "Approve the first store theme, brand name, and niches"
+      "Create the Shopify trial store and leave the admin logged into the VPS Chrome profile",
+      "Connect at least one POD vendor account and leave the account logged in on the VPS if browser automation is required",
+      "Confirm taxes, shipping defaults, and storefront basics once the launch dossier flags them"
     ],
     launchBlockers: [
-      "Print-on-demand vendor integrations and store policies need owner approval."
+      "Shopify store credentials and at least one POD vendor integration are required before product publishing can start."
     ],
     approvalType: "marketplace",
     automationPotential: 7,
@@ -377,7 +377,8 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
       activeWorkItems: 5
     },
     notes: [
-      "Keep this behind the digital asset store because the fulfillment surface is wider."
+      "Use imonengine+imonic@gmail.com as the umbrella alias for Shopify and the first social accounts.",
+      "Start with five original designs so the first product cadence can rotate designs instead of repeating one illustration across the whole week."
     ]
   },
   {

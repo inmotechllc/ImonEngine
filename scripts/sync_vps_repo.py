@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import sys
 
 
@@ -20,7 +21,37 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Upload a local file to the VPS after git sync in the form local_path::remote_path.",
     )
+    parser.add_argument(
+        "--upload-dir",
+        action="append",
+        default=[],
+        help="Upload a local directory recursively to the VPS after git sync in the form local_dir::remote_dir.",
+    )
     return parser.parse_args()
+
+
+def remote_mkdir(client, remote_dir: str) -> None:
+    if not remote_dir:
+        return
+    mkdir_command = (
+        f"python3 - <<'PY'\n"
+        f"from pathlib import Path\n"
+        f"Path({remote_dir!r}).mkdir(parents=True, exist_ok=True)\n"
+        f"PY"
+    )
+    stdin, stdout, stderr = client.exec_command(mkdir_command)
+    exit_status = stdout.channel.recv_exit_status()
+    if exit_status != 0:
+        raise RuntimeError(
+            json.dumps(
+                {
+                    "status": "error",
+                    "reason": f"Could not create remote directory for {remote_dir}",
+                    "stderr": stderr.read().decode("utf-8", errors="replace").strip(),
+                },
+                indent=2,
+            )
+        )
 
 
 def main() -> int:
@@ -67,28 +98,42 @@ def main() -> int:
                 return 1
             remote_dir = os.path.dirname(remote_path)
             if remote_dir:
-                mkdir_command = (
-                    f"python3 - <<'PY'\n"
-                    f"from pathlib import Path\n"
-                    f"Path({remote_dir!r}).mkdir(parents=True, exist_ok=True)\n"
-                    f"PY"
-                )
-                stdin, stdout, stderr = client.exec_command(mkdir_command)
-                exit_status = stdout.channel.recv_exit_status()
-                if exit_status != 0:
-                    print(
-                        json.dumps(
-                            {
-                                "status": "error",
-                                "reason": f"Could not create remote directory for {remote_path}",
-                                "stderr": stderr.read().decode('utf-8', errors='replace').strip(),
-                            },
-                            indent=2,
-                        )
-                    )
+                try:
+                    remote_mkdir(client, remote_dir)
+                except RuntimeError as error:
+                    print(str(error))
                     return 1
             sftp.put(local_path, remote_path)
             uploaded.append({"localPath": local_path, "remotePath": remote_path})
+
+        for spec in args.upload_dir:
+            if "::" not in spec:
+                print(json.dumps({"status": "error", "reason": f"Invalid --upload-dir value: {spec}"}, indent=2))
+                return 1
+            local_dir, remote_dir = spec.split("::", 1)
+            local_dir = local_dir.strip()
+            remote_dir = remote_dir.strip()
+            if not os.path.isdir(local_dir):
+                print(json.dumps({"status": "error", "reason": f"Local directory not found: {local_dir}"}, indent=2))
+                return 1
+            try:
+                remote_mkdir(client, remote_dir)
+            except RuntimeError as error:
+                print(str(error))
+                return 1
+            local_root = Path(local_dir)
+            for local_path in sorted(local_root.rglob("*")):
+                if not local_path.is_file():
+                    continue
+                relative_path = local_path.relative_to(local_root).as_posix()
+                remote_path = f"{remote_dir.rstrip('/')}/{relative_path}"
+                try:
+                    remote_mkdir(client, os.path.dirname(remote_path))
+                except RuntimeError as error:
+                    print(str(error))
+                    return 1
+                sftp.put(str(local_path), remote_path)
+                uploaded.append({"localPath": str(local_path), "remotePath": remote_path})
 
         results: list[dict[str, object]] = []
         for command in commands:

@@ -16,6 +16,7 @@ import { ImonEngineAgent } from "./agents/imon-engine.js";
 import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { StoreAutopilotAgent } from "./agents/store-autopilot.js";
 import { buildAgencySite } from "./services/agency-site.js";
+import { PodStudioService } from "./services/pod-studio.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
 
@@ -111,6 +112,7 @@ function usage(): string {
     "  npm run dev -- collective-fund-report [--days 30]",
     "  npm run dev -- social-profiles [--business <id>] [--all]",
     "  npm run dev -- venture-studio [--business <id>]",
+    "  npm run dev -- pod-plan --business imon-pod-store --reference-dir <path> [--notify-roadblocks]",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
@@ -135,6 +137,7 @@ async function buildContext() {
   const storeAutopilot = new StoreAutopilotAgent(config, store, digitalAssetFactory, imonEngine);
   const storeOps = new StoreOpsService(config, store);
   const ventureStudio = new VentureStudioService(config, store);
+  const podStudio = new PodStudioService(config, store);
 
   return {
     config,
@@ -149,7 +152,8 @@ async function buildContext() {
     digitalAssetFactory,
     storeAutopilot,
     storeOps,
-    ventureStudio
+    ventureStudio,
+    podStudio
   };
 }
 
@@ -226,7 +230,8 @@ async function main(): Promise<void> {
     digitalAssetFactory,
     storeAutopilot,
     storeOps,
-    ventureStudio
+    ventureStudio,
+    podStudio
   } =
     await buildContext();
 
@@ -525,6 +530,18 @@ async function main(): Promise<void> {
           2
         )
       );
+      break;
+    }
+    case "pod-plan": {
+      const businessId = typeof flags.business === "string" ? flags.business : "imon-pod-store";
+      const referenceDirectory = typeof flags["reference-dir"] === "string" ? flags["reference-dir"] : undefined;
+      const result = await podStudio.writePlan({
+        businessId,
+        referenceDirectory,
+        notifyRoadblocks: Boolean(flags["notify-roadblocks"])
+      });
+      logger.info(`POD launch plan refreshed for ${result.plan.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
       break;
     }
     case "report": {

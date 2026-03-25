@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$REPO_ROOT/runtime/ops"
 LOG_PATH="$LOG_DIR/autopilot-vps.log"
+POD_REFERENCE_DIR="$REPO_ROOT/runtime/ops/pod-businesses/imon-pod-store/style-references/imported"
 
 mkdir -p "$LOG_DIR"
 
@@ -16,7 +17,13 @@ mkdir -p "$LOG_DIR"
     printf '[%s] Skipped git pull because tracked local changes are present.\n' "$(date -Iseconds)"
   fi
   npm run dev -- autopilot-run-once
+  if [ -d "$POD_REFERENCE_DIR" ]; then
+    npm run dev -- pod-plan --business imon-pod-store --reference-dir "$POD_REFERENCE_DIR" --notify-roadblocks
+  else
+    printf '[%s] Skipped Imonic POD plan because %s is not available yet.\n' "$(date -Iseconds)" "$POD_REFERENCE_DIR"
+  fi
   npm run dev -- engine-sync
+  npm run dev -- social-profiles
   npm run dev -- vps-artifacts
   printf '[%s] VPS autopilot work unit finished.\n' "$(date -Iseconds)"
 } >>"$LOG_PATH" 2>&1

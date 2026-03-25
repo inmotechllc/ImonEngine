@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { loadConfig } from "./config.js";
 import { DEFAULT_OFFERS } from "./domain/defaults.js";
 import type { ClientJob } from "./domain/contracts.js";
@@ -14,6 +14,7 @@ import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { FileStore } from "./storage/store.js";
 import { AIClient } from "./openai/client.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
+import { PodStudioService } from "./services/pod-studio.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
 
@@ -36,6 +37,7 @@ async function setupWorkspace() {
   const digitalAssetFactory = new DigitalAssetFactoryAgent(config, store, ai);
   const storeOps = new StoreOpsService(config, store);
   const ventureStudio = new VentureStudioService(config, store);
+  const podStudio = new PodStudioService(config, store);
 
   return {
     root,
@@ -48,7 +50,8 @@ async function setupWorkspace() {
     imonEngine,
     digitalAssetFactory,
     storeOps,
-    ventureStudio
+    ventureStudio,
+    podStudio
   };
 }
 
@@ -244,16 +247,16 @@ test("store ops reserve Imon for the parent system and scaffold distinct future 
   const profiles = await storeOps.ensureSocialProfiles("imon-pod-store");
   const gmailAlias = profiles.find((profile) => profile.platform === "gmail_alias");
   const facebookPage = profiles.find((profile) => profile.platform === "facebook_page");
-  const instagramLanes = profiles.filter((profile) => profile.platform === "instagram_account");
+  const instagramProfiles = profiles.filter((profile) => profile.platform === "instagram_account");
 
-  assert.equal(gmailAlias?.brandName, "Canvas Current");
-  assert.equal(gmailAlias?.emailAlias, "imonengine+canvascurrent@gmail.com");
+  assert.equal(gmailAlias?.brandName, "Imonic");
+  assert.equal(gmailAlias?.emailAlias, "imonengine+imonic@gmail.com");
   assert.equal(facebookPage?.status, "planned");
   assert.ok(facebookPage?.notes.some((note) => note.includes("umbrella Facebook Page")));
-  assert.equal(instagramLanes.length, 4);
-  assert.ok(instagramLanes.every((profile) => profile.role === "niche_lane"));
-  assert.ok(instagramLanes.every((profile) => profile.parentProfileId === "imon-pod-store-facebook-page"));
-  assert.ok(instagramLanes.every((profile) => profile.notes.some((note) => note.includes("ten accounts"))));
+  assert.equal(instagramProfiles.length, 1);
+  assert.equal(instagramProfiles[0]?.role, "umbrella_brand");
+  assert.equal(instagramProfiles[0]?.emailAlias, "imonengine+imonic@gmail.com");
+  assert.ok(instagramProfiles[0]?.notes.some((note) => note.includes("primary Instagram account")));
 });
 
 test("store ops import Gumroad and Relay data into a revenue snapshot", async () => {
@@ -312,7 +315,7 @@ test("venture studio builds weekly launch windows and brand blueprints from the 
   const { imonEngine, storeOps, ventureStudio } = await setupWorkspace();
   await imonEngine.bootstrap();
   await storeOps.ensureSocialProfiles();
-  await storeOps.ensureSocialProfiles("imon-pod-store", "Canvas Current");
+  await storeOps.ensureSocialProfiles("imon-pod-store", "Imonic");
 
   const snapshot = await ventureStudio.buildSnapshot();
   const podBlueprint = snapshot.blueprints.find((blueprint) => blueprint.businessId === "imon-pod-store");
@@ -333,12 +336,47 @@ test("venture studio builds weekly launch windows and brand blueprints from the 
   assert.equal(firstWindowWeekday, "Mon");
   assert.ok(firstWindowHour >= 7 && firstWindowHour <= 8);
   assert.ok(podBlueprint);
-  assert.equal(podBlueprint?.businessName, "Canvas Current");
-  assert.equal(podBlueprint?.aliasEmail, "imonengine+canvascurrent@gmail.com");
+  assert.equal(podBlueprint?.businessName, "Imonic");
+  assert.equal(podBlueprint?.aliasEmail, "imonengine+imonic@gmail.com");
   assert.equal(podBlueprint?.socialArchitecture.facebookStrategy, "umbrella_brand");
-  assert.equal(podBlueprint?.socialArchitecture.instagramStrategy, "niche_accounts");
-  assert.equal(podBlueprint?.socialArchitecture.niches.length, 4);
+  assert.equal(podBlueprint?.socialArchitecture.instagramStrategy, "single_brand");
+  assert.equal(podBlueprint?.socialArchitecture.niches.length, 1);
   assert.ok(snapshot.policy.socialRules.some((rule) => rule.includes("umbrella brand")));
   assert.equal(snapshot.policy.systemReinvestmentCapRate, 0.35);
   assert.ok(snapshot.capitalExperimentTracks.every((track) => track.stage !== "live_ops"));
+});
+
+test("pod studio creates an Imonic launch plan with deduplicated products and actionable roadblocks", async () => {
+  const { root, imonEngine, podStudio, store } = await setupWorkspace();
+  await imonEngine.bootstrap();
+
+  const referenceDir = path.join(root, "tdc");
+  await mkdir(referenceDir, { recursive: true });
+  await writeFile(path.join(referenceDir, "bear-pop.png"), "img", "utf8");
+  await writeFile(path.join(referenceDir, "candy-castle.png"), "img", "utf8");
+  await writeFile(path.join(referenceDir, "abstract-tiger.png"), "img", "utf8");
+  await writeFile(path.join(referenceDir, "fox-static.png"), "img", "utf8");
+  await writeFile(path.join(referenceDir, "rabbit-orbit.png"), "img", "utf8");
+
+  const result = await podStudio.writePlan({
+    businessId: "imon-pod-store",
+    referenceDirectory: referenceDir
+  });
+  const combinations = new Set(result.plan.productSchedule.map((item) => `${item.designId}:${item.productType}`));
+  const storyTargets = result.plan.socialSchedule
+    .filter((item) => item.kind === "story" || item.kind === "reel")
+    .map((item) => `${item.designId}:${item.productType ?? ""}`);
+  const updatedBusiness = await store.getManagedBusiness("imon-pod-store");
+
+  assert.equal(result.plan.businessName, "Imonic");
+  assert.equal(result.plan.aliasEmail, "imonengine+imonic@gmail.com");
+  assert.equal(result.plan.starterDesigns.length, 5);
+  assert.equal(result.plan.cadence.weeklyNewDesigns, 1);
+  assert.equal(result.plan.productSchedule.length, combinations.size);
+  assert.equal(new Set(storyTargets).size, storyTargets.length);
+  assert.ok(result.plan.roadblocks.some((roadblock) => roadblock.category.includes("Shopify")));
+  assert.ok(result.plan.roadblocks.some((roadblock) => roadblock.category.includes("POD vendor")));
+  assert.ok(updatedBusiness);
+  assert.equal(updatedBusiness?.name, "Imonic");
+  assert.ok(updatedBusiness?.launchBlockers.some((blocker) => blocker.includes("Shopify")));
 });

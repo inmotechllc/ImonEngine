@@ -164,10 +164,12 @@ const CATEGORY_NICHE_TEMPLATES: Partial<Record<BusinessCategory, NicheSeed[]>> =
 };
 
 const BUSINESS_NICHE_TEMPLATES: Partial<Record<string, NicheSeed[]>> = {
-  "imon-pod-store": CATEGORY_NICHE_TEMPLATES.print_on_demand_store ?? [],
+  "imon-pod-store": [],
   "imon-faceless-social-brand": CATEGORY_NICHE_TEMPLATES.faceless_social_brand ?? [],
   "imon-micro-saas-factory": CATEGORY_NICHE_TEMPLATES.micro_saas_factory ?? []
 };
+
+const BUSINESS_SINGLE_BRAND_INSTAGRAM = new Set<string>(["imon-pod-store"]);
 
 function hashSeed(seed: string): number {
   let hash = 2166136261;
@@ -404,8 +406,11 @@ function socialArchitectureForBusiness(
     : scalableUmbrella.has(business.category)
       ? "umbrella_brand"
       : "avoid_by_default";
-  const instagramStrategy: VentureInstagramStrategy =
-    scalableUmbrella.has(business.category) ? "niche_accounts" : "single_brand";
+  const instagramStrategy: VentureInstagramStrategy = BUSINESS_SINGLE_BRAND_INSTAGRAM.has(business.id)
+    ? "single_brand"
+    : scalableUmbrella.has(business.category)
+      ? "niche_accounts"
+      : "single_brand";
   const nicheSeeds = nicheSeedsForBusiness(business);
   const niches: VentureNicheLane[] =
     instagramStrategy === "niche_accounts"
