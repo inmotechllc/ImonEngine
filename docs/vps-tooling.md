@@ -38,7 +38,15 @@ Default ports:
 - VNC backend: `5900` on `127.0.0.1`
 - noVNC web UI: `6080`
 
-The noVNC session is wired to the existing Chrome profile, so once you sign into Gumroad, Gmail, Meta, or Pinterest there, server-side automation can reuse the same cookies even when your local machine is offline.
+The noVNC session is wired to the existing Chrome profile, so once you sign into Gumroad, Gmail, or Pinterest there, server-side automation can reuse the same cookies even when your local machine is offline.
+
+For Meta/Facebook, prefer the official Page API path instead of a VPS browser login whenever possible:
+
+- `META_PAGE_ID`
+- `META_PAGE_ACCESS_TOKEN`
+- optional `META_GRAPH_API_VERSION` override
+
+With those set in `/opt/imon-engine/.env`, `scripts/publish_growth_post.py` can post Facebook Page growth content from the VPS without an authenticated Meta browser session on the server.
 
 Default behavior:
 

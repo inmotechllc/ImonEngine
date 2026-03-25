@@ -726,6 +726,9 @@ export class StoreAutopilotAgent {
         notes: [
           ...due.notes,
           `Posted automatically on ${postedAt} via ${due.channel}.`,
+          ...(typeof result.delivery === "string" && result.delivery.length > 0
+            ? [`Delivery path: ${result.delivery}`]
+            : []),
           ...(typeof result.pageUrl === "string" && result.pageUrl.length > 0
             ? [`Automation page URL: ${result.pageUrl}`]
             : [])
@@ -742,6 +745,9 @@ export class StoreAutopilotAgent {
         details: [
           `Growth item: ${due.id}`,
           `Scheduled for: ${due.scheduledFor}`,
+          ...(typeof result.delivery === "string" && result.delivery.length > 0
+            ? [`Delivery path: ${result.delivery}`]
+            : []),
           ...(typeof result.pageUrl === "string" && result.pageUrl.length > 0
             ? [`Automation page URL: ${result.pageUrl}`]
             : []),
@@ -1119,12 +1125,12 @@ export class StoreAutopilotAgent {
       "- VPS wrapper: `scripts/run_vps_autopilot.sh`",
       "- VPS cron installer: `scripts/install-vps-autopilot.sh`",
       "- Local Gumroad publisher: `scripts/publish_gumroad_product.py`",
-      "- Local Facebook growth publisher: `scripts/publish_growth_post.py`",
+      "- Local/VPS social growth publisher: `scripts/publish_growth_post.py`",
       "- VPS sync helper: `scripts/sync_vps_repo.py`",
       "",
       "## Browser Recovery",
       "",
-      "- Keep the signed-in automation browser open for Gumroad and Gmail access.",
+      "- Keep the signed-in automation browser open for Gumroad, Gmail, and Pinterest access.",
       "- If the Playwright wrapper fails to reattach, recover the session with `python scripts/chrome_cdp.py list-tabs`.",
       "- Publish the next ready pack through the live browser session with `python scripts/publish_gumroad_product.py --pack-dir <pack-dir>`.",
       "- Use `python scripts/send_gmail_message.py --to ... --subject ... --body-file ...` for the final owner notification once Gmail is open.",
@@ -1133,6 +1139,7 @@ export class StoreAutopilotAgent {
       "",
       "- Refresh queue + promo assets: `npm run dev -- growth-queue`",
       "- Publish due Facebook or Pinterest posts from the live queue with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`",
+      "- Facebook can post without a live browser session when `META_PAGE_ACCESS_TOKEN` is configured with the current Page id and `pages_manage_posts` access.",
       "- Refresh the social registry: `npm run dev -- social-profiles`",
       "- Import Gumroad CSV sales: `npm run dev -- import-gumroad-sales --file <csv>`",
       "- Import Relay CSV transactions: `npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]`",
@@ -1173,7 +1180,7 @@ export class StoreAutopilotAgent {
       "## Repeatable Traffic Workflow",
       "",
       "- Generate promo assets with `python scripts/build_growth_assets.py --state-file runtime/state/assetPacks.json --output-dir runtime/marketing`.",
-      "- Use the generated square teasers for the live channel set first: Pinterest pins for texture and wallpaper packs, then Facebook Page posts from the signed-in `Imon` page.",
+      "- Use the generated square teasers for the live channel set first: Pinterest pins for texture and wallpaper packs, then Facebook Page posts through the Meta Graph API when a Page access token is configured.",
       "- Publish due Facebook or Pinterest posts with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`.",
       "- For all future brands, reserve `ImonEngine` for the parent system and create a distinct creative brand name plus `imonengine+<brand>@gmail.com` alias before account signup.",
       "- X signup should use visual input or simulated clicks for the normal flow, then pause for a manual owner solve if Arkose appears.",
@@ -1189,7 +1196,7 @@ export class StoreAutopilotAgent {
       "",
       "## No-Cost Channels",
       "",
-      "- Facebook Page posts from the live `Imon` page",
+      "- Facebook Page posts through the Meta Graph API for the live `Imon` page",
       "- X posts with one featured asset and one CTA link once the X profile moves from blocked to live",
       "- Pinterest pins for wallpaper and texture packs from the live `Imon Digital Assets` board",
       ""
@@ -1221,8 +1228,8 @@ export class StoreAutopilotAgent {
       "- Install with `powershell -ExecutionPolicy Bypass -File scripts/install-windows-autopilot.ps1`.",
       "- The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.",
       "- The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.",
-      "- Due Facebook and Pinterest growth posts are executed from the local runner before new catalog seeding continues.",
-      "- Browser-backed Facebook and Pinterest posting is handled by `scripts/publish_growth_post.py`.",
+      "- Due Facebook and Pinterest growth posts are executed from the active runner before new catalog seeding continues.",
+      "- `scripts/publish_growth_post.py` prefers the Meta Graph API for Facebook when `META_PAGE_ACCESS_TOKEN` is present, and falls back to the signed-in browser only when no token is configured.",
       "- Reserve `ImonEngine` and `Imon` for the parent system or the legacy first store only; every future business should get its own creative brand name and plus-tag alias.",
       "- X signup should prefer visual-input or simulated-click flows; if Arkose appears, hand the challenge to the owner and then resume automation after it is solved.",
       "- Catalog expansion is capped so the store cannot outrun its growth queue and channel bandwidth.",
@@ -1236,7 +1243,8 @@ export class StoreAutopilotAgent {
         "- Install with `sudo bash scripts/install-vps-autopilot.sh` inside `/opt/imon-engine`.",
         "- The VPS runner is safe for headless phases and runtime sync work.",
         "- Browser-dependent tasks can run on the VPS once the server-side Chrome profile is signed in through `scripts/vps-remote-desktop-start.sh`.",
-        "- Use `scripts/vps-remote-desktop-status.sh` to confirm that x11vnc and noVNC are up before relying on server-side Gmail or marketplace automation.",
+        "- Use `scripts/vps-remote-desktop-status.sh` to confirm that x11vnc and noVNC are up before relying on server-side Gmail, Pinterest, or marketplace automation.",
+        "- Meta/Facebook no longer needs a VPS browser login when `META_PAGE_ACCESS_TOKEN` is configured for the page.",
         "",
         "## Runtime Rules",
       "",
@@ -1262,14 +1270,14 @@ export class StoreAutopilotAgent {
       "",
         "## Execution Model",
         "",
-        "- The local task is the primary scheduler because it can reuse the signed-in browser session when needed.",
+        "- The local task is the primary scheduler when browser-only accounts still live there.",
         "- The VPS cron job can take over browser-dependent work once the server-side Chrome profile is signed in and the remote desktop stack is up.",
         "- `scripts/publish_gumroad_product.py` can run on the local scheduler or the VPS, as long as the matching signed-in browser session is available.",
-        "- `scripts/publish_growth_post.py` can run on the local scheduler or the VPS, as long as the matching signed-in Meta or Pinterest browser session is available.",
+        "- `scripts/publish_growth_post.py` can run on the local scheduler or the VPS; Facebook prefers `META_PAGE_ACCESS_TOKEN`, while Pinterest still uses the matching signed-in browser session.",
         "- `runtime/state/growthQueue.json` should be uploaded from local and not regenerated on the VPS, so scheduled post ids stay aligned with the browser host.",
         "- `runtime/ops/social-profiles.md` is the current registry of live vs blocked channel accounts.",
         "- `runtime/state/growthQueue.json`, `runtime/ops/revenue-report.json`, and `runtime/ops/collective-fund-report.json` are the current store-ops control surfaces for growth pacing and reinvestment review.",
-        "- If the browser is closed, Gmail delivery and any server-side marketplace automation will block until the session is reopened.",
+        "- If the browser is closed, Gmail delivery, Pinterest, and any server-side marketplace automation will block until the session is reopened.",
         "- When the runner hits a real roadblock, it should email `APPROVAL_EMAIL` through the signed-in ImonEngine Gmail session, with throttling so repeated blockers do not spam you.",
         ""
       ].join("\n");
@@ -1306,6 +1314,9 @@ export class StoreAutopilotAgent {
       "GUMROAD_SELLER_EMAIL=imonengine@gmail.com",
       "GUMROAD_USERNAME=imonengine",
       "GUMROAD_PROFILE_URL=imonengine.gumroad.com",
+      "META_GRAPH_API_VERSION=v23.0",
+      "META_PAGE_ID=",
+      "META_PAGE_ACCESS_TOKEN=",
       "STORE_MAX_NEW_PACKS_7D=2",
       "STORE_MAX_PUBLISHED_PACKS=36",
       "STORE_MAX_ASSET_TYPE_SHARE=0.4",

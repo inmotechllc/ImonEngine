@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import mimetypes
+import os
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +16,7 @@ from chrome_cdp import CdpPage, close_tab, detect_mcp_chrome_port, open_new_tab
 
 
 DEFAULT_META_ASSET_ID = "1042144572314434"
+DEFAULT_META_GRAPH_API_VERSION = "v23.0"
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +35,22 @@ def load_json(path: str) -> Any:
     if not file_path.exists():
         raise SystemExit(f"Missing file: {file_path}")
     return json.loads(file_path.read_text(encoding="utf-8"))
+
+
+def load_env_file() -> None:
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = value.strip().strip('"').strip("'")
 
 
 def wait_until(page: CdpPage, expression: str, *, timeout: float = 30.0, interval: float = 0.5) -> Any:
@@ -161,6 +184,135 @@ def resolve_meta_asset_id(profiles: list[dict[str, Any]], business_id: str) -> s
     return DEFAULT_META_ASSET_ID
 
 
+def resolve_facebook_page_id(profiles: list[dict[str, Any]], business_id: str) -> str:
+    page_id = str(os.getenv("META_PAGE_ID") or os.getenv("META_FACEBOOK_PAGE_ID") or "").strip()
+    if page_id:
+        return page_id
+
+    for profile in profiles:
+        if profile.get("businessId") != business_id:
+            continue
+        if profile.get("platform") != "facebook_page":
+            continue
+        external_id = str(profile.get("externalId") or "").strip()
+        if external_id:
+            return external_id
+        profile_url = str(profile.get("profileUrl") or "")
+        if "id=" in profile_url:
+            return profile_url.split("id=", 1)[1].split("&", 1)[0]
+    return ""
+
+
+def resolve_profile_url(
+    profiles: list[dict[str, Any]],
+    business_id: str,
+    platform: str,
+) -> str:
+    for profile in profiles:
+        if profile.get("businessId") == business_id and profile.get("platform") == platform:
+            return str(profile.get("profileUrl") or "").strip()
+    return ""
+
+
+def resolve_meta_page_access_token() -> str:
+    return str(
+        os.getenv("META_PAGE_ACCESS_TOKEN")
+        or os.getenv("META_GRAPH_PAGE_ACCESS_TOKEN")
+        or ""
+    ).strip()
+
+
+def resolve_meta_graph_api_version() -> str:
+    return str(os.getenv("META_GRAPH_API_VERSION") or DEFAULT_META_GRAPH_API_VERSION).strip() or DEFAULT_META_GRAPH_API_VERSION
+
+
+def append_destination_url(caption: str, destination_url: str) -> str:
+    destination = destination_url.strip()
+    if not destination:
+        return caption
+    if destination in caption:
+        return caption
+    if not caption.strip():
+        return destination
+    return f"{caption.rstrip()}\n\n{destination}"
+
+
+def encode_multipart_formdata(
+    fields: dict[str, str],
+    files: list[tuple[str, str, str, bytes]],
+) -> tuple[str, bytes]:
+    boundary = f"----ImonEngineBoundary{uuid.uuid4().hex}"
+    chunks: list[bytes] = []
+
+    for key, value in fields.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode("utf-8"),
+                value.encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+
+    for field_name, file_name, content_type, content in files:
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                (
+                    f'Content-Disposition: form-data; name="{field_name}"; filename="{file_name}"\r\n'
+                ).encode("utf-8"),
+                f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+                content,
+                b"\r\n",
+            ]
+        )
+
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return boundary, b"".join(chunks)
+
+
+def http_post_json(
+    url: str,
+    *,
+    fields: dict[str, str],
+    files: list[tuple[str, str, str, bytes]] | None = None,
+) -> dict[str, Any]:
+    headers = {"User-Agent": "ImonEngine/1.0"}
+    data: bytes
+    if files:
+        boundary, data = encode_multipart_formdata(fields, files)
+        headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+    else:
+        data = urllib.parse.urlencode(fields).encode("utf-8")
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+    request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(body)
+            error_message = (
+                parsed.get("error", {}).get("message")
+                or parsed.get("message")
+                or body
+            )
+        except Exception:
+            error_message = body or error.reason
+        raise RuntimeError(
+            f"Meta Graph API request failed ({error.code}): {error_message}"
+        ) from error
+
+
+def build_facebook_post_url(page_id: str, graph_post_id: str, fallback_url: str) -> str:
+    if "_" in graph_post_id:
+        _, post_id = graph_post_id.split("_", 1)
+        return f"https://www.facebook.com/{page_id}/posts/{post_id}"
+    return fallback_url
+
+
 def resolve_brand_name(profiles: list[dict[str, Any]], business_id: str) -> str:
     for profile in profiles:
         if profile.get("businessId") == business_id and profile.get("brandName"):
@@ -239,6 +391,71 @@ def post_to_facebook(
         "postedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "pageUrl": str(page.evaluate("location.href")),
         "bodySnippet": str(page.evaluate("(document.body.innerText || '').slice(0, 1200)")),
+    }
+
+
+def post_to_facebook_api(
+    *,
+    caption: str,
+    asset_path: str,
+    destination_url: str,
+    business_id: str,
+    social_profiles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    page_id = resolve_facebook_page_id(social_profiles, business_id)
+    if not page_id:
+        raise RuntimeError(
+            "Could not resolve the Facebook Page id. Set META_PAGE_ID or store the page externalId in socialProfiles.json."
+        )
+
+    access_token = resolve_meta_page_access_token()
+    if not access_token:
+        raise RuntimeError(
+            "META_PAGE_ACCESS_TOKEN is not configured. Add a Page access token with pages_manage_posts before using Meta API posting."
+        )
+
+    graph_version = resolve_meta_graph_api_version()
+    profile_url = resolve_profile_url(social_profiles, business_id, "facebook_page")
+    full_caption = append_destination_url(caption, destination_url)
+    posted_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    asset = Path(asset_path)
+    if asset_path and asset.exists():
+        mime_type = mimetypes.guess_type(asset.name)[0] or "application/octet-stream"
+        response = http_post_json(
+            f"https://graph.facebook.com/{graph_version}/{page_id}/photos",
+            fields={
+                "access_token": access_token,
+                "caption": full_caption,
+                "published": "true",
+            },
+            files=[("source", asset.name, mime_type, asset.read_bytes())],
+        )
+        graph_object_id = str(response.get("id") or "")
+        graph_post_id = str(response.get("post_id") or graph_object_id)
+    else:
+        feed_fields = {
+            "access_token": access_token,
+            "message": full_caption,
+        }
+        if destination_url.strip():
+            feed_fields["link"] = destination_url.strip()
+        response = http_post_json(
+            f"https://graph.facebook.com/{graph_version}/{page_id}/feed",
+            fields=feed_fields,
+        )
+        graph_object_id = str(response.get("id") or "")
+        graph_post_id = graph_object_id
+
+    return {
+        "status": "posted",
+        "channel": "facebook_page",
+        "postedAt": posted_at,
+        "pageUrl": build_facebook_post_url(page_id, graph_post_id, profile_url),
+        "pageId": page_id,
+        "graphObjectId": graph_object_id,
+        "graphPostId": graph_post_id,
+        "delivery": "meta_graph_api",
     }
 
 
@@ -374,6 +591,7 @@ def post_to_pinterest(
 
 
 def main() -> None:
+    load_env_file()
     args = parse_args()
     queue = load_json(args.queue_file)
     social_profiles = load_json(args.social_profiles_file)
@@ -382,7 +600,17 @@ def main() -> None:
         raise SystemExit(f"Could not find growth queue item {args.item_id!r}.")
 
     channel = str(item.get("channel") or "")
-    port = args.port or detect_mcp_chrome_port()
+
+    if channel == "facebook_page" and resolve_meta_page_access_token():
+        result = post_to_facebook_api(
+            caption=str(item.get("caption") or "").strip(),
+            asset_path=str(item.get("assetPath") or "").strip(),
+            destination_url=str(item.get("destinationUrl") or "").strip(),
+            business_id=str(item.get("businessId") or ""),
+            social_profiles=social_profiles,
+        )
+        print(json.dumps(result, indent=2))
+        return
 
     if channel == "facebook_page":
         start_url = "https://business.facebook.com/"
@@ -390,6 +618,15 @@ def main() -> None:
         start_url = "https://www.pinterest.com/pin-builder/"
     else:
         raise SystemExit(f"Unsupported growth channel for live posting: {channel}")
+
+    try:
+        port = args.port or detect_mcp_chrome_port()
+    except Exception as error:
+        if channel == "facebook_page":
+            raise SystemExit(
+                "META_PAGE_ACCESS_TOKEN is not configured and no live Meta browser session is available."
+            ) from error
+        raise
 
     tab = open_new_tab(port, start_url)
     page = CdpPage(tab["webSocketDebuggerUrl"])

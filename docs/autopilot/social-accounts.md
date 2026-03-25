@@ -24,6 +24,12 @@
 - Pinterest Profile: `https://www.pinterest.com/imonengineimon/`
 - Pinterest Board: `Imon Digital Assets`
 
+## Meta Delivery Note
+
+- The Facebook Page remains live under the real Meta account.
+- VPS browser login for Meta is optional and may hit datacenter CAPTCHA loops.
+- Prefer `META_PAGE_ACCESS_TOKEN` + `META_PAGE_ID` for server-side Facebook posting.
+
 ## Growth Rule
 
 - The free-channel queue should prefer live channels first.

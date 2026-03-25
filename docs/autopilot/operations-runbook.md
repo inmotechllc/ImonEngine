@@ -4,7 +4,7 @@
 
 - Install with `powershell -ExecutionPolicy Bypass -File scripts/install-windows-autopilot.ps1`.
 - The scheduled task runs `scripts/run_local_autopilot.ps1` hourly.
-- Due Facebook and Pinterest growth posts are now executed from the local runner before new catalog seeding continues.
+- Due Facebook and Pinterest growth posts are now executed from the active runner before new catalog seeding continues.
 - The local runner executes one work unit, publishes one ready Gumroad pack when the signed-in browser is available, commits tracked changes, pushes to GitHub, and syncs the VPS when `IMON_ENGINE_VPS_PASSWORD` is set.
 - Reserve `ImonEngine` and `Imon` for parent-level accounts or the legacy first store only; new businesses should always get distinct names and `imonengine+<brandhandle>@gmail.com` aliases.
 - Catalog expansion is now paced by config instead of running unbounded:
@@ -13,7 +13,7 @@
   - `STORE_MAX_ASSET_TYPE_SHARE`
   - `STORE_MAX_OPEN_PACK_QUEUE`
 - Browser-backed publishing is handled by `scripts/publish_gumroad_product.py`.
-- Browser-backed Facebook and Pinterest posting is handled by `scripts/publish_growth_post.py`.
+- `scripts/publish_growth_post.py` prefers the Meta Graph API for Facebook when `META_PAGE_ACCESS_TOKEN` is present, and falls back to the signed-in browser only when no token is configured.
 - X signup should prefer visual input and simulated clicks, then pause for manual owner completion only when an anti-bot or identity challenge appears.
 - Gumroad uploads are only considered complete after the content row shows `Download` and the transient `Cancel` action disappears.
 - Gumroad product media is only considered complete after at least one cover image exists and the square thumbnail no longer shows the `Upload` placeholder.
@@ -39,6 +39,7 @@
 - Manual refresh commands:
   - `npm run dev -- growth-queue`
   - `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`
+  - Facebook can post without a browser session when `META_PAGE_ACCESS_TOKEN` and `META_PAGE_ID` are set for the page
   - `npm run dev -- social-profiles`
   - `npm run dev -- import-gumroad-sales --file <csv>`
   - `npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]`
@@ -49,7 +50,8 @@
 
 - Install with `sudo bash scripts/install-vps-autopilot.sh` inside `/opt/imon-engine`.
 - The VPS runner is safe for headless phases and runtime sync work.
-- Browser-dependent tasks should stay on the local runner because the signed-in Gumroad and Gmail session lives there.
+- Browser-dependent tasks can run on the VPS once the server-side Chrome profile is signed in.
+- Meta/Facebook no longer needs a VPS browser login when `META_PAGE_ACCESS_TOKEN` is configured for the page.
 
 ## Runtime Rules
 

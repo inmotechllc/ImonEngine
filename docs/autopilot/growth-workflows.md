@@ -3,7 +3,7 @@
 ## Repeatable Traffic Workflow
 
 - Generate promo assets with `python scripts/build_growth_assets.py --state-file runtime/state/assetPacks.json --output-dir runtime/marketing`.
-- Use the generated square teasers for the live channel set first: Pinterest pins for the `Imon Digital Assets` board, then Facebook Page posts from the signed-in `Imon` page.
+- Use the generated square teasers for the live channel set first: Pinterest pins for the `Imon Digital Assets` board, then Facebook Page posts through the Meta Graph API when `META_PAGE_ACCESS_TOKEN` is configured.
 - Publish due Facebook or Pinterest posts with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`.
 - Review channel readiness in `runtime/ops/social-profiles.md`.
 - Reserve `ImonEngine` for the parent system and give future brands their own names plus `imonengine+<brandhandle>@gmail.com` aliases before account signup.
@@ -28,7 +28,7 @@
 
 ## No-Cost Channels
 
-- Facebook Page posts from `Imon`
+- Facebook Page posts through the Meta Graph API for `Imon`
 - X posts with one featured asset and one CTA link once the X profile is live
 - Pinterest pins for wallpaper and texture packs from the live `Imon Digital Assets` board
 
