@@ -97,6 +97,12 @@ interface RoadblockGuidance {
   continueAfterCompletion: string[];
 }
 
+interface RoadblockOwnerContext {
+  workflowId: string;
+  businessId: string;
+  businessLabel: string;
+}
+
 export interface AutopilotPublishResult {
   packId: string;
   title: string;
@@ -1470,7 +1476,7 @@ export class StoreAutopilotAgent {
     }
 
     const bodyPath = path.join(this.config.notificationDir, "roadblock-email-latest.md");
-    await writeTextFile(bodyPath, this.composeRoadblockEmail(result));
+    await writeTextFile(bodyPath, await this.composeRoadblockEmail(result));
 
     await this.runPythonScript("send_gmail_message.py", [
       "--to",
@@ -1504,8 +1510,15 @@ export class StoreAutopilotAgent {
     );
   }
 
-  private composeRoadblockEmail(result: AutopilotRunResult): string {
+  private async composeRoadblockEmail(result: AutopilotRunResult): Promise<string> {
     const guidance = this.deriveRoadblockGuidance(result);
+    const ownerContext = this.ownerContextForRoadblock(result);
+    const ownership = ownerContext
+      ? await this.store.getWorkflowOwnershipRecord(
+          ownerContext.workflowId,
+          ownerContext.businessId
+        )
+      : undefined;
     const remoteDesktopUrl = this.config.engine.hostPrimaryIp
       ? `http://${this.config.engine.hostPrimaryIp}:6080/vnc.html?autoconnect=1&resize=scale`
       : "";
@@ -1516,6 +1529,14 @@ export class StoreAutopilotAgent {
       `Phase: ${result.phaseId}`,
       `Status: ${result.status}`,
       `Roadblock type: ${guidance.category}`,
+      ...(ownerContext ? [`Business: ${ownerContext.businessLabel} (${ownerContext.businessId})`] : []),
+      ...(ownership
+        ? [
+            `Owning department: ${ownership.departmentName}`,
+            `Owning position: ${ownership.positionName}`,
+            `Owning workflow: ${ownership.workflowName} (${ownership.workflowId})`
+          ]
+        : []),
       `Summary: ${result.summary}`,
       "",
       "Details:",
@@ -1531,6 +1552,39 @@ export class StoreAutopilotAgent {
       ...(remoteDesktopUrl ? [`VPS remote desktop: ${remoteDesktopUrl}`] : []),
       "If the VPS browser is involved, keep the server-side Chrome profile open and signed in after you finish the owner step."
     ].join("\n");
+  }
+
+  private ownerContextForRoadblock(result: AutopilotRunResult): RoadblockOwnerContext | undefined {
+    switch (result.phaseId) {
+      case "phase-01-product-factory-expansion":
+        return {
+          workflowId: "digital-asset-factory",
+          businessId: "imon-digital-asset-store",
+          businessLabel: "Imon digital asset store"
+        };
+      case "phase-02-store-conversion-automation":
+      case "phase-04-autonomous-operations-hardening":
+      case "phase-06-continuous-store-operations":
+        return {
+          workflowId: "store-autopilot",
+          businessId: "imon-digital-asset-store",
+          businessLabel: "Imon digital asset store"
+        };
+      case "phase-03-growth-automation":
+        return {
+          workflowId: "growth-publishing",
+          businessId: "imon-digital-asset-store",
+          businessLabel: "Imon digital asset store"
+        };
+      case "phase-05-final-review-and-notification":
+        return {
+          workflowId: "business-governance",
+          businessId: "imon-digital-asset-store",
+          businessLabel: "Imon digital asset store"
+        };
+      default:
+        return undefined;
+    }
   }
 
   private deriveRoadblockGuidance(result: AutopilotRunResult): RoadblockGuidance {

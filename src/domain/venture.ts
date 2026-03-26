@@ -1,4 +1,5 @@
 import type { BusinessCategory } from "./engine.js";
+import type { DepartmentKind, ModelRouteTier } from "./org.js";
 
 export type VentureLaunchMode = "weekly" | "monthly";
 
@@ -79,6 +80,30 @@ export interface VentureSelectionScore {
   composite: number;
 }
 
+export interface VentureOrgDepartmentSummary {
+  kind: DepartmentKind;
+  name: string;
+  purpose: string;
+  positionTitles: string[];
+}
+
+export interface VentureWorkflowOwnershipSummary {
+  workflowId: string;
+  workflowName: string;
+  departmentKind: DepartmentKind;
+  positionTitle: string;
+  allowedModelTier: ModelRouteTier;
+  escalationTargetTitle?: string;
+}
+
+export interface VentureOrgStructure {
+  blueprintId: string;
+  summary: string;
+  departments: VentureOrgDepartmentSummary[];
+  workflowOwnership: VentureWorkflowOwnershipSummary[];
+  approvalModel: string[];
+}
+
 export interface VentureBlueprint {
   businessId: string;
   businessName: string;
@@ -95,6 +120,7 @@ export interface VentureBlueprint {
   startupPhases: VentureStartupPhase[];
   cadence: VentureCadencePlan;
   growthFocus: string[];
+  orgStructure: VentureOrgStructure;
   socialArchitecture: VentureSocialArchitecture;
   reinvestment: {
     brandRate: number;

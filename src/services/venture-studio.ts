@@ -20,6 +20,7 @@ import type {
 import { ensureDir, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
 import { FileStore } from "../storage/store.js";
+import { buildBusinessOrgTemplate, summarizeOrgTemplate } from "./org-templates.js";
 
 const TEMPLATE_SOURCE_BUSINESS_ID = "imon-digital-asset-store";
 const PRE_SLOWDOWN_BRAND_COUNT = 5;
@@ -633,6 +634,10 @@ export class VentureStudioService {
         startupPhases: phasesFor(business, aliasEmail),
         cadence,
         growthFocus: profile.growth,
+        orgStructure: {
+          blueprintId: `org-business-${business.id}`,
+          ...summarizeOrgTemplate(buildBusinessOrgTemplate(business.category))
+        },
         socialArchitecture,
         reinvestment: {
           brandRate: this.config.storeOps.finance.reinvestmentRate,
@@ -779,6 +784,8 @@ export class VentureStudioService {
         `- Composite score: ${blueprint.selectionScore.composite}`,
         `- Facebook strategy: ${blueprint.socialArchitecture.facebookStrategy}`,
         `- Instagram strategy: ${blueprint.socialArchitecture.instagramStrategy} (${blueprint.socialArchitecture.niches.length} lane(s))`,
+        `- Departments: ${blueprint.orgStructure.departments.length}`,
+        `- Workflow owners: ${blueprint.orgStructure.workflowOwnership.length}`,
         `- This week's randomized cadence: ${blueprint.cadence.coreOutput.selected} ${blueprint.cadence.coreOutput.label} ${blueprint.cadence.coreOutput.period}; ${blueprint.cadence.feedPosts.selected} ${blueprint.cadence.feedPosts.label} ${blueprint.cadence.feedPosts.period}; ${blueprint.cadence.storiesOrReels.selected} ${blueprint.cadence.storiesOrReels.label} ${blueprint.cadence.storiesOrReels.period}.`,
         "- Startup phases:",
         ...blueprint.startupPhases.map((phase) => `  - ${phase.title}`),
@@ -850,6 +857,22 @@ export class VentureStudioService {
       "",
       "## Growth Focus",
       ...blueprint.growthFocus.map((item) => `- ${item}`),
+      "",
+      "## Org Structure",
+      `- Blueprint id: ${blueprint.orgStructure.blueprintId}`,
+      ...blueprint.orgStructure.departments.flatMap((department) => [
+        `### ${department.name}`,
+        `- Purpose: ${department.purpose}`,
+        ...department.positionTitles.map((title) => `- Position: ${title}`),
+        ""
+      ]),
+      "### Workflow Ownership",
+      ...blueprint.orgStructure.workflowOwnership.map(
+        (owner) =>
+          `- ${owner.workflowName}: ${owner.departmentKind} / ${owner.positionTitle} (${owner.allowedModelTier})`
+      ),
+      "### Approval Model",
+      ...blueprint.orgStructure.approvalModel.map((line) => `- ${line}`),
       "",
       "## Social Architecture",
       `- Umbrella brand: ${blueprint.socialArchitecture.umbrellaBrandName}`,

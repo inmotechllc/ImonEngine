@@ -26,29 +26,55 @@ import type {
   SalesTransaction
 } from "../domain/store-ops.js";
 import type { SocialProfileRecord } from "../domain/social.js";
+import type {
+  ApprovalRoute,
+  DepartmentDefinition,
+  MemoryNamespacePolicy,
+  OfficeViewSnapshot,
+  OrganizationBlueprint,
+  OrgAuditRecord,
+  PermissionPolicy,
+  PositionAssignment,
+  PositionDefinition,
+  ReportingLine,
+  TaskEnvelope,
+  WorkflowOwnershipRecord
+} from "../domain/org.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../lib/fs.js";
 
 type EntityCollectionMap = {
   allocationPolicies: RevenueAllocationPolicy[];
   approvals: ApprovalTask[];
+  approvalRoutes: ApprovalRoute[];
   assetPacks: AssetPackRecord[];
   businesses: ManagedBusiness[];
   businessRuns: BusinessRunRecord[];
   clients: ClientJob[];
   collectiveSnapshots: CollectiveFundSnapshot[];
+  departmentDefinitions: DepartmentDefinition[];
   growthQueue: GrowthWorkItem[];
   growthPolicies: CatalogGrowthPolicy[];
   engineReports: EngineOverviewReport[];
   leads: LeadRecord[];
+  memoryNamespacePolicies: MemoryNamespacePolicy[];
   offers: OfferConfig[];
+  officeViewSnapshots: OfficeViewSnapshot[];
+  orgAuditRecords: OrgAuditRecord[];
+  organizationBlueprints: OrganizationBlueprint[];
   outreach: OutreachDraft[];
   allocationSnapshots: RevenueAllocationSnapshot[];
+  permissionPolicies: PermissionPolicy[];
+  positionAssignments: PositionAssignment[];
+  positionDefinitions: PositionDefinition[];
   resourceSnapshots: VpsResourceSnapshot[];
   revenueLedger: BusinessLedgerEntry[];
+  reportingLines: ReportingLine[];
   salesTransactions: SalesTransaction[];
   socialProfiles: SocialProfileRecord[];
+  taskEnvelopes: TaskEnvelope[];
   retention: RetentionReport[];
   reports: RunReport[];
+  workflowOwnership: WorkflowOwnershipRecord[];
 };
 
 export class FileStore {
@@ -59,24 +85,36 @@ export class FileStore {
     const collections: Array<keyof EntityCollectionMap> = [
       "allocationPolicies",
       "approvals",
+      "approvalRoutes",
       "allocationSnapshots",
       "assetPacks",
       "businesses",
       "businessRuns",
       "clients",
       "collectiveSnapshots",
+      "departmentDefinitions",
       "growthPolicies",
       "growthQueue",
       "engineReports",
       "leads",
+      "memoryNamespacePolicies",
       "offers",
+      "officeViewSnapshots",
+      "orgAuditRecords",
+      "organizationBlueprints",
       "outreach",
+      "permissionPolicies",
+      "positionAssignments",
+      "positionDefinitions",
       "resourceSnapshots",
+      "reportingLines",
       "revenueLedger",
       "salesTransactions",
       "socialProfiles",
+      "taskEnvelopes",
       "retention",
-      "reports"
+      "reports",
+      "workflowOwnership"
     ];
 
     await Promise.all(
@@ -160,6 +198,18 @@ export class FileStore {
     await this.upsert("approvals", task);
   }
 
+  async getApprovalRoutes(): Promise<ApprovalRoute[]> {
+    return this.readCollection("approvalRoutes");
+  }
+
+  async saveApprovalRoute(route: ApprovalRoute): Promise<void> {
+    await this.upsert("approvalRoutes", route);
+  }
+
+  async replaceApprovalRoutes(routes: ApprovalRoute[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("approvalRoutes"), routes);
+  }
+
   async getGrowthQueue(): Promise<GrowthWorkItem[]> {
     return this.readCollection("growthQueue");
   }
@@ -222,6 +272,153 @@ export class FileStore {
 
   async replaceSocialProfiles(profiles: SocialProfileRecord[]): Promise<void> {
     await writeJsonFile(this.collectionPath("socialProfiles"), profiles);
+  }
+
+  async getOrganizationBlueprints(): Promise<OrganizationBlueprint[]> {
+    return this.readCollection("organizationBlueprints");
+  }
+
+  async getOrganizationBlueprint(id: string): Promise<OrganizationBlueprint | undefined> {
+    const blueprints = await this.getOrganizationBlueprints();
+    return blueprints.find((blueprint) => blueprint.id === id);
+  }
+
+  async saveOrganizationBlueprint(blueprint: OrganizationBlueprint): Promise<void> {
+    await this.upsert("organizationBlueprints", blueprint);
+  }
+
+  async replaceOrganizationBlueprints(blueprints: OrganizationBlueprint[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("organizationBlueprints"), blueprints);
+  }
+
+  async getDepartmentDefinitions(): Promise<DepartmentDefinition[]> {
+    return this.readCollection("departmentDefinitions");
+  }
+
+  async saveDepartmentDefinition(definition: DepartmentDefinition): Promise<void> {
+    await this.upsert("departmentDefinitions", definition);
+  }
+
+  async replaceDepartmentDefinitions(definitions: DepartmentDefinition[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("departmentDefinitions"), definitions);
+  }
+
+  async getPositionDefinitions(): Promise<PositionDefinition[]> {
+    return this.readCollection("positionDefinitions");
+  }
+
+  async savePositionDefinition(definition: PositionDefinition): Promise<void> {
+    await this.upsert("positionDefinitions", definition);
+  }
+
+  async replacePositionDefinitions(definitions: PositionDefinition[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("positionDefinitions"), definitions);
+  }
+
+  async getPositionAssignments(): Promise<PositionAssignment[]> {
+    return this.readCollection("positionAssignments");
+  }
+
+  async savePositionAssignment(assignment: PositionAssignment): Promise<void> {
+    await this.upsert("positionAssignments", assignment);
+  }
+
+  async replacePositionAssignments(assignments: PositionAssignment[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("positionAssignments"), assignments);
+  }
+
+  async getReportingLines(): Promise<ReportingLine[]> {
+    return this.readCollection("reportingLines");
+  }
+
+  async saveReportingLine(reportingLine: ReportingLine): Promise<void> {
+    await this.upsert("reportingLines", reportingLine);
+  }
+
+  async replaceReportingLines(reportingLines: ReportingLine[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("reportingLines"), reportingLines);
+  }
+
+  async getPermissionPolicies(): Promise<PermissionPolicy[]> {
+    return this.readCollection("permissionPolicies");
+  }
+
+  async savePermissionPolicy(policy: PermissionPolicy): Promise<void> {
+    await this.upsert("permissionPolicies", policy);
+  }
+
+  async replacePermissionPolicies(policies: PermissionPolicy[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("permissionPolicies"), policies);
+  }
+
+  async getMemoryNamespacePolicies(): Promise<MemoryNamespacePolicy[]> {
+    return this.readCollection("memoryNamespacePolicies");
+  }
+
+  async saveMemoryNamespacePolicy(policy: MemoryNamespacePolicy): Promise<void> {
+    await this.upsert("memoryNamespacePolicies", policy);
+  }
+
+  async replaceMemoryNamespacePolicies(policies: MemoryNamespacePolicy[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("memoryNamespacePolicies"), policies);
+  }
+
+  async getWorkflowOwnership(): Promise<WorkflowOwnershipRecord[]> {
+    return this.readCollection("workflowOwnership");
+  }
+
+  async getWorkflowOwnershipRecord(
+    workflowId: string,
+    businessId?: string
+  ): Promise<WorkflowOwnershipRecord | undefined> {
+    const records = await this.getWorkflowOwnership();
+    return records.find(
+      (record) => record.workflowId === workflowId && record.businessId === businessId
+    ) ?? records.find((record) => record.workflowId === workflowId && !record.businessId);
+  }
+
+  async saveWorkflowOwnership(record: WorkflowOwnershipRecord): Promise<void> {
+    await this.upsert("workflowOwnership", record);
+  }
+
+  async replaceWorkflowOwnership(records: WorkflowOwnershipRecord[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("workflowOwnership"), records);
+  }
+
+  async getTaskEnvelopes(): Promise<TaskEnvelope[]> {
+    return this.readCollection("taskEnvelopes");
+  }
+
+  async saveTaskEnvelope(envelope: TaskEnvelope): Promise<void> {
+    await this.upsert("taskEnvelopes", envelope);
+  }
+
+  async replaceTaskEnvelopes(envelopes: TaskEnvelope[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("taskEnvelopes"), envelopes);
+  }
+
+  async getOrgAuditRecords(): Promise<OrgAuditRecord[]> {
+    return this.readCollection("orgAuditRecords");
+  }
+
+  async saveOrgAuditRecord(record: OrgAuditRecord): Promise<void> {
+    await this.upsert("orgAuditRecords", record);
+  }
+
+  async replaceOrgAuditRecords(records: OrgAuditRecord[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("orgAuditRecords"), records);
+  }
+
+  async getOfficeViewSnapshots(): Promise<OfficeViewSnapshot[]> {
+    return this.readCollection("officeViewSnapshots");
+  }
+
+  async saveOfficeViewSnapshot(snapshot: OfficeViewSnapshot): Promise<void> {
+    await this.upsert("officeViewSnapshots", snapshot);
+  }
+
+  async replaceOfficeViewSnapshots(snapshots: OfficeViewSnapshot[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("officeViewSnapshots"), snapshots);
   }
 
   async getOutreachDrafts(): Promise<OutreachDraft[]> {

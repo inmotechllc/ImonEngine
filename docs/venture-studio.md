@@ -49,6 +49,17 @@ ImonEngine now has a portfolio-level venture studio layer on top of the first li
 - `Growth Agent`: tests hooks, timing, and low-cost acquisition loops.
 - `Finance And Allocation Agent`: tracks revenue, enforces reinvestment, and proposes shared-tool spend.
 
+## Org Structure
+
+Every venture blueprint now emits a real-world operating structure alongside the older lane strategy:
+
+- department roster
+- position roster
+- workflow ownership map
+- approval model summary
+
+That structure is generated from the same control-plane templates used by the live engine sync, so new business blueprints and live businesses no longer drift apart structurally.
+
 ## Capital Experiments
 
 - Equities, crypto, forex, and other capital-market experiments are treated as `paper-only` tracks at first.
@@ -70,6 +81,8 @@ ImonEngine now has a portfolio-level venture studio layer on top of the first li
 - `runtime/ops/venture-calendar.md`
 - `runtime/ops/venture-blueprints/<business-id>.json`
 - `runtime/ops/venture-blueprints/<business-id>.md`
+- `runtime/ops/org-control-plane.json`
+- `runtime/ops/org-blueprints/<blueprint-id>.json`
 
 ## VPS Execution Surface
 

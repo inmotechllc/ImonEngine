@@ -679,7 +679,7 @@ export class PodStudioService {
     await writeJsonFile(roadblocksPath, plan.roadblocks);
     await writeTextFile(planMarkdownPath, this.toMarkdown(plan));
     if (plan.roadblocks.length > 0) {
-      await writeTextFile(roadblockEmailPath, this.composeRoadblockEmail(plan));
+      await writeTextFile(roadblockEmailPath, await this.composeRoadblockEmail(plan));
     }
 
     return {
@@ -757,11 +757,15 @@ export class PodStudioService {
     return true;
   }
 
-  private composeRoadblockEmail(plan: PodAutomationPlan): string {
+  private async composeRoadblockEmail(plan: PodAutomationPlan): Promise<string> {
+    const ownership = await this.store.getWorkflowOwnershipRecord("pod-planning", plan.businessId);
     return [
       `ImonEngine reached a launch roadblock for ${plan.businessName}.`,
       "",
       `Business: ${plan.businessName}`,
+      ...(ownership ? [`Owning department: ${ownership.departmentName}`] : []),
+      ...(ownership ? [`Owning position: ${ownership.positionName}`] : []),
+      ...(ownership ? [`Owning workflow: ${ownership.workflowName} (${ownership.workflowId})`] : []),
       `Alias: ${plan.aliasEmail}`,
       `Status: ${plan.status}`,
       `Generated at: ${plan.generatedAt}`,

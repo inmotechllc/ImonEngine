@@ -4,6 +4,8 @@ ImonEngine is the parent portfolio layer for this repo. It sits above the origin
 
 It now also has a `venture studio` layer that turns the first live store into a reusable business template, enforces launch windows for new brands, and keeps speculative capital ideas in paper-only mode until the operating businesses produce real profit.
 
+It now also has a real `organization control plane`. That layer maps the engine and each business into departments, positions, workflow ownership, approval routes, memory boundaries, and office views. The office is only a view of the control plane, not the source of truth.
+
 ## Managed Business Order
 
 1. Digital asset store
@@ -23,6 +25,7 @@ The first two businesses are marked `ready` by default because they have the lig
 - Recommended active-business concurrency
 - Approval tasks for business launch blockers
 - Generated bootstrap and cron artifacts for VPS staging
+- Organization blueprints, workflow ownership, and office-view snapshots
 
 ## Commands
 
@@ -32,6 +35,11 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- engine-report`
 - `npm run dev -- venture-studio`
 - `npm run dev -- venture-studio --business <id>`
+- `npm run dev -- org-sync`
+- `npm run dev -- org-report`
+- `npm run dev -- org-report --business <id>`
+- `npm run dev -- office-views`
+- `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
 - `npm run dev -- autopilot-run-once`
 - `npm run dev -- activate-business --business <id>`
 - `npm run dev -- pause-business --business <id>`
@@ -51,9 +59,18 @@ The first two businesses are marked `ready` by default because they have the lig
 - `runtime/state/resourceSnapshots.json`
 - `runtime/state/revenueLedger.json`
 - `runtime/state/engineReports.json`
+- `runtime/state/organizationBlueprints.json`
+- `runtime/state/departmentDefinitions.json`
+- `runtime/state/positionDefinitions.json`
+- `runtime/state/workflowOwnership.json`
+- `runtime/state/taskEnvelopes.json`
+- `runtime/state/orgAuditRecords.json`
 - `runtime/ops/venture-studio.json`
 - `runtime/ops/venture-calendar.json`
 - `runtime/ops/venture-blueprints/`
+- `runtime/ops/org-control-plane.json`
+- `runtime/ops/office-views.json`
+- `runtime/ops/org-blueprints/`
 
 ## Venture Rules
 

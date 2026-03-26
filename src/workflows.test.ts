@@ -181,6 +181,31 @@ test("ImonEngine seeds the portfolio and produces a resource-aware report", asyn
   assert.ok(report.recommendedConcurrency >= 1);
 });
 
+test("organization control plane sync creates blueprints, workflow ownership, and office views", async () => {
+  const { store, imonEngine } = await setupWorkspace();
+  await imonEngine.bootstrap();
+
+  const officeSnapshot = await imonEngine.syncOrganization();
+  const engineBlueprint = await store.getOrganizationBlueprint("org-engine-imon-engine");
+  const digitalStoreBlueprint = await store.getOrganizationBlueprint(
+    "org-business-imon-digital-asset-store"
+  );
+  const workflowOwner = await store.getWorkflowOwnershipRecord(
+    "store-autopilot",
+    "imon-digital-asset-store"
+  );
+
+  assert.ok(engineBlueprint);
+  assert.ok(digitalStoreBlueprint);
+  assert.ok(workflowOwner);
+  assert.equal(workflowOwner?.departmentName, "Operations");
+  assert.equal(workflowOwner?.positionName, "Operations Manager");
+  assert.ok(officeSnapshot.executiveView.businesses.length >= 5);
+  assert.ok(
+    officeSnapshot.businessViews.some((view) => view.businessId === "imon-digital-asset-store")
+  );
+});
+
 test("digital asset factory seeds Gumroad starter packs", async () => {
   const { store, imonEngine, digitalAssetFactory } = await setupWorkspace();
   await imonEngine.bootstrap();
@@ -348,12 +373,49 @@ test("venture studio builds weekly launch windows and brand blueprints from the 
   assert.ok(podBlueprint);
   assert.equal(podBlueprint?.businessName, "Imonic");
   assert.equal(podBlueprint?.aliasEmail, "imonengine+imonic@gmail.com");
+  assert.equal(podBlueprint?.orgStructure.blueprintId, "org-business-imon-pod-store");
+  assert.ok(
+    podBlueprint?.orgStructure.departments.some(
+      (department) => department.name === "Merchandising"
+    )
+  );
+  assert.ok(
+    podBlueprint?.orgStructure.workflowOwnership.some(
+      (owner) => owner.workflowId === "pod-planning"
+    )
+  );
   assert.equal(podBlueprint?.socialArchitecture.facebookStrategy, "umbrella_brand");
   assert.equal(podBlueprint?.socialArchitecture.instagramStrategy, "single_brand");
   assert.equal(podBlueprint?.socialArchitecture.niches.length, 1);
   assert.ok(snapshot.policy.socialRules.some((rule) => rule.includes("umbrella brand")));
   assert.equal(snapshot.policy.systemReinvestmentCapRate, 0.35);
   assert.ok(snapshot.capitalExperimentTracks.every((track) => track.stage !== "live_ops"));
+});
+
+test("task routing enforces business memory scope and least-privilege tools", async () => {
+  const { imonEngine } = await setupWorkspace();
+  await imonEngine.bootstrap();
+
+  const routed = await imonEngine.routeTask({
+    workflowId: "store-autopilot",
+    businessId: "imon-digital-asset-store",
+    title: "Refresh store queue",
+    summary: "Refresh the digital asset store growth queue and artifacts.",
+    requestedTools: ["scheduler", "growth-queue", "money_movement"]
+  });
+
+  assert.equal(routed.envelope.businessId, "imon-digital-asset-store");
+  assert.ok(routed.envelope.allowedTools.includes("scheduler"));
+  assert.ok(routed.envelope.allowedTools.includes("growth-queue"));
+  assert.ok(!routed.envelope.allowedTools.includes("money_movement"));
+  assert.ok(
+    routed.envelope.allowedMemoryNamespaces.every(
+      (namespace) =>
+        namespace.includes("business/imon-digital-asset-store") &&
+        !namespace.includes("business/imon-pod-store")
+    )
+  );
+  assert.equal(routed.approvalRoute.riskLevel, "low");
 });
 
 test("pod studio creates an Imonic launch plan with deduplicated products and actionable roadblocks", async () => {

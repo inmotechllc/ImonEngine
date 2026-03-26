@@ -94,6 +94,10 @@ function usage(): string {
     "  npm run dev -- businesses",
     "  npm run dev -- engine-sync",
     "  npm run dev -- engine-report",
+    "  npm run dev -- org-sync",
+    "  npm run dev -- org-report [--business <id>]",
+    "  npm run dev -- office-views",
+    "  npm run dev -- route-task --title <text> --summary <text> [--workflow <id>] [--business <id>] [--risk low|medium|high]",
     "  npm run dev -- activate-business --business imon-digital-asset-store",
     "  npm run dev -- pause-business --business imon-digital-asset-store",
     "  npm run dev -- vps-artifacts",
@@ -342,6 +346,87 @@ async function main(): Promise<void> {
     case "engine-report": {
       const report = await imonEngine.sync();
       console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "org-sync": {
+      await imonEngine.sync();
+      const snapshot = await imonEngine.getLatestOfficeSnapshot();
+      logger.info("Organization control plane synced.");
+      console.log(JSON.stringify(snapshot ?? null, null, 2));
+      break;
+    }
+    case "org-report": {
+      await imonEngine.sync();
+      const businessId = typeof flags.business === "string" ? flags.business : undefined;
+      const blueprint = businessId
+        ? await store.getOrganizationBlueprint(`org-business-${businessId}`)
+        : await store.getOrganizationBlueprint("org-engine-imon-engine");
+      const officeSnapshot = await imonEngine.getLatestOfficeSnapshot();
+      console.log(
+        JSON.stringify(
+          businessId
+            ? {
+                blueprint,
+                businessOffice: officeSnapshot?.businessViews.find((view) => view.businessId === businessId) ?? null
+              }
+            : {
+                blueprint,
+                executiveOffice: officeSnapshot?.executiveView ?? null
+              },
+          null,
+          2
+        )
+      );
+      break;
+    }
+    case "office-views": {
+      await imonEngine.sync();
+      const snapshot = await imonEngine.getLatestOfficeSnapshot();
+      console.log(JSON.stringify(snapshot ?? null, null, 2));
+      break;
+    }
+    case "route-task": {
+      const title = String(flags.title ?? "");
+      const summary = String(flags.summary ?? "");
+      if (!title || !summary) {
+        throw new Error("Missing --title or --summary for route-task command.");
+      }
+      const risk =
+        typeof flags.risk === "string" &&
+        ["low", "medium", "high"].includes(flags.risk)
+          ? (flags.risk as "low" | "medium" | "high")
+          : undefined;
+      const actionClasses =
+        typeof flags["action-classes"] === "string"
+          ? flags["action-classes"]
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean)
+          : undefined;
+      const requestedTools =
+        typeof flags.tools === "string"
+          ? flags.tools
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean)
+          : undefined;
+      const routed = await imonEngine.routeTask({
+        workflowId: typeof flags.workflow === "string" ? flags.workflow : undefined,
+        businessId: typeof flags.business === "string" ? flags.business : undefined,
+        departmentId: typeof flags.department === "string" ? flags.department : undefined,
+        positionId: typeof flags.position === "string" ? flags.position : undefined,
+        title,
+        summary,
+        riskLevel: risk,
+        actionClasses: actionClasses as any,
+        publicFacing: flags["public-facing"] === true ? true : undefined,
+        moneyMovement: flags["money-movement"] === true ? true : undefined,
+        requiresVerifiedFinancialData:
+          flags["requires-verified-financial-data"] === true ? true : undefined,
+        requestedTools
+      });
+      logger.info(`Routed task ${routed.envelope.id}.`);
+      console.log(JSON.stringify(routed, null, 2));
       break;
     }
     case "activate-business": {

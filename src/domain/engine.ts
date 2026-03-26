@@ -43,6 +43,7 @@ export interface ManagedBusiness {
   name: string;
   module: string;
   category: BusinessCategory;
+  orgBlueprintId?: string;
   launchPriority: number;
   stage: BusinessLaunchStage;
   summary: string;
@@ -71,6 +72,7 @@ export interface ManagedBusinessSeed extends Omit<ManagedBusiness, "createdAt" |
 export interface ImonEngineState {
   id: string;
   name: string;
+  orgBlueprintId?: string;
   overview: string;
   timezone: string;
   host: {

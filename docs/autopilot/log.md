@@ -255,3 +255,7 @@ RuntimeError: Timed out waiting for browser condition.
   - Relay classifications are now tracked as inferred and excluded from allocation logic by default.
   - Revenue and collective reports now surface data-quality warnings instead of mixing inferred and verified signals.
   - ImonEngine portfolio metrics now ignore inferred Relay costs and revenue when computing monthly business performance.
+- 2026-03-26T00:00:00.000Z [phase-06-continuous-store-operations] PROGRESS: Added the real-world organization control plane.
+  - Engine and business sync now emit departments, positions, workflow ownership, approval routes, memory namespace policies, and office-view snapshots.
+  - Venture blueprints now include org structure summaries instead of only loose agent-role lists.
+  - Store and POD roadblock emails now include the owning business, department, position, and workflow from the control plane.

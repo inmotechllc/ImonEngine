@@ -9,10 +9,12 @@ import type {
   ManagedBusinessSeed,
   VpsResourceSnapshot
 } from "../domain/engine.js";
+import type { OfficeViewSnapshot, TaskRoutingRequest } from "../domain/org.js";
 import { writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { FileStore } from "../storage/store.js";
 import { AccountOpsAgent } from "./account-ops.js";
 import { SystemMonitorService } from "../services/system-monitor.js";
+import { OrganizationControlPlaneService } from "../services/organization-control-plane.js";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -42,12 +44,15 @@ export class ImonEngineAgent {
 
   private readonly monitor: SystemMonitorService;
 
+  private readonly orgControlPlane: OrganizationControlPlaneService;
+
   constructor(
     private readonly config: AppConfig,
     private readonly store: FileStore
   ) {
     this.accountOps = new AccountOpsAgent(config, store);
     this.monitor = new SystemMonitorService(config);
+    this.orgControlPlane = new OrganizationControlPlaneService(config, store);
   }
 
   async bootstrap(): Promise<EngineOverviewReport> {
@@ -73,6 +78,7 @@ export class ImonEngineAgent {
 
     const report = this.buildOverviewReport(nextEngine, businesses, snapshot);
     await this.store.saveEngineReport(report);
+    await this.orgControlPlane.sync(nextEngine, businesses);
     await writeJsonFile(path.join(this.config.reportDir, `${report.id}.json`), report);
     await writeJsonFile(path.join(this.config.opsDir, "engine-overview.json"), report);
     await writeJsonFile(path.join(this.config.opsDir, "business-roster.json"), businesses);
@@ -172,6 +178,7 @@ export class ImonEngineAgent {
     const manifestPath = path.join(this.config.opsDir, "vps-manifest.json");
     const businesses = await this.getPortfolioBusinesses();
     const engine = await this.ensureEngineState();
+    await this.orgControlPlane.sync(engine, businesses);
 
     await writeTextFile(
       bootstrapScriptPath,
@@ -238,11 +245,27 @@ export class ImonEngineAgent {
     };
   }
 
+  async syncOrganization(): Promise<OfficeViewSnapshot> {
+    const engine = await this.ensureEngineState();
+    const businesses = await this.getPortfolioBusinesses();
+    const result = await this.orgControlPlane.sync(engine, businesses);
+    return result.officeSnapshot;
+  }
+
+  async routeTask(request: TaskRoutingRequest) {
+    return this.orgControlPlane.routeTask(request);
+  }
+
+  async getLatestOfficeSnapshot(): Promise<OfficeViewSnapshot | undefined> {
+    return this.orgControlPlane.getLatestOfficeSnapshot();
+  }
+
   private async ensureEngineState(): Promise<ImonEngineState> {
     const existing = await this.store.getEngineState();
     if (existing) {
       const next: ImonEngineState = {
         ...existing,
+        orgBlueprintId: `org-engine-${existing.id}`,
         name: this.config.engine.name,
         timezone: this.config.engine.timezone,
         host: {
@@ -265,6 +288,7 @@ export class ImonEngineAgent {
     const createdAt = nowIso();
     const state: ImonEngineState = {
       ...DEFAULT_IMON_ENGINE,
+      orgBlueprintId: `org-engine-${DEFAULT_IMON_ENGINE.id}`,
       name: this.config.engine.name,
       timezone: this.config.engine.timezone,
       host: {
@@ -308,6 +332,7 @@ export class ImonEngineAgent {
     if (!current) {
       return {
         ...template,
+        orgBlueprintId: `org-business-${template.id}`,
         createdAt: timestamp,
         updatedAt: timestamp
       };
@@ -322,6 +347,7 @@ export class ImonEngineAgent {
 
     return {
       ...template,
+      orgBlueprintId: `org-business-${template.id}`,
       stage: current.stage,
       launchBlockers:
         current.stage === "active"
@@ -476,6 +502,7 @@ export class ImonEngineAgent {
 
     return {
       ...engine,
+      orgBlueprintId: `org-engine-${engine.id}`,
       portfolio: {
         trackedBusinesses: businesses.length,
         activeBusinesses: businesses.filter((business) => business.stage === "active").length,
