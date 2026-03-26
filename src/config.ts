@@ -67,6 +67,14 @@ export interface AppConfig {
     sessionTtlHours: number;
     staleThresholdMinutes: number;
     serviceLogPath: string;
+    local: {
+      bindHost: string;
+      port: number;
+      remoteUrl: string;
+      tunnelEnabled: boolean;
+      tunnelLocalPort: number;
+      tunnelPythonBin: string;
+    };
   };
   smtp?: {
     host: string;
@@ -191,7 +199,17 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
       staleThresholdMinutes: Number(process.env.CONTROL_ROOM_STALE_THRESHOLD_MINUTES ?? "120"),
       serviceLogPath:
         process.env.CONTROL_ROOM_SERVICE_LOG_PATH ??
-        path.join(controlRoomDir, "server.log")
+        path.join(controlRoomDir, "server.log"),
+      local: {
+        bindHost: process.env.CONTROL_ROOM_LOCAL_BIND_HOST ?? "127.0.0.1",
+        port: Number(process.env.CONTROL_ROOM_LOCAL_PORT ?? "4310"),
+        remoteUrl:
+          process.env.CONTROL_ROOM_REMOTE_URL ??
+          `http://127.0.0.1:${process.env.CONTROL_ROOM_TUNNEL_PORT ?? "4311"}`,
+        tunnelEnabled: process.env.CONTROL_ROOM_AUTO_TUNNEL !== "false",
+        tunnelLocalPort: Number(process.env.CONTROL_ROOM_TUNNEL_PORT ?? "4311"),
+        tunnelPythonBin: process.env.CONTROL_ROOM_TUNNEL_PYTHON_BIN ?? "python"
+      }
     },
     smtp,
     cloudflare:

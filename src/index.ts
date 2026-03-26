@@ -19,6 +19,7 @@ import { StoreAutopilotAgent } from "./agents/store-autopilot.js";
 import { buildAgencySite } from "./services/agency-site.js";
 import { OfficeDashboardService } from "./services/office-dashboard.js";
 import { ControlRoomServer } from "./services/control-room-server.js";
+import { ControlRoomLocalServer } from "./services/control-room-local-server.js";
 import { PodStudioService } from "./services/pod-studio.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
@@ -103,6 +104,7 @@ function usage(): string {
     "  npm run dev -- office-dashboard",
     "  npm run dev -- control-room-build",
     "  npm run dev -- control-room-serve",
+    "  npm run dev -- control-room-local",
     "  npm run dev -- control-room-health",
     "  npm run dev -- control-room-password-hash --password <value>",
     "  npm run dev -- route-task --title <text> --summary <text> [--workflow <id>] [--business <id>] [--risk low|medium|high]",
@@ -152,6 +154,7 @@ async function buildContext() {
   const podStudio = new PodStudioService(config, store);
   const officeDashboard = new OfficeDashboardService(config, store);
   const controlRoomServer = new ControlRoomServer(config, store);
+  const controlRoomLocalServer = new ControlRoomLocalServer(config);
 
   return {
     config,
@@ -169,7 +172,8 @@ async function buildContext() {
     ventureStudio,
     podStudio,
     officeDashboard,
-    controlRoomServer
+    controlRoomServer,
+    controlRoomLocalServer
   };
 }
 
@@ -249,7 +253,8 @@ async function main(): Promise<void> {
     ventureStudio,
     podStudio,
     officeDashboard,
-    controlRoomServer
+    controlRoomServer,
+    controlRoomLocalServer
   } =
     await buildContext();
 
@@ -419,6 +424,27 @@ async function main(): Promise<void> {
       logger.info(
         `Control room listening on http://${address.host}:${address.port} (private VPS mode).`
       );
+      process.once("SIGINT", () => {
+        void controlRoomServer.close();
+      });
+      process.once("SIGTERM", () => {
+        void controlRoomServer.close();
+      });
+      await new Promise(() => {});
+      break;
+    }
+    case "control-room-local": {
+      const address = await controlRoomLocalServer.listen();
+      logger.info(
+        `Local control room listening on http://${address.host}:${address.port} and proxying the VPS control plane.`
+      );
+      process.once("SIGINT", () => {
+        void controlRoomLocalServer.close();
+      });
+      process.once("SIGTERM", () => {
+        void controlRoomLocalServer.close();
+      });
+      await new Promise(() => {});
       break;
     }
     case "control-room-health": {

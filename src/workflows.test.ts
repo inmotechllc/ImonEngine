@@ -16,6 +16,7 @@ import { AIClient } from "./openai/client.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
 import { PodStudioService } from "./services/pod-studio.js";
 import { ControlRoomServer } from "./services/control-room-server.js";
+import { ControlRoomLocalServer } from "./services/control-room-local-server.js";
 import { ControlRoomSnapshotService } from "./services/control-room-snapshot.js";
 import { OfficeDashboardService } from "./services/office-dashboard.js";
 import { StoreOpsService } from "./services/store-ops.js";
@@ -310,6 +311,141 @@ test("control-room server enforces auth and serves page, api, and stream routes"
   assert.match(textChunk, /event: snapshot/);
   await reader?.cancel();
   await server.close();
+});
+
+test("control-room server command routes mutate state through the control plane", async () => {
+  const { imonEngine, config, store } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  await imonEngine.sync();
+
+  config.controlRoom.bindHost = "127.0.0.1";
+  config.controlRoom.port = 0;
+  config.controlRoom.sessionSecret = "test-control-room-secret";
+  config.controlRoom.passwordHash = await hashControlRoomPassword("control-room-pass");
+
+  const server = new ControlRoomServer(config, store);
+  const address = await server.listen();
+  const baseUrl = `http://${address.host}:${address.port}`;
+
+  const login = await fetch(`${baseUrl}/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      password: "control-room-pass",
+      next: "/"
+    })
+  });
+  const cookie = login.headers.get("set-cookie") ?? "";
+
+  const activate = await fetch(`${baseUrl}/api/control-room/commands/activate-business`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie
+    },
+    body: JSON.stringify({ businessId: "imon-digital-asset-store" })
+  });
+  assert.equal(activate.status, 200);
+  const activatedBody = await activate.json();
+  assert.equal(activatedBody.business.stage, "active");
+
+  const routeTask = await fetch(`${baseUrl}/api/control-room/commands/route-task`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie
+    },
+    body: JSON.stringify({
+      businessId: "imon-digital-asset-store",
+      workflowId: "store-autopilot",
+      title: "Operator review",
+      summary: "Inspect the next launch queue for duplicate offers.",
+      riskLevel: "medium"
+    })
+  });
+  assert.equal(routeTask.status, 200);
+  const routedBody = await routeTask.json();
+  assert.equal(routedBody.routed.envelope.businessId, "imon-digital-asset-store");
+  assert.ok(routedBody.routed.envelope.departmentId);
+  assert.ok(routedBody.routed.envelope.positionId);
+
+  const pause = await fetch(`${baseUrl}/api/control-room/commands/pause-business`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie
+    },
+    body: JSON.stringify({ businessId: "imon-digital-asset-store" })
+  });
+  assert.equal(pause.status, 200);
+  const pausedBody = await pause.json();
+  assert.equal(pausedBody.business.stage, "paused");
+
+  await server.close();
+});
+
+test("local control-room app signs into the VPS control room and proxies read/write actions", async () => {
+  const { imonEngine, config, store } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  await imonEngine.sync();
+
+  config.controlRoom.bindHost = "127.0.0.1";
+  config.controlRoom.port = 0;
+  config.controlRoom.sessionSecret = "test-control-room-secret";
+  config.controlRoom.passwordHash = await hashControlRoomPassword("control-room-pass");
+
+  const remoteServer = new ControlRoomServer(config, store);
+  const remoteAddress = await remoteServer.listen();
+  const remoteBaseUrl = `http://${remoteAddress.host}:${remoteAddress.port}`;
+
+  config.controlRoom.local.bindHost = "127.0.0.1";
+  config.controlRoom.local.port = 0;
+  config.controlRoom.local.remoteUrl = remoteBaseUrl;
+  config.controlRoom.local.tunnelEnabled = false;
+
+  const localServer = new ControlRoomLocalServer(config);
+  const localAddress = await localServer.listen();
+  const localBaseUrl = `http://${localAddress.host}:${localAddress.port}`;
+
+  const localLogin = await fetch(`${localBaseUrl}/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      password: "control-room-pass",
+      next: "/"
+    })
+  });
+  assert.equal(localLogin.status, 303);
+
+  const localHome = await fetch(`${localBaseUrl}/`);
+  assert.equal(localHome.status, 200);
+  assert.match(await localHome.text(), /Local Operator App/i);
+
+  const snapshotResponse = await fetch(`${localBaseUrl}/api/control-room/snapshot`);
+  assert.equal(snapshotResponse.status, 200);
+  const snapshot = await snapshotResponse.json();
+  assert.equal(snapshot.engineName, "ImonEngine");
+
+  const commandResponse = await fetch(`${localBaseUrl}/api/control-room/commands/engine-sync`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: "{}"
+  });
+  assert.equal(commandResponse.status, 200);
+  const commandBody = await commandResponse.json();
+  assert.equal(commandBody.status, "ok");
+  assert.ok(commandBody.report.recommendedConcurrency >= 1);
+
+  await localServer.close();
+  await remoteServer.close();
 });
 
 test("control-room health degrades cleanly when the office snapshot is missing", async () => {

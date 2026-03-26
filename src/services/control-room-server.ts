@@ -2,9 +2,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { URL } from "node:url";
 import type { AddressInfo } from "node:net";
 import type { AppConfig } from "../config.js";
+import { ImonEngineAgent } from "../agents/imon-engine.js";
+import type { TaskRoutingRequest } from "../domain/org.js";
 import { createControlRoomDefaultSecret, createSignedControlRoomSession, readSignedControlRoomSession, verifyControlRoomPassword } from "../lib/control-room-auth.js";
 import { ControlRoomRenderer } from "./control-room-renderer.js";
 import { ControlRoomSnapshotService } from "./control-room-snapshot.js";
+import { OfficeDashboardService } from "./office-dashboard.js";
 import { FileStore } from "../storage/store.js";
 
 type RouteMatch =
@@ -20,6 +23,10 @@ type RouteMatch =
   | { type: "api-tasks" }
   | { type: "api-health" }
   | { type: "api-stream" }
+  | { type: "command-engine-sync" }
+  | { type: "command-activate-business" }
+  | { type: "command-pause-business" }
+  | { type: "command-route-task" }
   | { type: "missing" };
 
 function html(res: ServerResponse, statusCode: number, body: string): void {
@@ -73,6 +80,11 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
+  const raw = await readRequestBody(req);
+  return JSON.parse(raw || "{}") as T;
+}
+
 function routePath(pathname: string): RouteMatch {
   if (pathname === "/") return { type: "home" };
   if (pathname === "/login") return { type: "login" };
@@ -83,6 +95,10 @@ function routePath(pathname: string): RouteMatch {
   if (pathname === "/api/control-room/tasks") return { type: "api-tasks" };
   if (pathname === "/api/control-room/health") return { type: "api-health" };
   if (pathname === "/api/control-room/stream") return { type: "api-stream" };
+  if (pathname === "/api/control-room/commands/engine-sync") return { type: "command-engine-sync" };
+  if (pathname === "/api/control-room/commands/activate-business") return { type: "command-activate-business" };
+  if (pathname === "/api/control-room/commands/pause-business") return { type: "command-pause-business" };
+  if (pathname === "/api/control-room/commands/route-task") return { type: "command-route-task" };
 
   const businessMatch = pathname.match(/^\/business\/([^/]+)$/);
   if (businessMatch?.[1]) {
@@ -111,6 +127,10 @@ export class ControlRoomServer {
 
   private readonly renderer: ControlRoomRenderer;
 
+  private readonly imonEngine: ImonEngineAgent;
+
+  private readonly officeDashboard: OfficeDashboardService;
+
   private server?: Server;
 
   constructor(
@@ -119,6 +139,8 @@ export class ControlRoomServer {
   ) {
     this.snapshotService = new ControlRoomSnapshotService(config, store);
     this.renderer = new ControlRoomRenderer();
+    this.imonEngine = new ImonEngineAgent(config, store);
+    this.officeDashboard = new OfficeDashboardService(config, store);
   }
 
   async listen(): Promise<{ host: string; port: number }> {
@@ -150,8 +172,11 @@ export class ControlRoomServer {
     if (!this.server) {
       return;
     }
+    const activeServer = this.server;
+    activeServer.closeIdleConnections?.();
+    activeServer.closeAllConnections?.();
     await new Promise<void>((resolve, reject) => {
-      this.server?.close((error) => {
+      activeServer.close((error) => {
         if (error) {
           reject(error);
           return;
@@ -267,6 +292,61 @@ export class ControlRoomServer {
       }
       case "api-stream": {
         await this.handleSse(req, res);
+        return;
+      }
+      case "command-engine-sync": {
+        if (req.method !== "POST") {
+          json(res, 405, { status: "method_not_allowed" });
+          return;
+        }
+        const report = await this.imonEngine.sync();
+        await this.officeDashboard.writeDashboard();
+        json(res, 200, { status: "ok", report });
+        return;
+      }
+      case "command-activate-business": {
+        if (req.method !== "POST") {
+          json(res, 405, { status: "method_not_allowed" });
+          return;
+        }
+        const body = await readJsonBody<{ businessId?: string }>(req);
+        if (!body.businessId) {
+          json(res, 400, { status: "error", message: "Missing businessId." });
+          return;
+        }
+        const business = await this.imonEngine.activateBusiness(body.businessId);
+        await this.officeDashboard.writeDashboard();
+        json(res, 200, { status: "ok", business });
+        return;
+      }
+      case "command-pause-business": {
+        if (req.method !== "POST") {
+          json(res, 405, { status: "method_not_allowed" });
+          return;
+        }
+        const body = await readJsonBody<{ businessId?: string }>(req);
+        if (!body.businessId) {
+          json(res, 400, { status: "error", message: "Missing businessId." });
+          return;
+        }
+        const business = await this.imonEngine.pauseBusiness(body.businessId);
+        await this.officeDashboard.writeDashboard();
+        json(res, 200, { status: "ok", business });
+        return;
+      }
+      case "command-route-task": {
+        if (req.method !== "POST") {
+          json(res, 405, { status: "method_not_allowed" });
+          return;
+        }
+        const body = await readJsonBody<TaskRoutingRequest>(req);
+        if (!body.title || !body.summary) {
+          json(res, 400, { status: "error", message: "Missing title or summary." });
+          return;
+        }
+        const routed = await this.imonEngine.routeTask(body);
+        await this.officeDashboard.writeDashboard();
+        json(res, 200, { status: "ok", routed });
         return;
       }
       default: {

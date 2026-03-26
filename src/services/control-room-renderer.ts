@@ -29,7 +29,7 @@ function statusToneFor(businessStage: string, health: ControlRoomHealthReport): 
 export interface ControlRoomPageOptions {
   selectedBusinessId?: string;
   selectedDepartmentId?: string;
-  appMode: "static" | "hosted";
+  appMode: "static" | "hosted" | "local";
 }
 
 export class ControlRoomRenderer {
@@ -39,16 +39,64 @@ export class ControlRoomRenderer {
       snapshot.businesses[0];
     const selectedDepartmentId =
       options.selectedDepartmentId ?? selectedBusiness?.office?.departments[0]?.id ?? null;
-    const initialPayload = JSON.stringify({
+
+    const payload = JSON.stringify({
       snapshot,
       selectedBusinessId: selectedBusiness?.id ?? null,
       selectedDepartmentId,
-      appMode: options.appMode
+      appMode: options.appMode,
+      routes: {
+        snapshot: "/api/control-room/snapshot",
+        stream: "/api/control-room/stream",
+        engineSync: "/api/control-room/commands/engine-sync",
+        activateBusiness: "/api/control-room/commands/activate-business",
+        pauseBusiness: "/api/control-room/commands/pause-business",
+        routeTask: "/api/control-room/commands/route-task"
+      }
     });
 
-    const heroAction = options.appMode === "hosted"
-      ? `<a class="button" href="/logout">Sign out</a>`
-      : `<span class="button" aria-disabled="true">Static export</span>`;
+    const modeLabel =
+      options.appMode === "static"
+        ? "Static Export"
+        : options.appMode === "local"
+          ? "Local Operator App"
+          : "Hosted VPS App";
+    const heroAction =
+      options.appMode === "static"
+        ? `<span class="button button-muted" aria-disabled="true">Static export</span>`
+        : `<a class="button button-primary" href="/logout">Sign out</a>`;
+    const controlsSection =
+      options.appMode === "static"
+        ? ""
+        : `
+        <section>
+          <div class="region-title">Operator Controls</div>
+          <div class="controls">
+            <button class="button button-primary" id="engine-sync-button" type="button">Run engine sync</button>
+            <button class="button" id="business-toggle-button" type="button">Toggle business state</button>
+          </div>
+          <form id="task-form" class="task-form">
+            <label class="field">
+              <span>Directive title</span>
+              <input id="task-title" name="title" type="text" placeholder="Guide Imon with a routed task" />
+            </label>
+            <label class="field">
+              <span>Directive summary</span>
+              <textarea id="task-summary" name="summary" rows="4" placeholder="What should the owning department do next?"></textarea>
+            </label>
+            <label class="field">
+              <span>Risk</span>
+              <select id="task-risk" name="risk">
+                <option value="low">low</option>
+                <option value="medium" selected>medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <button class="button button-primary" type="submit">Route directive</button>
+          </form>
+          <div class="detail-panel" id="control-result">Use this panel to sync the engine, change business state, or route operator guidance into the control plane.</div>
+        </section>`
+        ;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -60,7 +108,7 @@ export class ControlRoomRenderer {
       :root{--bg:#081017;--panel:#111b23;--panel2:#0d161d;--line:rgba(176,198,214,.15);--text:#ebf1f5;--muted:#92a2af;--accent:#58d3a4;--accent2:#7cc7ff;--warning:#ffb14a;--danger:#ff7f75}
       *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at top left,rgba(88,211,164,.14),transparent 28%),radial-gradient(circle at top right,rgba(124,199,255,.12),transparent 24%),linear-gradient(180deg,#081017 0%,#0b1117 100%);color:var(--text);font-family:"Bahnschrift","Aptos","Segoe UI Variable","Segoe UI",sans-serif}
       body{padding:22px}a{color:inherit;text-decoration:none}
-      .shell{display:grid;grid-template-columns:280px minmax(0,1fr) 340px;gap:18px;align-items:start}
+      .shell{display:grid;grid-template-columns:280px minmax(0,1fr) 360px;gap:18px;align-items:start}
       .hero{grid-column:1 / -1;padding:26px 30px 24px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(17,27,35,.96),rgba(8,15,21,.92)),linear-gradient(90deg,rgba(88,211,164,.15),transparent 45%);position:relative;overflow:hidden}
       .hero::after{content:"";position:absolute;inset:auto -10% -35% 40%;height:220px;background:radial-gradient(circle,rgba(124,199,255,.18),transparent 60%);filter:blur(18px);pointer-events:none}
       .hero-top,.headline{display:flex;justify-content:space-between;gap:18px;align-items:start}
@@ -68,16 +116,19 @@ export class ControlRoomRenderer {
       .hero p{max-width:60ch;margin:16px 0 0;color:var(--muted);line-height:1.6}
       .hero-actions{display:grid;gap:8px;justify-items:end}
       .eyebrow,.mono{font-family:"Cascadia Code","IBM Plex Mono","Consolas",monospace;font-size:.78rem}
-      .eyebrow,.section-label,.region-title{color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
-      .button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+      .eyebrow,.section-label,.region-title,.field span{color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+      .button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer;font:inherit}
       .button:hover{border-color:rgba(124,199,255,.38)}
+      .button-primary{background:rgba(88,211,164,.12);border-color:rgba(88,211,164,.26)}
+      .button-muted{opacity:.8;cursor:default}
       .banner{display:none;margin-top:18px;padding:12px 14px;border:1px solid rgba(255,177,74,.28);background:rgba(255,177,74,.08);color:var(--warning)}
       .banner.visible{display:block}
       .kpi-strip{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
       .kpi{min-width:150px;padding:12px 14px;border-top:1px solid var(--line)}
       .kpi label,.metric-box label,.finance-box label{display:block;font-size:.73rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-      .kpi strong{font-size:1.45rem}.rail,.main,.inspector{border:1px solid var(--line);background:linear-gradient(180deg,rgba(17,27,35,.9),rgba(11,17,23,.96))}
-      .rail,.inspector{padding:18px}.main{padding:20px 24px}.business-list,.stack,.list,.roster{display:grid;gap:10px}
+      .kpi strong{font-size:1.45rem}
+      .rail,.main,.inspector{border:1px solid var(--line);background:linear-gradient(180deg,rgba(17,27,35,.9),rgba(11,17,23,.96))}
+      .rail,.inspector{padding:18px}.main{padding:20px 24px}.business-list,.stack,.list,.roster,.controls{display:grid;gap:10px}
       .business-link{display:block;border:1px solid transparent;background:rgba(255,255,255,.02);padding:14px;transition:border-color .16s ease,transform .16s ease,background .16s ease}
       .business-link:hover,.business-link[aria-current="page"]{border-color:rgba(124,199,255,.38);background:rgba(124,199,255,.08);transform:translateY(-1px)}
       .headline{align-items:end;margin-bottom:18px}.headline h2{margin:0;font-size:clamp(1.5rem,2vw,2.35rem);letter-spacing:-.035em}.muted{color:var(--muted)}
@@ -90,8 +141,12 @@ export class ControlRoomRenderer {
       .metric-box strong,.finance-box strong{display:block;margin-top:7px;font-size:1.15rem}
       .roster-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) auto;gap:14px;padding-bottom:12px}
       .tag{display:inline-flex;align-items:center;padding:4px 8px;border:1px solid var(--line);color:var(--muted);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase}
-      .detail-panel{padding:14px;border:1px solid var(--line);background:rgba(255,255,255,.03);margin-top:16px}
-      .warning-list{display:grid;gap:10px;padding-left:18px}.warning-list li{margin:0;color:var(--warning)}.inspector{position:sticky;top:22px}
+      .detail-panel{padding:14px;border:1px solid var(--line);background:rgba(255,255,255,.03);margin-top:16px;white-space:pre-wrap}
+      .warning-list{display:grid;gap:10px;padding-left:18px}.warning-list li{margin:0;color:var(--warning)}
+      .inspector{position:sticky;top:22px}
+      .task-form{display:grid;gap:12px;margin-top:10px}
+      .field{display:grid;gap:8px}
+      .field input,.field textarea,.field select{width:100%;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font:inherit;padding:10px 12px}
       @media (max-width:1220px){.shell{grid-template-columns:1fr}.inspector{position:static}.metric-grid,.finance-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       @media (max-width:760px){body{padding:12px}.hero{padding:20px}.hero-top,.headline{flex-direction:column}.metric-grid,.finance-grid{grid-template-columns:1fr}.roster-row{grid-template-columns:1fr}}
     </style>
@@ -106,7 +161,7 @@ export class ControlRoomRenderer {
             <p>${escapeHtml(snapshot.engineOverview)}</p>
           </div>
           <div class="hero-actions">
-            <div class="eyebrow">Hosted ${escapeHtml(options.appMode)} view</div>
+            <div class="eyebrow">${escapeHtml(modeLabel)}</div>
             <div class="mono" id="freshness-label">${escapeHtml(this.freshnessLabel(snapshot.health))}</div>
             ${heroAction}
           </div>
@@ -121,29 +176,54 @@ export class ControlRoomRenderer {
           <div class="kpi"><label>Collective Transfer</label><strong>${formatMoney(snapshot.executiveBudgetView?.collectiveTransfer ?? 0)}</strong></div>
         </div>
       </section>
-      <aside class="rail"><div class="region-title">Business Offices</div><div class="business-list" id="business-list"></div></aside>
+
+      <aside class="rail">
+        <div class="region-title">Business Offices</div>
+        <div class="business-list" id="business-list"></div>
+      </aside>
+
       <main class="main">
         <section class="section">
-          <div class="headline"><div><div class="mono muted" id="business-id"></div><h2 id="business-name"></h2></div><div class="status" id="business-status"></div></div>
+          <div class="headline">
+            <div>
+              <div class="mono muted" id="business-id"></div>
+              <h2 id="business-name"></h2>
+            </div>
+            <div class="status" id="business-status"></div>
+          </div>
           <p class="muted" id="business-summary"></p>
           <div class="metric-grid" id="business-metrics"></div>
         </section>
+
         <section class="section">
           <div class="region-title">Budget Monitor</div>
           <div class="finance-grid" id="finance-grid"></div>
           <div class="detail-panel" id="finance-meta"></div>
         </section>
-        <section class="section"><div class="region-title">Department Office</div><div class="roster" id="department-roster"></div></section>
-        <section class="section"><div class="region-title">Workflow Ownership</div><div class="roster" id="workflow-roster"></div></section>
+
+        <section class="section">
+          <div class="region-title">Department Office</div>
+          <div class="roster" id="department-roster"></div>
+        </section>
+
+        <section class="section">
+          <div class="region-title">Workflow Ownership</div>
+          <div class="roster" id="workflow-roster"></div>
+        </section>
       </main>
-      <aside class="inspector"><div class="stack">
-        <section><div class="region-title">Approval Queue</div><div class="list" id="approval-list"></div></section>
-        <section><div class="region-title">Task Inspector</div><div class="list" id="task-list"></div></section>
-        <section><div class="region-title">Activity Log</div><div class="list" id="audit-list"></div></section>
-      </div></aside>
+
+      <aside class="inspector">
+        <div class="stack">
+          ${controlsSection}
+          <section><div class="region-title">Approval Queue</div><div class="list" id="approval-list"></div></section>
+          <section><div class="region-title">Task Inspector</div><div class="list" id="task-list"></div></section>
+          <section><div class="region-title">Activity Log</div><div class="list" id="audit-list"></div></section>
+        </div>
+      </aside>
     </div>
+
     <script>
-      const app = ${initialPayload};
+      const app = ${payload};
       const state = { selectedBusinessId: app.selectedBusinessId, selectedDepartmentId: app.selectedDepartmentId };
       const businessList = document.getElementById("business-list");
       const businessId = document.getElementById("business-id");
@@ -160,9 +240,12 @@ export class ControlRoomRenderer {
       const auditList = document.getElementById("audit-list");
       const freshnessLabel = document.getElementById("freshness-label");
       const globalBanner = document.getElementById("global-banner");
+      const engineSyncButton = document.getElementById("engine-sync-button");
+      const businessToggleButton = document.getElementById("business-toggle-button");
+      const taskForm = document.getElementById("task-form");
+      const controlResult = document.getElementById("control-result");
 
       function routeForBusiness(id) { return "/business/" + encodeURIComponent(id); }
-      function routeForDepartment(businessId, departmentId) { return "/department/" + encodeURIComponent(businessId) + "/" + encodeURIComponent(departmentId); }
       function formatMoney(value) { return "$" + Number(value || 0).toFixed(2); }
       function toneFor(business) {
         if (app.snapshot.health.status !== "ready") return "degraded";
@@ -171,6 +254,44 @@ export class ControlRoomRenderer {
         if (business.stage === "paused") return "paused";
         if (business.stage === "scaffolded") return "blocked";
         return business.stage;
+      }
+
+      function currentBusiness() {
+        return app.snapshot.businesses.find((entry) => entry.id === state.selectedBusinessId) || app.snapshot.businesses[0];
+      }
+
+      function setControlMessage(message) {
+        if (controlResult) controlResult.textContent = message;
+      }
+
+      async function postJson(url, body) {
+        const response = await fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {})
+        });
+        const text = await response.text();
+        let parsed = null;
+        try { parsed = text ? JSON.parse(text) : null; } catch {}
+        if (!response.ok) {
+          throw new Error(parsed && parsed.message ? parsed.message : text || "Request failed.");
+        }
+        return parsed;
+      }
+
+      async function refreshSnapshot(forceMessage) {
+        try {
+          const response = await fetch(app.routes.snapshot, { credentials: "same-origin" });
+          if (!response.ok) return;
+          const next = await response.json();
+          if (next.fingerprint !== app.snapshot.fingerprint) {
+            app.snapshot = next;
+            render();
+          } else if (forceMessage) {
+            render();
+          }
+        } catch {}
       }
 
       function renderBusinessButtons() {
@@ -194,7 +315,7 @@ export class ControlRoomRenderer {
 
       function render() {
         renderBusinessButtons();
-        const business = app.snapshot.businesses.find((entry) => entry.id === state.selectedBusinessId) || app.snapshot.businesses[0];
+        const business = currentBusiness();
         if (!business) return;
         businessId.textContent = business.id;
         businessName.textContent = business.name;
@@ -213,23 +334,56 @@ export class ControlRoomRenderer {
         const auditRecords = business.recentAudits.length ? business.recentAudits : app.snapshot.recentAudits;
         auditList.innerHTML = auditRecords.map((record) => "<article class=\\"list-item\\"><strong>" + record.summary + "</strong><div class=\\"muted mono\\">" + record.eventType + " · " + record.createdAt + "</div><div class=\\"muted\\">" + (record.details[0] || "") + "</div></article>").join("") || "<div class=\\"muted\\">No audit activity has been recorded yet.</div>";
         if (app.snapshot.globalWarnings.length) { globalBanner.classList.add("visible"); globalBanner.textContent = app.snapshot.globalWarnings[0]; } else { globalBanner.classList.remove("visible"); globalBanner.textContent = ""; }
+        if (businessToggleButton) {
+          businessToggleButton.textContent = business.stage === "active" ? "Pause selected business" : "Activate selected business";
+        }
       }
 
-      async function refreshSnapshot() {
-        try {
-          const response = await fetch("/api/control-room/snapshot", { credentials: "same-origin" });
-          if (!response.ok) return;
-          const next = await response.json();
-          if (next.fingerprint !== app.snapshot.fingerprint) {
-            app.snapshot = next;
-            render();
-          }
-        } catch {}
+      async function runEngineSync() {
+        setControlMessage("Running engine sync...");
+        const result = await postJson(app.routes.engineSync, {});
+        setControlMessage("Engine synced. Recommended concurrency: " + result.report.recommendedConcurrency);
+        await refreshSnapshot(true);
+      }
+
+      async function toggleBusinessState() {
+        const business = currentBusiness();
+        if (!business) return;
+        const targetUrl = business.stage === "active" ? app.routes.pauseBusiness : app.routes.activateBusiness;
+        setControlMessage((business.stage === "active" ? "Pausing " : "Activating ") + business.name + "...");
+        await postJson(targetUrl, { businessId: business.id });
+        setControlMessage("Updated business state for " + business.name + ".");
+        await refreshSnapshot(true);
+      }
+
+      async function routeTask(event) {
+        event.preventDefault();
+        const business = currentBusiness();
+        if (!business) return;
+        const title = document.getElementById("task-title").value.trim();
+        const summary = document.getElementById("task-summary").value.trim();
+        const riskLevel = document.getElementById("task-risk").value;
+        if (!title || !summary) {
+          setControlMessage("Directive title and summary are required.");
+          return;
+        }
+        setControlMessage("Routing operator directive...");
+        const result = await postJson(app.routes.routeTask, {
+          businessId: business.id,
+          workflowId: business.workflowOwnership[0] ? business.workflowOwnership[0].workflowId : undefined,
+          title,
+          summary,
+          riskLevel
+        });
+        document.getElementById("task-title").value = "";
+        document.getElementById("task-summary").value = "";
+        setControlMessage("Directive routed to " + result.routed.envelope.departmentId + " / " + result.routed.envelope.positionId + ".");
+        await refreshSnapshot(true);
       }
 
       function connectStream() {
         if (app.appMode !== "hosted" || !window.EventSource) return;
-        const stream = new EventSource("/api/control-room/stream", { withCredentials: true });
+        const stream = new EventSource(app.routes.stream, { withCredentials: true });
         stream.addEventListener("snapshot", (event) => {
           try {
             const next = JSON.parse(event.data);
@@ -245,16 +399,23 @@ export class ControlRoomRenderer {
         });
       }
 
+      if (engineSyncButton) engineSyncButton.addEventListener("click", () => { void runEngineSync().catch((error) => setControlMessage(error.message || String(error))); });
+      if (businessToggleButton) businessToggleButton.addEventListener("click", () => { void toggleBusinessState().catch((error) => setControlMessage(error.message || String(error))); });
+      if (taskForm) taskForm.addEventListener("submit", (event) => { void routeTask(event).catch((error) => setControlMessage(error.message || String(error))); });
+
       render();
       connectStream();
-      if (app.appMode === "hosted") window.setInterval(refreshSnapshot, 30000);
+      if (app.appMode !== "static") {
+        window.setInterval(() => { void refreshSnapshot(false); }, 30000);
+      }
     </script>
   </body>
 </html>`;
   }
 
-  renderLoginPage(args: { engineName: string; message?: string; nextPath?: string }): string {
+  renderLoginPage(args: { engineName: string; message?: string; nextPath?: string; intro?: string }): string {
     const nextValue = args.nextPath ? escapeHtml(args.nextPath) : "/";
+    const intro = args.intro ?? "Use the owner password to open the control room.";
     return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapeHtml(args.engineName)} Control Room Login</title><style>
       :root{--line:rgba(176,198,214,.15);--text:#ebf1f5;--muted:#92a2af;--warning:#ffb14a}
@@ -264,7 +425,7 @@ export class ControlRoomRenderer {
       input{width:100%;min-height:48px;padding:0 14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font:inherit}button{width:100%;min-height:46px;border:1px solid var(--line);background:rgba(88,211,164,.12);color:var(--text);font:inherit;cursor:pointer}
       .message{margin-bottom:16px;padding:12px 14px;border:1px solid rgba(255,177,74,.3);background:rgba(255,177,74,.08);color:var(--warning)}
     </style></head>
-    <body><section class="panel"><div style="font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:#92a2af;">Private VPS Control Room</div><h1>${escapeHtml(args.engineName)}</h1><p>Use the owner password to open the hosted control room inside the VPS browser or an SSH tunnel.</p>${args.message ? `<div class="message">${escapeHtml(args.message)}</div>` : ""}<form method="post" action="/login"><input type="hidden" name="next" value="${nextValue}" /><label for="password">Owner password</label><input id="password" name="password" type="password" autocomplete="current-password" /><div style="height:16px;"></div><button type="submit">Open control room</button></form></section></body></html>`;
+    <body><section class="panel"><div style="font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:#92a2af;">ImonEngine Control Room</div><h1>${escapeHtml(args.engineName)}</h1><p>${escapeHtml(intro)}</p>${args.message ? `<div class="message">${escapeHtml(args.message)}</div>` : ""}<form method="post" action="/login"><input type="hidden" name="next" value="${nextValue}" /><label for="password">Owner password</label><input id="password" name="password" type="password" autocomplete="current-password" /><div style="height:16px;"></div><button type="submit">Open control room</button></form></section></body></html>`;
   }
 
   private freshnessLabel(health: ControlRoomHealthReport): string {

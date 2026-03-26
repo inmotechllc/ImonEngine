@@ -6,7 +6,7 @@ It now also has a `venture studio` layer that turns the first live store into a 
 
 It now also has a real `organization control plane`. That layer maps the engine and each business into departments, positions, workflow ownership, approval routes, memory boundaries, and office views. The office is only a view of the control plane, not the source of truth.
 
-It now also has a private hosted `control room` app on top of the control plane. The app is served from the VPS, uses an owner-only login gate, stays read-only in v1, and keeps the static dashboard export as a fallback.
+It now also has a private hosted `control room` app on top of the control plane plus a local `operator app` that connects back to the VPS. The VPS remains the execution and state layer. The local app is the normal dashboard/control surface, and the static dashboard export remains a fallback artifact.
 
 ## Managed Business Order
 
@@ -44,6 +44,7 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- office-dashboard`
 - `npm run dev -- control-room-build`
 - `npm run dev -- control-room-serve`
+- `npm run dev -- control-room-local`
 - `npm run dev -- control-room-health`
 - `npm run dev -- control-room-password-hash --password "<value>"`
 - `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
@@ -99,10 +100,11 @@ The first two businesses are marked `ready` by default because they have the lig
 5. Start the persistent VPS browser with `scripts/vps-browser-start.sh` when a virtual display session is needed.
 6. Verify Docker, Chrome, Playwright, Codex CLI, and DevTools with `scripts/vps-tooling-status.sh`.
 7. Install the hosted control room with `scripts/install-control-room-service.sh`.
-8. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
-9. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, `runtime/ops/venture-studio.json`, and the private control room.
+8. Start the local operator app with `npm run dev -- control-room-local` when you want the dashboard/offices locally instead of through noVNC.
+9. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
+10. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, `runtime/ops/venture-studio.json`, and the private control room.
 
-See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted control-room service.
+See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted/local control-room split and operator workflow.
 
 ## Gumroad Publish Flow
 

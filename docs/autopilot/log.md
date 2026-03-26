@@ -1,5 +1,12 @@
 # Autopilot Log
 
+## 2026-03-26
+
+- Added a local operator control-room app that proxies the private VPS control room over an SSH tunnel instead of depending on noVNC for normal dashboard use.
+- Added write-safe control endpoints for engine sync, business activation/pause, and routed operator directives while keeping the control plane authoritative.
+- Kept the static control-room export and the hosted VPS app on the same snapshot/rendering layer so the local UI, hosted UI, and file export stay in parity.
+- Added test coverage for hosted control-room command routes and the local proxy app login/read/write flow.
+
 ## 2026-03-23 / 2026-03-24
 
 - Launched the first Gumroad product and exposed it on the ImonEngine storefront.
