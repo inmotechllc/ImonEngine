@@ -251,3 +251,7 @@ RuntimeError: Timed out waiting for browser condition.
 
   - Queue JSON: C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.json
   - Queue Markdown: C:\AIWorkspace\Projects\Auto-Funding\runtime\ops\growth-queue.md
+- 2026-03-26T00:00:00.000Z [phase-06-continuous-store-operations] PROGRESS: Hardened finance reporting so only verified marketplace data can drive earnings, reinvestment, and collective-fund decisions.
+  - Relay classifications are now tracked as inferred and excluded from allocation logic by default.
+  - Revenue and collective reports now surface data-quality warnings instead of mixing inferred and verified signals.
+  - ImonEngine portfolio metrics now ignore inferred Relay costs and revenue when computing monthly business performance.

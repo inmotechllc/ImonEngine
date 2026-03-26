@@ -50,6 +50,7 @@
     "The VPS cron runner is now the primary scheduler for continuous store operations.",
     "The Codex desktop automation and Windows scheduled task should remain paused unless the VPS runner is down.",
     "Future scalable businesses should use one umbrella Facebook Page with multiple niche Instagram identities beneath it.",
-    "If Playwright cannot reattach to the signed-in browser, use the CDP fallback script against the active Chrome DevTools session on the VPS."
+    "If Playwright cannot reattach to the signed-in browser, use the CDP fallback script against the active Chrome DevTools session on the VPS.",
+    "Verified exports are the only allowed source for earnings, reinvestment, and cashout decisions; inferred or manual-unverified financial data must stay excluded from those calculations."
   ]
 }

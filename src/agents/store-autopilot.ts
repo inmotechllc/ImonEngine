@@ -879,13 +879,14 @@ export class StoreAutopilotAgent {
         return {
           phaseId: "phase-06-continuous-store-operations",
           status: "progress",
-          summary: "Updated the brand and collective revenue allocation reports from imported Gumroad and Relay transactions.",
+          summary: "Updated the brand and collective revenue allocation reports using verified earnings data and observed bank activity.",
           details: [
             `Revenue JSON: ${artifacts.jsonPath}`,
             `Revenue Markdown: ${artifacts.markdownPath}`,
             `Collective JSON: ${collectiveArtifacts.jsonPath}`,
             `Collective Markdown: ${collectiveArtifacts.markdownPath}`,
-            `Net revenue window: $${snapshot.netRevenue.toFixed(2)}`
+            `Verified net revenue window: $${snapshot.netRevenue.toFixed(2)}`,
+            `Excluded inferred/unverified transactions: ${snapshot.dataQuality.excludedFromAllocationCount}`
           ],
           changed: true
         };

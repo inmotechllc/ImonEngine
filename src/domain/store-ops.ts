@@ -22,6 +22,10 @@ export interface GrowthWorkItem {
 
 export type SalesTransactionSource = "gumroad" | "relay" | "manual";
 
+export type SalesTransactionVerificationStatus = "verified" | "inferred" | "manual_unverified";
+
+export type SalesTransactionClassificationMethod = "direct_export" | "description_inference" | "manual_entry";
+
 export type SalesTransactionType =
   | "sale"
   | "refund"
@@ -38,6 +42,8 @@ export interface SalesTransaction {
   businessId?: string;
   packId?: string;
   source: SalesTransactionSource;
+  verificationStatus?: SalesTransactionVerificationStatus;
+  classificationMethod?: SalesTransactionClassificationMethod;
   externalId?: string;
   type: SalesTransactionType;
   grossAmount: number;
@@ -49,6 +55,20 @@ export interface SalesTransaction {
   occurredAt: string;
   importedAt: string;
   metadata?: Record<string, string>;
+}
+
+export interface RevenueDataQualitySummary {
+  verifiedTransactions: number;
+  inferredTransactions: number;
+  manualUnverifiedTransactions: number;
+  excludedFromAllocationCount: number;
+  verifiedNetRevenue: number;
+  inferredNetRevenue: number;
+  verifiedCosts: number;
+  inferredCosts: number;
+  observedRelayDeposits: number;
+  observedRelaySpend: number;
+  warnings: string[];
 }
 
 export interface RevenueAllocationPolicy {
@@ -81,8 +101,16 @@ export interface RevenueAllocationSnapshot {
     refundBuffer: number;
     collectiveTransfer: number;
     ownerCashoutReady: boolean;
+    basedOnVerifiedDataOnly: boolean;
   };
+  dataQuality: RevenueDataQualitySummary;
   generatedAt: string;
+}
+
+export interface CollectiveFundDataQualitySummary {
+  businessesWithVerifiedRevenue: number;
+  businessesWithExcludedData: number;
+  warnings: string[];
 }
 
 export interface CollectiveFundSnapshot {
@@ -93,6 +121,8 @@ export interface CollectiveFundSnapshot {
     businessId: string;
     collectiveTransfer: number;
     growthReinvestment: number;
+    verifiedNetRevenue: number;
+    excludedFromAllocationCount: number;
   }>;
   totals: {
     collectiveTransfer: number;
@@ -102,7 +132,9 @@ export interface CollectiveFundSnapshot {
     sharedToolsReinvestmentCap: number;
     reserveAfterSharedReinvestment: number;
     ownerCashoutReady: boolean;
+    basedOnVerifiedDataOnly: boolean;
   };
+  dataQuality: CollectiveFundDataQualitySummary;
 }
 
 export interface CatalogGrowthPolicy {

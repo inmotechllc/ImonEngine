@@ -297,18 +297,28 @@ test("store ops import Gumroad and Relay data into a revenue snapshot", async ()
 
   assert.equal(gumroadResult.imported, 1);
   assert.equal(relayResult.imported, 2);
+  assert.equal(relayResult.ledgerEntriesCreated, 0);
   assert.equal(snapshot.saleCount, 1);
   assert.equal(snapshot.grossRevenue, 9);
   assert.equal(snapshot.fees, 1);
   assert.equal(snapshot.relayDeposits, 8);
   assert.equal(snapshot.relaySpend, 2.5);
+  assert.equal(snapshot.dataQuality.verifiedTransactions, 1);
+  assert.equal(snapshot.dataQuality.inferredTransactions, 2);
+  assert.equal(snapshot.dataQuality.excludedFromAllocationCount, 2);
+  assert.equal(snapshot.dataQuality.verifiedNetRevenue, 8);
+  assert.equal(snapshot.dataQuality.inferredCosts, 2.5);
+  assert.equal(snapshot.recommendations.basedOnVerifiedDataOnly, true);
   assert.equal(snapshot.recommendations.growthReinvestment, 2.8);
   assert.equal(snapshot.recommendations.collectiveTransfer, 2.8);
   assert.equal(collective.businessCount, 1);
   assert.equal(collective.totals.collectiveTransfer, 2.8);
+  assert.equal(collective.recommendations.basedOnVerifiedDataOnly, true);
+  assert.equal(collective.dataQuality.businessesWithExcludedData, 1);
   assert.ok(profiles.some((profile) => profile.platform === "facebook_page" && profile.status === "live"));
   assert.ok(profiles.some((profile) => profile.platform === "x" && profile.status === "blocked"));
   assert.ok(report.monthlyRevenue > 0);
+  assert.equal(report.monthlyCosts, 1);
 });
 
 test("venture studio builds weekly launch windows and brand blueprints from the live template", async () => {

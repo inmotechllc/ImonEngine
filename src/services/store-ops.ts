@@ -10,10 +10,12 @@ import type {
   CollectiveFundSnapshot,
   GrowthChannel,
   GrowthWorkItem,
+  RevenueDataQualitySummary,
   RevenueAllocationPolicy,
   RevenueAllocationSnapshot,
   SalesTransaction,
-  SalesTransactionType
+  SalesTransactionType,
+  SalesTransactionVerificationStatus
 } from "../domain/store-ops.js";
 import type { SocialProfileRecord, SocialProfileRole, SocialPlatform } from "../domain/social.js";
 import { writeJsonFile, writeTextFile } from "../lib/fs.js";
@@ -175,6 +177,60 @@ function rangeStart(days: number): string {
 
 function roundCurrency(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function resolveTransactionVerificationStatus(
+  transaction: Pick<SalesTransaction, "verificationStatus" | "source">
+): SalesTransactionVerificationStatus {
+  if (transaction.verificationStatus) {
+    return transaction.verificationStatus;
+  }
+
+  if (transaction.source === "gumroad") {
+    return "verified";
+  }
+
+  if (transaction.source === "relay") {
+    return "inferred";
+  }
+
+  return "manual_unverified";
+}
+
+function isVerifiedTransaction(transaction: SalesTransaction): boolean {
+  return resolveTransactionVerificationStatus(transaction) === "verified";
+}
+
+function isInferredTransaction(transaction: SalesTransaction): boolean {
+  return resolveTransactionVerificationStatus(transaction) === "inferred";
+}
+
+function isManualUnverifiedTransaction(transaction: SalesTransaction): boolean {
+  return resolveTransactionVerificationStatus(transaction) === "manual_unverified";
+}
+
+function isTrustedLedgerSource(source: string): boolean {
+  return source === "gumroad";
+}
+
+function resolveRevenueDataQuality(snapshot: RevenueAllocationSnapshot): RevenueDataQualitySummary {
+  return (
+    snapshot.dataQuality ?? {
+      verifiedTransactions: snapshot.saleCount + snapshot.refundCount,
+      inferredTransactions: 0,
+      manualUnverifiedTransactions: 0,
+      excludedFromAllocationCount: 0,
+      verifiedNetRevenue: snapshot.netRevenue,
+      inferredNetRevenue: 0,
+      verifiedCosts: snapshot.fees + snapshot.refunds,
+      inferredCosts: 0,
+      observedRelayDeposits: snapshot.relayDeposits,
+      observedRelaySpend: snapshot.relaySpend,
+      warnings: [
+        "Legacy snapshot without explicit data-quality metadata. Treat it as verified only if it came from trusted marketplace exports."
+      ]
+    }
+  );
 }
 
 function channelForAssetType(assetType: DigitalAssetType): GrowthChannel[] {
@@ -1094,6 +1150,8 @@ export class StoreOpsService {
         businessId: pack?.businessId ?? DIGITAL_ASSET_STORE_ID,
         packId: pack?.id,
         source: "gumroad",
+        verificationStatus: "verified",
+        classificationMethod: "direct_export",
         externalId: orderId,
         type,
         grossAmount: gross,
@@ -1159,6 +1217,8 @@ export class StoreOpsService {
         id: slugify(`relay-${description}-${occurredAt}-${amount}`),
         businessId,
         source: "relay",
+        verificationStatus: "inferred",
+        classificationMethod: "description_inference",
         type: inferredType,
         grossAmount: Math.abs(amount),
         feeAmount: 0,
@@ -1176,7 +1236,7 @@ export class StoreOpsService {
       await this.store.saveSalesTransaction(transaction);
       imported += 1;
 
-      if (transaction.businessId && transaction.type !== "transfer") {
+      if (transaction.businessId && transaction.type !== "transfer" && isVerifiedTransaction(transaction)) {
         const ledgerEntry: BusinessLedgerEntry = {
           id: `${transaction.id}-ledger`,
           businessId: transaction.businessId,
@@ -1200,19 +1260,29 @@ export class StoreOpsService {
     days = 30
   ): Promise<RevenueAllocationSnapshot> {
     const policy = await this.ensureAllocationPolicy(businessId);
-    const transactions = (await this.store.getSalesTransactions()).filter((transaction) => {
-      return (
-        transaction.businessId === businessId &&
-        new Date(transaction.occurredAt).getTime() >= new Date(rangeStart(days)).getTime()
-      );
-    });
+    const windowStart = rangeStart(days);
+    const windowStartTime = new Date(windowStart).getTime();
+    const allTransactions = await this.store.getSalesTransactions();
+    const transactions = allTransactions.filter(
+      (transaction) =>
+        transaction.businessId === businessId && new Date(transaction.occurredAt).getTime() >= windowStartTime
+    );
 
-    const saleTransactions = transactions.filter((transaction) => transaction.type === "sale");
-    const refundTransactions = transactions.filter((transaction) => transaction.type === "refund");
+    const verifiedTransactions = transactions.filter(isVerifiedTransaction);
+    const inferredTransactions = transactions.filter(isInferredTransaction);
+    const manualUnverifiedTransactions = transactions.filter(isManualUnverifiedTransaction);
+    const excludedFromAllocationTransactions = transactions.filter((transaction) => !isVerifiedTransaction(transaction));
+    const saleTransactions = verifiedTransactions.filter((transaction) => transaction.type === "sale");
+    const refundTransactions = verifiedTransactions.filter((transaction) => transaction.type === "refund");
     const relayTransactions = transactions.filter((transaction) => transaction.source === "relay");
 
     const grossRevenue = roundCurrency(saleTransactions.reduce((sum, item) => sum + item.grossAmount, 0));
-    const fees = roundCurrency(saleTransactions.reduce((sum, item) => sum + item.feeAmount, 0));
+    const fees = roundCurrency(
+      saleTransactions.reduce((sum, item) => sum + item.feeAmount, 0) +
+        verifiedTransactions
+          .filter((transaction) => transaction.type === "fee")
+          .reduce((sum, item) => sum + Math.max(Math.abs(item.netAmount), item.feeAmount), 0)
+    );
     const refunds = roundCurrency(refundTransactions.reduce((sum, item) => sum + Math.abs(item.netAmount), 0));
     const netRevenue = roundCurrency(Math.max(0, grossRevenue - fees - refunds));
     const relayDeposits = roundCurrency(
@@ -1221,7 +1291,66 @@ export class StoreOpsService {
     const relaySpend = roundCurrency(
       relayTransactions.filter((item) => item.netAmount < 0).reduce((sum, item) => sum + Math.abs(item.netAmount), 0)
     );
-    const unmatchedRelayTransactions = relayTransactions.filter((item) => !item.businessId).length;
+    const unmatchedRelayTransactions = allTransactions.filter(
+      (transaction) =>
+        transaction.source === "relay" &&
+        !transaction.businessId &&
+        new Date(transaction.occurredAt).getTime() >= windowStartTime
+    ).length;
+    const inferredNetRevenue = roundCurrency(
+      excludedFromAllocationTransactions
+        .filter((transaction) => transaction.type === "sale")
+        .reduce((sum, transaction) => sum + Math.max(0, transaction.netAmount), 0)
+    );
+    const verifiedCosts = roundCurrency(
+      refunds +
+        fees +
+        verifiedTransactions
+          .filter((transaction) => transaction.source === "relay" && transaction.netAmount < 0)
+          .reduce((sum, transaction) => sum + Math.abs(transaction.netAmount), 0)
+    );
+    const inferredCosts = roundCurrency(
+      excludedFromAllocationTransactions.reduce((sum, transaction) => {
+        if (transaction.type === "refund") {
+          return sum + Math.abs(transaction.netAmount);
+        }
+        if (transaction.netAmount < 0) {
+          return sum + Math.abs(transaction.netAmount);
+        }
+        return sum + Math.max(0, transaction.feeAmount);
+      }, 0)
+    );
+    const dataQuality: RevenueDataQualitySummary = {
+      verifiedTransactions: verifiedTransactions.length,
+      inferredTransactions: inferredTransactions.length,
+      manualUnverifiedTransactions: manualUnverifiedTransactions.length,
+      excludedFromAllocationCount: excludedFromAllocationTransactions.length,
+      verifiedNetRevenue: netRevenue,
+      inferredNetRevenue,
+      verifiedCosts,
+      inferredCosts,
+      observedRelayDeposits: relayDeposits,
+      observedRelaySpend: relaySpend,
+      warnings: [
+        ...(verifiedTransactions.length === 0
+          ? ["No verified marketplace transactions were available in this window, so all allocation outputs remain at zero."]
+          : []),
+        ...(excludedFromAllocationTransactions.length > 0
+          ? [
+              `Excluded ${excludedFromAllocationTransactions.length} inferred or unverified transaction(s) from earnings and reinvestment calculations.`
+            ]
+          : []),
+        ...(relayTransactions.some((transaction) => !isVerifiedTransaction(transaction))
+          ? [
+              "Relay cash movement is shown as observed bank activity only. Inferred Relay classifications are not used to calculate earnings or reinvestment."
+            ]
+          : []),
+        ...(manualUnverifiedTransactions.length > 0
+          ? ["Manual transactions remain excluded until they are replaced with verified exports or explicitly verified entries."]
+          : []),
+        "Revenue allocations and growth recommendations use verified marketplace data only."
+      ]
+    };
 
     const latestSignal =
       transactions
@@ -1231,7 +1360,7 @@ export class StoreOpsService {
     const snapshot: RevenueAllocationSnapshot = {
       id: `${businessId}-revenue-${latestSignal.replaceAll(":", "-")}`,
       businessId,
-      windowStart: rangeStart(days),
+      windowStart,
       windowEnd: nowIso(),
       saleCount: saleTransactions.length,
       refundCount: refundTransactions.length,
@@ -1262,8 +1391,10 @@ export class StoreOpsService {
               roundCurrency(netRevenue * policy.taxReserveRate) -
               roundCurrency(netRevenue * policy.reinvestmentRate) -
               roundCurrency(netRevenue * policy.refundBufferRate)
-          ) >= policy.cashoutThreshold
+          ) >= policy.cashoutThreshold,
+        basedOnVerifiedDataOnly: true
       },
+      dataQuality,
       generatedAt: latestSignal
     };
 
@@ -1277,6 +1408,7 @@ export class StoreOpsService {
   }> {
     const jsonPath = path.join(this.config.opsDir, "revenue-report.json");
     const markdownPath = path.join(this.config.opsDir, "revenue-report.md");
+    const dataQuality = resolveRevenueDataQuality(snapshot);
     await writeJsonFile(jsonPath, snapshot);
     await writeTextFile(
       markdownPath,
@@ -1286,14 +1418,27 @@ export class StoreOpsService {
         `Generated at: ${snapshot.generatedAt}`,
         `Window: ${snapshot.windowStart} -> ${snapshot.windowEnd}`,
         "",
-        `- Gross revenue: $${snapshot.grossRevenue.toFixed(2)}`,
-        `- Fees: $${snapshot.fees.toFixed(2)}`,
-        `- Refunds: $${snapshot.refunds.toFixed(2)}`,
-        `- Net revenue: $${snapshot.netRevenue.toFixed(2)}`,
-        `- Relay deposits: $${snapshot.relayDeposits.toFixed(2)}`,
-        `- Relay spend: $${snapshot.relaySpend.toFixed(2)}`,
+        "## Verified Earnings Used By Imon",
+        `- Verified gross revenue: $${snapshot.grossRevenue.toFixed(2)}`,
+        `- Verified fees: $${snapshot.fees.toFixed(2)}`,
+        `- Verified refunds: $${snapshot.refunds.toFixed(2)}`,
+        `- Verified net revenue: $${snapshot.netRevenue.toFixed(2)}`,
+        "",
+        "## Observed Bank Activity",
+        `- Relay deposits observed: $${snapshot.relayDeposits.toFixed(2)}`,
+        `- Relay spend observed: $${snapshot.relaySpend.toFixed(2)}`,
+        `- Unmatched Relay transactions in window: ${snapshot.unmatchedRelayTransactions}`,
+        "",
+        "## Data Quality Guardrails",
+        `- Verified transactions: ${dataQuality.verifiedTransactions}`,
+        `- Inferred transactions excluded from allocations: ${dataQuality.inferredTransactions}`,
+        `- Manual/unverified transactions excluded from allocations: ${dataQuality.manualUnverifiedTransactions}`,
+        `- Inferred net revenue excluded: $${dataQuality.inferredNetRevenue.toFixed(2)}`,
+        `- Inferred costs excluded: $${dataQuality.inferredCosts.toFixed(2)}`,
+        ...dataQuality.warnings.map((warning) => `- Warning: ${warning}`),
         "",
         "## Recommended Allocation",
+        `- Recommendations use verified data only: ${snapshot.recommendations.basedOnVerifiedDataOnly ? "yes" : "no"}`,
         `- Tax reserve: $${snapshot.recommendations.taxReserve.toFixed(2)}`,
         `- Brand growth reinvestment: $${snapshot.recommendations.growthReinvestment.toFixed(2)}`,
         `- Refund buffer: $${snapshot.recommendations.refundBuffer.toFixed(2)}`,
@@ -1306,6 +1451,8 @@ export class StoreOpsService {
 
   async buildCollectiveFundSnapshot(days = 30): Promise<CollectiveFundSnapshot> {
     const policy = await this.ensureAllocationPolicy(DIGITAL_ASSET_STORE_ID);
+    const policies = await this.store.getAllocationPolicies();
+    const policiesByBusiness = new Map(policies.map((candidate) => [candidate.businessId, candidate]));
     const latestByBusiness = new Map<string, RevenueAllocationSnapshot>();
     for (const snapshot of await this.store.getAllocationSnapshots()) {
       if (new Date(snapshot.generatedAt).getTime() < new Date(rangeStart(days)).getTime()) {
@@ -1317,11 +1464,23 @@ export class StoreOpsService {
       }
     }
 
-    const contributingBusinesses = [...latestByBusiness.values()].map((snapshot) => ({
-      businessId: snapshot.businessId,
-      collectiveTransfer: snapshot.recommendations.collectiveTransfer,
-      growthReinvestment: snapshot.recommendations.growthReinvestment
-    }));
+    const contributingBusinesses = [...latestByBusiness.values()].map((snapshot) => {
+      const dataQuality = resolveRevenueDataQuality(snapshot);
+      const businessPolicy = policiesByBusiness.get(snapshot.businessId) ?? policy;
+      const taxReserve = roundCurrency(dataQuality.verifiedNetRevenue * businessPolicy.taxReserveRate);
+      const growthReinvestment = roundCurrency(dataQuality.verifiedNetRevenue * businessPolicy.reinvestmentRate);
+      const refundBuffer = roundCurrency(dataQuality.verifiedNetRevenue * businessPolicy.refundBufferRate);
+      const collectiveTransfer = roundCurrency(
+        Math.max(0, dataQuality.verifiedNetRevenue - taxReserve - growthReinvestment - refundBuffer)
+      );
+      return {
+        businessId: snapshot.businessId,
+        collectiveTransfer,
+        growthReinvestment,
+        verifiedNetRevenue: dataQuality.verifiedNetRevenue,
+        excludedFromAllocationCount: dataQuality.excludedFromAllocationCount
+      };
+    });
     const totalCollectiveTransfer = roundCurrency(
       contributingBusinesses.reduce((sum, item) => sum + item.collectiveTransfer, 0)
     );
@@ -1344,7 +1503,20 @@ export class StoreOpsService {
       recommendations: {
         sharedToolsReinvestmentCap,
         reserveAfterSharedReinvestment,
-        ownerCashoutReady: reserveAfterSharedReinvestment >= policy.cashoutThreshold
+        ownerCashoutReady: reserveAfterSharedReinvestment >= policy.cashoutThreshold,
+        basedOnVerifiedDataOnly: true
+      },
+      dataQuality: {
+        businessesWithVerifiedRevenue: contributingBusinesses.filter((item) => item.verifiedNetRevenue > 0).length,
+        businessesWithExcludedData: contributingBusinesses.filter((item) => item.excludedFromAllocationCount > 0).length,
+        warnings: [
+          ...(contributingBusinesses.some((item) => item.excludedFromAllocationCount > 0)
+            ? [
+                "Collective transfers exclude inferred or unverified business-level transactions until those records are verified."
+              ]
+            : []),
+          "Shared tool reinvestment caps are computed from verified business transfers only."
+        ]
       }
     };
     await this.store.saveCollectiveSnapshot(snapshot);
@@ -1366,14 +1538,20 @@ export class StoreOpsService {
         "## Brand Contributions",
         ...snapshot.contributingBusinesses.map(
           (item) =>
-            `- ${item.businessId}: collective transfer $${item.collectiveTransfer.toFixed(2)}, growth reinvestment $${item.growthReinvestment.toFixed(2)}`
+            `- ${item.businessId}: verified net revenue $${item.verifiedNetRevenue.toFixed(2)}, collective transfer $${item.collectiveTransfer.toFixed(2)}, growth reinvestment $${item.growthReinvestment.toFixed(2)}, excluded transactions ${item.excludedFromAllocationCount}`
         ),
         "",
         "## Collective Totals",
         `- Total collective transfer: $${snapshot.totals.collectiveTransfer.toFixed(2)}`,
         `- Total brand growth reinvestment: $${snapshot.totals.growthReinvestment.toFixed(2)}`,
         "",
+        "## Data Quality Guardrails",
+        `- Businesses with verified revenue: ${snapshot.dataQuality.businessesWithVerifiedRevenue}`,
+        `- Businesses with excluded inferred/unverified data: ${snapshot.dataQuality.businessesWithExcludedData}`,
+        ...snapshot.dataQuality.warnings.map((warning) => `- Warning: ${warning}`),
+        "",
         "## Shared Reinvestment Policy",
+        `- Recommendations use verified data only: ${snapshot.recommendations.basedOnVerifiedDataOnly ? "yes" : "no"}`,
         `- Max shared reinvestment into cross-business tools: $${snapshot.recommendations.sharedToolsReinvestmentCap.toFixed(2)}`,
         `- Reserve remaining after shared reinvestment: $${snapshot.recommendations.reserveAfterSharedReinvestment.toFixed(2)}`,
         `- Collective cashout threshold reached: ${snapshot.recommendations.ownerCashoutReady ? "yes" : "no"}`

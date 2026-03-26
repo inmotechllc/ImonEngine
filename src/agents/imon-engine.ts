@@ -22,6 +22,21 @@ function sortBusinesses(businesses: ManagedBusiness[]): ManagedBusiness[] {
   return [...businesses].sort((left, right) => left.launchPriority - right.launchPriority);
 }
 
+function isVerifiedFinancialSignal(transaction: {
+  source: string;
+  verificationStatus?: string;
+}): boolean {
+  if (transaction.verificationStatus) {
+    return transaction.verificationStatus === "verified";
+  }
+
+  return transaction.source === "gumroad";
+}
+
+function isTrustedLedgerSource(source: string): boolean {
+  return source === "gumroad";
+}
+
 export class ImonEngineAgent {
   private readonly accountOps: AccountOpsAgent;
 
@@ -358,10 +373,11 @@ export class ImonEngineAgent {
           transaction.businessId === business.id &&
           new Date(transaction.occurredAt).getTime() >= last30Days
       );
-      const salesRevenue = salesWindow
+      const verifiedSalesWindow = salesWindow.filter(isVerifiedFinancialSignal);
+      const salesRevenue = verifiedSalesWindow
         .filter((transaction) => transaction.type === "sale")
         .reduce((sum, transaction) => sum + Math.max(0, transaction.netAmount), 0);
-      const salesCosts = salesWindow.reduce((sum, transaction) => {
+      const salesCosts = verifiedSalesWindow.reduce((sum, transaction) => {
         if (transaction.type === "refund") {
           return sum + Math.abs(transaction.netAmount);
         }
@@ -370,18 +386,21 @@ export class ImonEngineAgent {
         }
         return sum + Math.max(0, transaction.feeAmount);
       }, 0);
+      const trustedLedger = ledger.filter(
+        (entry) => entry.businessId === business.id && isTrustedLedgerSource(entry.source)
+      );
 
       const revenue =
-        salesWindow.length > 0
+        verifiedSalesWindow.length > 0
           ? salesRevenue
-          : ledger
-              .filter((entry) => entry.businessId === business.id && entry.type === "revenue")
+          : trustedLedger
+              .filter((entry) => entry.type === "revenue")
               .reduce((sum, entry) => sum + entry.amount, 0);
       const costs =
-        salesWindow.length > 0
+        verifiedSalesWindow.length > 0
           ? salesCosts
-          : ledger
-              .filter((entry) => entry.businessId === business.id && entry.type === "cost")
+          : trustedLedger
+              .filter((entry) => entry.type === "cost")
               .reduce((sum, entry) => sum + entry.amount, 0);
 
       const next =
@@ -400,8 +419,8 @@ export class ImonEngineAgent {
               ...business,
               metrics: {
                 ...business.metrics,
-                currentMonthlyRevenue: revenue > 0 ? revenue : business.metrics.currentMonthlyRevenue,
-                currentMonthlyCosts: costs > 0 ? costs : business.metrics.currentMonthlyCosts,
+                currentMonthlyRevenue: revenue,
+                currentMonthlyCosts: costs,
                 activeWorkItems:
                   business.id === "imon-digital-asset-store"
                     ? assetPacks.filter((pack) => pack.status !== "published").length

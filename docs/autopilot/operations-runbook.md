@@ -42,6 +42,9 @@
 
 - Brand revenue flows into a brand growth reinvestment bucket and a collective ImonEngine transfer bucket.
 - Shared ImonEngine tool spend should never exceed the same reinvestment rate used for brand growth.
+- Verified marketplace/export data is the only data Imon should use for earnings, growth budgets, reinvestment, and cashout decisions.
+- Relay transactions are treated as observed cash movement by default. If their business attribution or classification is inferred, they must stay excluded from earnings and reinvestment calculations.
+- Manual or guessed financial entries must remain excluded until they are replaced with verified exports or an explicitly verified import path.
 - Revenue and collective reports live in:
   - `runtime/ops/revenue-report.json`
   - `runtime/ops/revenue-report.md`
