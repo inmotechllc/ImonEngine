@@ -15,8 +15,10 @@ import { FileStore } from "./storage/store.js";
 import { AIClient } from "./openai/client.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
 import { PodStudioService } from "./services/pod-studio.js";
+import { OfficeDashboardService } from "./services/office-dashboard.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
+import { exists, readTextFile } from "./lib/fs.js";
 
 async function setupWorkspace() {
   const root = await mkdtemp(path.join(os.tmpdir(), "auto-funding-"));
@@ -38,6 +40,7 @@ async function setupWorkspace() {
   const storeOps = new StoreOpsService(config, store);
   const ventureStudio = new VentureStudioService(config, store);
   const podStudio = new PodStudioService(config, store);
+  const officeDashboard = new OfficeDashboardService(config, store);
 
   return {
     root,
@@ -51,7 +54,8 @@ async function setupWorkspace() {
     digitalAssetFactory,
     storeOps,
     ventureStudio,
-    podStudio
+    podStudio,
+    officeDashboard
   };
 }
 
@@ -182,10 +186,11 @@ test("ImonEngine seeds the portfolio and produces a resource-aware report", asyn
 });
 
 test("organization control plane sync creates blueprints, workflow ownership, and office views", async () => {
-  const { store, imonEngine } = await setupWorkspace();
+  const { store, imonEngine, officeDashboard } = await setupWorkspace();
   await imonEngine.bootstrap();
 
   const officeSnapshot = await imonEngine.syncOrganization();
+  const dashboardArtifacts = await officeDashboard.writeDashboard();
   const engineBlueprint = await store.getOrganizationBlueprint("org-engine-imon-engine");
   const digitalStoreBlueprint = await store.getOrganizationBlueprint(
     "org-business-imon-digital-asset-store"
@@ -204,6 +209,11 @@ test("organization control plane sync creates blueprints, workflow ownership, an
   assert.ok(
     officeSnapshot.businessViews.some((view) => view.businessId === "imon-digital-asset-store")
   );
+  assert.equal(await exists(dashboardArtifacts.htmlPath), true);
+  const dashboardHtml = await readTextFile(dashboardArtifacts.htmlPath);
+  assert.ok(dashboardHtml.includes("ImonEngine"));
+  assert.ok(dashboardHtml.includes("Business Offices"));
+  assert.ok(dashboardHtml.includes("Task Inspector"));
 });
 
 test("digital asset factory seeds Gumroad starter packs", async () => {

@@ -16,6 +16,7 @@ import { ImonEngineAgent } from "./agents/imon-engine.js";
 import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { StoreAutopilotAgent } from "./agents/store-autopilot.js";
 import { buildAgencySite } from "./services/agency-site.js";
+import { OfficeDashboardService } from "./services/office-dashboard.js";
 import { PodStudioService } from "./services/pod-studio.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
@@ -97,6 +98,7 @@ function usage(): string {
     "  npm run dev -- org-sync",
     "  npm run dev -- org-report [--business <id>]",
     "  npm run dev -- office-views",
+    "  npm run dev -- office-dashboard",
     "  npm run dev -- route-task --title <text> --summary <text> [--workflow <id>] [--business <id>] [--risk low|medium|high]",
     "  npm run dev -- activate-business --business imon-digital-asset-store",
     "  npm run dev -- pause-business --business imon-digital-asset-store",
@@ -142,6 +144,7 @@ async function buildContext() {
   const storeOps = new StoreOpsService(config, store);
   const ventureStudio = new VentureStudioService(config, store);
   const podStudio = new PodStudioService(config, store);
+  const officeDashboard = new OfficeDashboardService(config, store);
 
   return {
     config,
@@ -157,7 +160,8 @@ async function buildContext() {
     storeAutopilot,
     storeOps,
     ventureStudio,
-    podStudio
+    podStudio,
+    officeDashboard
   };
 }
 
@@ -235,7 +239,8 @@ async function main(): Promise<void> {
     storeAutopilot,
     storeOps,
     ventureStudio,
-    podStudio
+    podStudio,
+    officeDashboard
   } =
     await buildContext();
 
@@ -383,6 +388,13 @@ async function main(): Promise<void> {
       await imonEngine.sync();
       const snapshot = await imonEngine.getLatestOfficeSnapshot();
       console.log(JSON.stringify(snapshot ?? null, null, 2));
+      break;
+    }
+    case "office-dashboard": {
+      await imonEngine.sync();
+      const artifacts = await officeDashboard.writeDashboard();
+      logger.info(`Office dashboard refreshed at ${artifacts.htmlPath}.`);
+      console.log(JSON.stringify(artifacts, null, 2));
       break;
     }
     case "route-task": {

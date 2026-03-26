@@ -259,3 +259,6 @@ RuntimeError: Timed out waiting for browser condition.
   - Engine and business sync now emit departments, positions, workflow ownership, approval routes, memory namespace policies, and office-view snapshots.
   - Venture blueprints now include org structure summaries instead of only loose agent-role lists.
   - Store and POD roadblock emails now include the owning business, department, position, and workflow from the control plane.
+- 2026-03-26T00:00:00.000Z [phase-06-continuous-store-operations] PROGRESS: Added the first control-room UI backed by the control plane.
+  - `engine-sync` now regenerates a self-contained dashboard at `runtime/ops/control-room/index.html`.
+  - The dashboard uses the latest office snapshot, approvals, task envelopes, audit records, and engine report instead of inventing separate UI state.

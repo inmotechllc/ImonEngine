@@ -85,6 +85,7 @@ Examples:
 - `npm run dev -- org-report`
 - `npm run dev -- org-report --business <id>`
 - `npm run dev -- office-views`
+- `npm run dev -- office-dashboard`
 - `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
 
 ## Runtime Artifacts
@@ -93,8 +94,19 @@ Examples:
 - `runtime/ops/org-control-plane.md`
 - `runtime/ops/office-views.json`
 - `runtime/ops/office-views.md`
+- `runtime/ops/control-room/index.html`
+- `runtime/ops/control-room/data.json`
 - `runtime/ops/org-blueprints/<blueprint-id>.json`
 - `runtime/ops/org-blueprints/<blueprint-id>.md`
+
+## Control Room
+
+The first office UI pass is a self-contained control-room dashboard generated from the live control-plane state.
+
+- It is backed by the latest engine report, office snapshot, approvals, task envelopes, and audit records.
+- It does not invent its own state.
+- It is written automatically during `engine-sync`, and can be refreshed directly with `office-dashboard`.
+- Use it as an operator surface for executive view, business offices, department context, approvals, tasks, and recent activity.
 
 ## Current Migration Target
 

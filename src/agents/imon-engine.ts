@@ -15,6 +15,7 @@ import { FileStore } from "../storage/store.js";
 import { AccountOpsAgent } from "./account-ops.js";
 import { SystemMonitorService } from "../services/system-monitor.js";
 import { OrganizationControlPlaneService } from "../services/organization-control-plane.js";
+import { OfficeDashboardService } from "../services/office-dashboard.js";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -46,6 +47,8 @@ export class ImonEngineAgent {
 
   private readonly orgControlPlane: OrganizationControlPlaneService;
 
+  private readonly officeDashboard: OfficeDashboardService;
+
   constructor(
     private readonly config: AppConfig,
     private readonly store: FileStore
@@ -53,6 +56,7 @@ export class ImonEngineAgent {
     this.accountOps = new AccountOpsAgent(config, store);
     this.monitor = new SystemMonitorService(config);
     this.orgControlPlane = new OrganizationControlPlaneService(config, store);
+    this.officeDashboard = new OfficeDashboardService(config, store);
   }
 
   async bootstrap(): Promise<EngineOverviewReport> {
@@ -79,6 +83,7 @@ export class ImonEngineAgent {
     const report = this.buildOverviewReport(nextEngine, businesses, snapshot);
     await this.store.saveEngineReport(report);
     await this.orgControlPlane.sync(nextEngine, businesses);
+    await this.officeDashboard.writeDashboard();
     await writeJsonFile(path.join(this.config.reportDir, `${report.id}.json`), report);
     await writeJsonFile(path.join(this.config.opsDir, "engine-overview.json"), report);
     await writeJsonFile(path.join(this.config.opsDir, "business-roster.json"), businesses);
@@ -179,6 +184,7 @@ export class ImonEngineAgent {
     const businesses = await this.getPortfolioBusinesses();
     const engine = await this.ensureEngineState();
     await this.orgControlPlane.sync(engine, businesses);
+    await this.officeDashboard.writeDashboard();
 
     await writeTextFile(
       bootstrapScriptPath,
@@ -258,6 +264,10 @@ export class ImonEngineAgent {
 
   async getLatestOfficeSnapshot(): Promise<OfficeViewSnapshot | undefined> {
     return this.orgControlPlane.getLatestOfficeSnapshot();
+  }
+
+  async writeOfficeDashboard() {
+    return this.officeDashboard.writeDashboard();
   }
 
   private async ensureEngineState(): Promise<ImonEngineState> {

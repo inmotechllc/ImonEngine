@@ -39,6 +39,7 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- org-report`
 - `npm run dev -- org-report --business <id>`
 - `npm run dev -- office-views`
+- `npm run dev -- office-dashboard`
 - `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
 - `npm run dev -- autopilot-run-once`
 - `npm run dev -- activate-business --business <id>`
@@ -70,6 +71,7 @@ The first two businesses are marked `ready` by default because they have the lig
 - `runtime/ops/venture-blueprints/`
 - `runtime/ops/org-control-plane.json`
 - `runtime/ops/office-views.json`
+- `runtime/ops/control-room/index.html`
 - `runtime/ops/org-blueprints/`
 
 ## Venture Rules
