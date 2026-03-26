@@ -20,4 +20,7 @@ EOF
 
 chmod 644 "$CRON_FILE"
 service cron reload || systemctl reload cron || true
+if [ -x "$REPO_ROOT/scripts/install-control-room-service.sh" ]; then
+  "$REPO_ROOT/scripts/install-control-room-service.sh" || echo "Control-room service install skipped."
+fi
 echo "Installed VPS autopilot cron at $CRON_FILE"

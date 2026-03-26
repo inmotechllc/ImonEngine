@@ -59,6 +59,15 @@ export interface AppConfig {
       cashoutThreshold: number;
     };
   };
+  controlRoom: {
+    bindHost: string;
+    port: number;
+    sessionSecret?: string;
+    passwordHash?: string;
+    sessionTtlHours: number;
+    staleThresholdMinutes: number;
+    serviceLogPath: string;
+  };
   smtp?: {
     host: string;
     port: number;
@@ -82,6 +91,7 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
   const notificationDir = path.join(outputDir, "notifications");
   const opsDir = path.join(outputDir, "ops");
   const assetStoreDir = path.join(outputDir, "asset-store");
+  const controlRoomDir = path.join(opsDir, "control-room");
 
   await Promise.all([
     ensureDir(outputDir),
@@ -90,7 +100,8 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
     ensureDir(reportDir),
     ensureDir(notificationDir),
     ensureDir(opsDir),
-    ensureDir(assetStoreDir)
+    ensureDir(assetStoreDir),
+    ensureDir(controlRoomDir)
   ]);
 
   const smtpHost = process.env.SMTP_HOST;
@@ -170,6 +181,17 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
         refundBufferRate: Number(process.env.STORE_REFUND_BUFFER_RATE ?? "0.1"),
         cashoutThreshold: Number(process.env.STORE_CASHOUT_THRESHOLD ?? "100")
       }
+    },
+    controlRoom: {
+      bindHost: process.env.CONTROL_ROOM_BIND_HOST ?? "127.0.0.1",
+      port: Number(process.env.CONTROL_ROOM_PORT ?? "4177"),
+      sessionSecret: process.env.CONTROL_ROOM_SESSION_SECRET,
+      passwordHash: process.env.CONTROL_ROOM_PASSWORD_HASH,
+      sessionTtlHours: Number(process.env.CONTROL_ROOM_SESSION_TTL_HOURS ?? "12"),
+      staleThresholdMinutes: Number(process.env.CONTROL_ROOM_STALE_THRESHOLD_MINUTES ?? "120"),
+      serviceLogPath:
+        process.env.CONTROL_ROOM_SERVICE_LOG_PATH ??
+        path.join(controlRoomDir, "server.log")
     },
     smtp,
     cloudflare:

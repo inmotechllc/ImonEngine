@@ -3,6 +3,7 @@ import { DEFAULT_AGENCY_PROFILE, DEFAULT_OFFERS } from "./domain/defaults.js";
 import type { ClientJob, LeadRecord, OfferConfig } from "./domain/contracts.js";
 import { loadConfig } from "./config.js";
 import { Logger } from "./lib/logger.js";
+import { hashControlRoomPassword } from "./lib/control-room-auth.js";
 import { readJsonFile, readTextFile } from "./lib/fs.js";
 import { slugify } from "./lib/text.js";
 import { AIClient } from "./openai/client.js";
@@ -17,6 +18,7 @@ import { DigitalAssetFactoryAgent } from "./agents/digital-asset-factory.js";
 import { StoreAutopilotAgent } from "./agents/store-autopilot.js";
 import { buildAgencySite } from "./services/agency-site.js";
 import { OfficeDashboardService } from "./services/office-dashboard.js";
+import { ControlRoomServer } from "./services/control-room-server.js";
 import { PodStudioService } from "./services/pod-studio.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
@@ -99,6 +101,10 @@ function usage(): string {
     "  npm run dev -- org-report [--business <id>]",
     "  npm run dev -- office-views",
     "  npm run dev -- office-dashboard",
+    "  npm run dev -- control-room-build",
+    "  npm run dev -- control-room-serve",
+    "  npm run dev -- control-room-health",
+    "  npm run dev -- control-room-password-hash --password <value>",
     "  npm run dev -- route-task --title <text> --summary <text> [--workflow <id>] [--business <id>] [--risk low|medium|high]",
     "  npm run dev -- activate-business --business imon-digital-asset-store",
     "  npm run dev -- pause-business --business imon-digital-asset-store",
@@ -145,6 +151,7 @@ async function buildContext() {
   const ventureStudio = new VentureStudioService(config, store);
   const podStudio = new PodStudioService(config, store);
   const officeDashboard = new OfficeDashboardService(config, store);
+  const controlRoomServer = new ControlRoomServer(config, store);
 
   return {
     config,
@@ -161,7 +168,8 @@ async function buildContext() {
     storeOps,
     ventureStudio,
     podStudio,
-    officeDashboard
+    officeDashboard,
+    controlRoomServer
   };
 }
 
@@ -240,7 +248,8 @@ async function main(): Promise<void> {
     storeOps,
     ventureStudio,
     podStudio,
-    officeDashboard
+    officeDashboard,
+    controlRoomServer
   } =
     await buildContext();
 
@@ -395,6 +404,34 @@ async function main(): Promise<void> {
       const artifacts = await officeDashboard.writeDashboard();
       logger.info(`Office dashboard refreshed at ${artifacts.htmlPath}.`);
       console.log(JSON.stringify(artifacts, null, 2));
+      break;
+    }
+    case "control-room-build": {
+      await imonEngine.sync();
+      const artifacts = await officeDashboard.writeDashboard();
+      logger.info(`Control-room export refreshed at ${artifacts.htmlPath}.`);
+      console.log(JSON.stringify(artifacts, null, 2));
+      break;
+    }
+    case "control-room-serve": {
+      await imonEngine.sync();
+      const address = await controlRoomServer.listen();
+      logger.info(
+        `Control room listening on http://${address.host}:${address.port} (private VPS mode).`
+      );
+      break;
+    }
+    case "control-room-health": {
+      const health = await controlRoomServer.getHealth();
+      console.log(JSON.stringify(health, null, 2));
+      break;
+    }
+    case "control-room-password-hash": {
+      const password = String(flags.password ?? "");
+      if (!password) {
+        throw new Error("Missing --password for control-room-password-hash.");
+      }
+      console.log(await hashControlRoomPassword(password));
       break;
     }
     case "route-task": {

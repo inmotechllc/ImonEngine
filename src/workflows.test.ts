@@ -15,10 +15,13 @@ import { FileStore } from "./storage/store.js";
 import { AIClient } from "./openai/client.js";
 import { ReplyHandlerAgent } from "./agents/reply-handler.js";
 import { PodStudioService } from "./services/pod-studio.js";
+import { ControlRoomServer } from "./services/control-room-server.js";
+import { ControlRoomSnapshotService } from "./services/control-room-snapshot.js";
 import { OfficeDashboardService } from "./services/office-dashboard.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
-import { exists, readTextFile } from "./lib/fs.js";
+import { hashControlRoomPassword } from "./lib/control-room-auth.js";
+import { exists, readJsonFile, readTextFile } from "./lib/fs.js";
 
 async function setupWorkspace() {
   const root = await mkdtemp(path.join(os.tmpdir(), "auto-funding-"));
@@ -214,6 +217,109 @@ test("organization control plane sync creates blueprints, workflow ownership, an
   assert.ok(dashboardHtml.includes("ImonEngine"));
   assert.ok(dashboardHtml.includes("Business Offices"));
   assert.ok(dashboardHtml.includes("Task Inspector"));
+});
+
+test("control-room snapshot and static export share the same source payload", async () => {
+  const { imonEngine, officeDashboard, config, store } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  await imonEngine.sync();
+
+  const snapshotService = new ControlRoomSnapshotService(config, store);
+  const liveSnapshot = await snapshotService.buildSnapshot();
+  const artifacts = await officeDashboard.writeDashboard();
+  const exportedSnapshot = await readJsonFile(artifacts.dataPath, null as any);
+
+  assert.equal(exportedSnapshot.engineId, liveSnapshot.engineId);
+  assert.equal(exportedSnapshot.fingerprint, liveSnapshot.fingerprint);
+  assert.equal(exportedSnapshot.businesses.length, liveSnapshot.businesses.length);
+  assert.equal(exportedSnapshot.executiveView.id, liveSnapshot.executiveView.id);
+});
+
+test("control-room server enforces auth and serves page, api, and stream routes", async () => {
+  const { imonEngine, config, store } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  await imonEngine.sync();
+
+  config.controlRoom.bindHost = "127.0.0.1";
+  config.controlRoom.port = 0;
+  config.controlRoom.sessionSecret = "test-control-room-secret";
+  config.controlRoom.passwordHash = await hashControlRoomPassword("control-room-pass");
+
+  const server = new ControlRoomServer(config, store);
+  const address = await server.listen();
+  const baseUrl = `http://${address.host}:${address.port}`;
+
+  const unauthenticated = await fetch(`${baseUrl}/`, {
+    redirect: "manual"
+  });
+  assert.equal(unauthenticated.status, 303);
+  assert.equal(unauthenticated.headers.get("location")?.startsWith("/login"), true);
+
+  const loginPage = await fetch(`${baseUrl}/login`);
+  assert.equal(loginPage.status, 200);
+  assert.match(await loginPage.text(), /Owner password/i);
+
+  const login = await fetch(`${baseUrl}/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      password: "control-room-pass",
+      next: "/"
+    })
+  });
+  assert.equal(login.status, 303);
+  const cookie = login.headers.get("set-cookie");
+  assert.ok(cookie?.includes("control_room_session="));
+
+  const businessPage = await fetch(`${baseUrl}/business/imon-digital-asset-store`, {
+    headers: {
+      cookie: cookie ?? ""
+    }
+  });
+  assert.equal(businessPage.status, 200);
+  assert.match(await businessPage.text(), /ImonEngine Control Room/i);
+
+  const snapshotResponse = await fetch(`${baseUrl}/api/control-room/snapshot`, {
+    headers: {
+      cookie: cookie ?? ""
+    }
+  });
+  assert.equal(snapshotResponse.status, 200);
+  const snapshot = await snapshotResponse.json();
+  assert.equal(snapshot.engineName, "ImonEngine");
+
+  const healthResponse = await fetch(`${baseUrl}/api/control-room/health`);
+  assert.equal(healthResponse.status, 200);
+  const health = await healthResponse.json();
+  assert.equal(health.authConfigured, true);
+
+  const streamResponse = await fetch(`${baseUrl}/api/control-room/stream`, {
+    headers: {
+      cookie: cookie ?? ""
+    }
+  });
+  assert.equal(streamResponse.status, 200);
+  const reader = streamResponse.body?.getReader();
+  const firstChunk = await reader?.read();
+  const textChunk = firstChunk?.value
+    ? Buffer.from(firstChunk.value).toString("utf8")
+    : "";
+  assert.match(textChunk, /event: snapshot/);
+  await reader?.cancel();
+  await server.close();
+});
+
+test("control-room health degrades cleanly when the office snapshot is missing", async () => {
+  const { config, store } = await setupWorkspace();
+  const snapshotService = new ControlRoomSnapshotService(config, store);
+  const health = await snapshotService.getHealthReport();
+
+  assert.equal(health.status, "degraded");
+  assert.equal(health.snapshotReady, false);
+  assert.ok(health.issues.some((issue) => issue.includes("office snapshot")));
 });
 
 test("digital asset factory seeds Gumroad starter packs", async () => {

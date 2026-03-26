@@ -86,6 +86,9 @@ Examples:
 - `npm run dev -- org-report --business <id>`
 - `npm run dev -- office-views`
 - `npm run dev -- office-dashboard`
+- `npm run dev -- control-room-build`
+- `npm run dev -- control-room-serve`
+- `npm run dev -- control-room-health`
 - `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
 
 ## Runtime Artifacts
@@ -101,12 +104,31 @@ Examples:
 
 ## Control Room
 
-The first office UI pass is a self-contained control-room dashboard generated from the live control-plane state.
+The first office UI pass now has two delivery modes:
 
-- It is backed by the latest engine report, office snapshot, approvals, task envelopes, and audit records.
-- It does not invent its own state.
-- It is written automatically during `engine-sync`, and can be refreshed directly with `office-dashboard`.
-- Use it as an operator surface for executive view, business offices, department context, approvals, tasks, and recent activity.
+- a static export at `runtime/ops/control-room/index.html`
+- a private hosted app served from the VPS
+
+Both modes are backed by the same shared control-room snapshot:
+
+- latest engine report
+- latest office snapshot
+- approvals
+- task envelopes
+- audit records
+- revenue allocation and collective-fund context when available
+
+The hosted app adds:
+
+- owner-only login
+- JSON endpoints
+- SSE-based live refresh
+- freshness and stale-data reporting
+- private VPS service hosting
+
+It still does not invent or mutate its own business state.
+
+See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted service and VPS setup.
 
 ## Current Migration Target
 

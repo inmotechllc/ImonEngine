@@ -262,3 +262,7 @@ RuntimeError: Timed out waiting for browser condition.
 - 2026-03-26T00:00:00.000Z [phase-06-continuous-store-operations] PROGRESS: Added the first control-room UI backed by the control plane.
   - `engine-sync` now regenerates a self-contained dashboard at `runtime/ops/control-room/index.html`.
   - The dashboard uses the latest office snapshot, approvals, task envelopes, audit records, and engine report instead of inventing separate UI state.
+- 2026-03-26T00:00:00.000Z [phase-06-continuous-store-operations] PROGRESS: Promoted the control room from a generated artifact into a private VPS-hosted app.
+  - Added a shared control-room snapshot layer so the hosted app and static export use the same source data and fingerprint.
+  - Added a minimal Node-hosted control-room server with owner login, JSON routes, health reporting, and SSE refresh.
+  - Added VPS service scripts so the control room can run persistently and restart after repo syncs.

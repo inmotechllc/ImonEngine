@@ -16,6 +16,7 @@ mkdir -p "$LOG_DIR"
   else
     printf '[%s] Skipped git pull because tracked local changes are present.\n' "$(date -Iseconds)"
   fi
+  npm run build
   npm run dev -- autopilot-run-once
   if [ -d "$POD_REFERENCE_DIR" ]; then
     npm run dev -- pod-plan --business imon-pod-store --reference-dir "$POD_REFERENCE_DIR" --notify-roadblocks
@@ -25,5 +26,8 @@ mkdir -p "$LOG_DIR"
   npm run dev -- engine-sync
   npm run dev -- social-profiles
   npm run dev -- vps-artifacts
+  if systemctl list-unit-files imon-engine-control-room.service >/dev/null 2>&1; then
+    systemctl restart imon-engine-control-room.service || true
+  fi
   printf '[%s] VPS autopilot work unit finished.\n' "$(date -Iseconds)"
 } >>"$LOG_PATH" 2>&1

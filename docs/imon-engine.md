@@ -6,6 +6,8 @@ It now also has a `venture studio` layer that turns the first live store into a 
 
 It now also has a real `organization control plane`. That layer maps the engine and each business into departments, positions, workflow ownership, approval routes, memory boundaries, and office views. The office is only a view of the control plane, not the source of truth.
 
+It now also has a private hosted `control room` app on top of the control plane. The app is served from the VPS, uses an owner-only login gate, stays read-only in v1, and keeps the static dashboard export as a fallback.
+
 ## Managed Business Order
 
 1. Digital asset store
@@ -40,6 +42,10 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- org-report --business <id>`
 - `npm run dev -- office-views`
 - `npm run dev -- office-dashboard`
+- `npm run dev -- control-room-build`
+- `npm run dev -- control-room-serve`
+- `npm run dev -- control-room-health`
+- `npm run dev -- control-room-password-hash --password "<value>"`
 - `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
 - `npm run dev -- autopilot-run-once`
 - `npm run dev -- activate-business --business <id>`
@@ -72,6 +78,7 @@ The first two businesses are marked `ready` by default because they have the lig
 - `runtime/ops/org-control-plane.json`
 - `runtime/ops/office-views.json`
 - `runtime/ops/control-room/index.html`
+- `runtime/ops/control-room/data.json`
 - `runtime/ops/org-blueprints/`
 
 ## Venture Rules
@@ -91,8 +98,11 @@ The first two businesses are marked `ready` by default because they have the lig
 4. Run `scripts/install-cron.sh` to keep `engine-sync` scheduled.
 5. Start the persistent VPS browser with `scripts/vps-browser-start.sh` when a virtual display session is needed.
 6. Verify Docker, Chrome, Playwright, Codex CLI, and DevTools with `scripts/vps-tooling-status.sh`.
-7. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
-8. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, and `runtime/ops/venture-studio.json`.
+7. Install the hosted control room with `scripts/install-control-room-service.sh`.
+8. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
+9. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, `runtime/ops/venture-studio.json`, and the private control room.
+
+See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted control-room service.
 
 ## Gumroad Publish Flow
 

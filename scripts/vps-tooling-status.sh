@@ -7,6 +7,7 @@ DISPLAY_NUMBER="${VPS_DISPLAY_NUMBER:-99}"
 REMOTE_DEBUG_PORT="${VPS_CHROME_REMOTE_DEBUGGING_PORT:-9222}"
 VNC_PORT="${VPS_VNC_PORT:-5900}"
 NOVNC_PORT="${VPS_NOVNC_PORT:-6080}"
+CONTROL_ROOM_PORT="${CONTROL_ROOM_PORT:-4177}"
 
 command_output() {
   if command -v "$1" >/dev/null 2>&1; then
@@ -43,6 +44,14 @@ remote_desktop_state="down"
 if curl -fsS "http://127.0.0.1:${NOVNC_PORT}/vnc.html" >/dev/null 2>&1; then
   remote_desktop_state="up"
 fi
+control_room_state="down"
+if curl -fsS "http://127.0.0.1:${CONTROL_ROOM_PORT}/api/control-room/health" >/dev/null 2>&1; then
+  control_room_state="up"
+fi
+control_room_service="false"
+if systemctl is-active --quiet imon-engine-control-room.service; then
+  control_room_service="true"
+fi
 x11vnc_running="false"
 if pgrep -f "x11vnc .*${VNC_PORT}" >/dev/null 2>&1; then
   x11vnc_running="true"
@@ -63,5 +72,7 @@ printf '  "chromeRunning": %s,\n' "$chrome_running"
 printf '  "devtoolsState": %s,\n' "$(json_escape "$devtools_state")"
 printf '  "x11vncRunning": %s,\n' "$x11vnc_running"
 printf '  "noVncRunning": %s,\n' "$novnc_running"
-printf '  "remoteDesktopState": %s\n' "$(json_escape "$remote_desktop_state")"
+printf '  "remoteDesktopState": %s,\n' "$(json_escape "$remote_desktop_state")"
+printf '  "controlRoomService": %s,\n' "$control_room_service"
+printf '  "controlRoomState": %s\n' "$(json_escape "$control_room_state")"
 printf '}\n'

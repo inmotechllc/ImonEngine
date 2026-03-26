@@ -62,6 +62,28 @@ Because the VPS is now the primary scheduler, Gmail, Gumroad, Pinterest, and any
 
 Use `scripts/vps-codex-login.sh` after the VPS browser is running. It starts the browser if needed, then opens the Codex authentication flow against the saved Chrome profile so the CLI can be used directly from the server.
 
+## Private Control Room Service
+
+The organization control room can now run as a persistent private VPS service.
+
+Helper scripts:
+
+- Install: `scripts/install-control-room-service.sh`
+- Run wrapper: `scripts/run-control-room.sh`
+
+Default behavior:
+
+- bind host: `127.0.0.1`
+- default port: `4177`
+- auth: owner-only password gate with signed httpOnly cookies
+
+The service is intended for:
+
+- the VPS Chrome profile through noVNC
+- SSH tunnel access later if needed
+
+`scripts/vps-tooling-status.sh` now reports whether the control-room service is up in addition to the browser stack.
+
 ## Containerized Business Workers
 
 Each new brand can run inside its own Docker container instead of sharing the root host environment.
@@ -87,5 +109,6 @@ Each worker mounts:
 
 - Use the VPS browser when the account session should persist on the server.
 - Use the VPS remote desktop when you need to log into the server-side Chrome profile yourself.
+- Use the private hosted control room for read-only executive/business/department operations instead of relying only on generated HTML artifacts.
 - Use a business worker container when a new brand needs isolated dependencies, code, or experimental tooling.
 - Keep the local Windows scheduler disabled unless the VPS runner is unavailable.
