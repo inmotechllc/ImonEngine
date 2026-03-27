@@ -81,6 +81,8 @@ The app is still intentionally limited. It does not expose direct mutation route
 Run the local control room with:
 
 - `npm run dev -- control-room-local`
+- `scripts/start-local-control-room.ps1`
+- `Start-Imon-Control-Room.cmd`
 
 That process:
 
@@ -96,6 +98,16 @@ Normal operator flow:
 3. Open `http://127.0.0.1:4310/`.
 4. Sign in once using the control-room password.
 5. Use the local UI for business switching, engine sync, activation/pause, and routed operator directives.
+
+For Windows, the easiest launcher is:
+
+- `C:\AIWorkspace\Projects\Auto-Funding\Start-Imon-Control-Room.cmd`
+
+That wrapper:
+
+- starts the local control-room server in a minimized PowerShell window when needed
+- waits for the local port to open
+- opens the dashboard in the default browser
 
 noVNC remains the fallback path for:
 

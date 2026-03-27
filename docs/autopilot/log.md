@@ -6,6 +6,7 @@
 - Added write-safe control endpoints for engine sync, business activation/pause, and routed operator directives while keeping the control plane authoritative.
 - Kept the static control-room export and the hosted VPS app on the same snapshot/rendering layer so the local UI, hosted UI, and file export stay in parity.
 - Added test coverage for hosted control-room command routes and the local proxy app login/read/write flow.
+- Added a Windows launcher so the local operator app can be opened like a regular app without manually starting the control-room proxy first.
 
 ## 2026-03-23 / 2026-03-24
 
