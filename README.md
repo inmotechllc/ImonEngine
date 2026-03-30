@@ -76,6 +76,14 @@ npm run dev -- retain --client sunrise-plumbing
 - `npm run dev -- report`
 - `npm run dev -- build-agency-site`
 
+## Agent Context
+
+- Repo-aware agent hub: `docs/autonomy/agents/README.md`
+- Auto-documentation contract: `docs/autonomy/agents/auto-documentation.md`
+- Structured context map: `docs/autonomy/agents/context-map.json`
+
+Use these when you want an LLM or automation agent to work on ImonEngine with repo-specific context instead of generic coding defaults.
+
 ## Required Owner Actions
 
 - Add `OPENAI_API_KEY` if you want model-generated scoring, copy, and reports instead of fallback heuristics.

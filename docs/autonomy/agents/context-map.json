@@ -1,0 +1,227 @@
+{
+  "name": "imon-engine-agent-context",
+  "project": "Auto-Funding",
+  "engine": "ImonEngine",
+  "entrypoints": {
+    "workspaceInstructions": "AGENTS.md",
+    "hub": "docs/autonomy/agents/README.md",
+    "documentationProtocol": "docs/autonomy/agents/auto-documentation.md",
+    "cli": "src/index.ts",
+    "config": "src/config.ts",
+    "store": "src/storage/store.ts"
+  },
+  "readOrder": [
+    "AGENTS.md",
+    "README.md",
+    "docs/imon-engine.md",
+    "docs/autonomy/agents/README.md",
+    "docs/autonomy/agents/auto-documentation.md"
+  ],
+  "capabilities": [
+    {
+      "id": "engine",
+      "docs": [
+        "docs/imon-engine.md"
+      ],
+      "code": [
+        "src/agents/imon-engine.ts",
+        "src/domain/engine.ts",
+        "src/services/system-monitor.ts"
+      ],
+      "runtime": [
+        "runtime/state/engine.json",
+        "runtime/state/businesses.json",
+        "runtime/ops/engine-overview.json"
+      ]
+    },
+    {
+      "id": "org-control-plane",
+      "docs": [
+        "docs/org-control-plane.md"
+      ],
+      "code": [
+        "src/domain/org.ts",
+        "src/services/organization-control-plane.ts",
+        "src/services/org-templates.ts",
+        "src/services/office-templates.ts"
+      ],
+      "runtime": [
+        "runtime/ops/org-control-plane.json",
+        "runtime/ops/office-views.json",
+        "runtime/state/taskEnvelopes.json"
+      ]
+    },
+    {
+      "id": "control-room",
+      "docs": [
+        "docs/control-room-hosting.md"
+      ],
+      "code": [
+        "src/services/control-room-server.ts",
+        "src/services/control-room-local-server.ts",
+        "src/services/control-room-renderer.ts",
+        "src/services/control-room-remote-client.ts",
+        "src/services/office-chat.ts",
+        "src/services/office-chat-shared.ts",
+        "scripts/test-control-room-ui.ts"
+      ],
+      "runtime": [
+        "runtime/ops/control-room",
+        "runtime/state/officeChatThreads.json",
+        "runtime/state/officeChatMessages.json",
+        "runtime/state/officeChatActions.json"
+      ]
+    },
+    {
+      "id": "store-ops",
+      "docs": [
+        "docs/gumroad-store.md"
+      ],
+      "code": [
+        "src/agents/digital-asset-factory.ts",
+        "src/agents/store-autopilot.ts",
+        "src/services/store-ops.ts",
+        "src/domain/digital-assets.ts",
+        "src/domain/store-ops.ts",
+        "scripts/publish_gumroad_product.py",
+        "scripts/publish_growth_post.py"
+      ],
+      "runtime": [
+        "runtime/state/assetPacks.json",
+        "runtime/state/socialProfiles.json",
+        "runtime/state/salesTransactions.json",
+        "runtime/asset-store",
+        "runtime/marketing"
+      ]
+    },
+    {
+      "id": "venture-studio",
+      "docs": [
+        "docs/venture-studio.md"
+      ],
+      "code": [
+        "src/services/venture-studio.ts",
+        "src/domain/venture.ts"
+      ],
+      "runtime": [
+        "runtime/ops/venture-studio.json",
+        "runtime/ops/venture-calendar.json",
+        "runtime/ops/venture-blueprints"
+      ]
+    },
+    {
+      "id": "pod",
+      "docs": [
+        "docs/imonic-store.md"
+      ],
+      "code": [
+        "src/services/pod-studio.ts",
+        "src/services/pod-autonomy.ts",
+        "src/domain/pod.ts"
+      ],
+      "runtime": [
+        "runtime/ops/pod-businesses"
+      ]
+    },
+    {
+      "id": "micro-saas",
+      "docs": [
+        "docs/micro-saas-factory.md"
+      ],
+      "code": [
+        "src/services/micro-saas-studio.ts",
+        "src/domain/micro-saas.ts"
+      ],
+      "runtime": [
+        "runtime/ops/micro-saas-businesses"
+      ]
+    },
+    {
+      "id": "northline",
+      "docs": [
+        "docs/northline-hosting.md",
+        "docs/northline-launch-checklist.md",
+        "docs/playbook.md"
+      ],
+      "code": [
+        "src/agents/orchestrator.ts",
+        "src/agents/site-builder.ts",
+        "src/agents/qa-reviewer.ts",
+        "src/agents/deployer.ts",
+        "src/services/agency-site.ts",
+        "src/services/northline-ops.ts",
+        "src/services/northline-site-server.ts"
+      ],
+      "runtime": [
+        "runtime/agency-site",
+        "runtime/previews",
+        "runtime/reports"
+      ]
+    },
+    {
+      "id": "setup-vps",
+      "docs": [
+        "docs/setup.md",
+        "docs/vps-tooling.md"
+      ],
+      "code": [
+        "src/config.ts",
+        "scripts"
+      ],
+      "runtime": [
+        "runtime/ops/bootstrap-vps.sh",
+        "runtime/ops/imon-engine.cron",
+        "runtime/ops/autopilot-last-run.json"
+      ]
+    },
+    {
+      "id": "autopilot",
+      "docs": [
+        "docs/autopilot/roadmap.md",
+        "docs/autopilot/handoff-protocol.md",
+        "docs/autopilot/state.json",
+        "docs/autopilot/phases"
+      ],
+      "code": [
+        "src/agents/store-autopilot.ts",
+        "scripts/run_local_autopilot.ps1",
+        "scripts/run_vps_autopilot.sh"
+      ],
+      "runtime": [
+        "runtime/ops/autopilot-runner.log",
+        "runtime/ops/autopilot-last-run.json"
+      ]
+    }
+  ],
+  "crossCuttingDocs": [
+    {
+      "path": "README.md",
+      "updateWhen": "top-level capabilities, quick start, or public command surface change"
+    },
+    {
+      "path": "docs/setup.md",
+      "updateWhen": "env vars, defaults, prerequisites, or first-run flow change"
+    },
+    {
+      "path": "docs/playbook.md",
+      "updateWhen": "daily, delivery, retention, or operator workflow changes"
+    },
+    {
+      "path": "docs/imon-engine.md",
+      "updateWhen": "engine model, state layout, command surface, or VPS flow changes"
+    }
+  ],
+  "validation": {
+    "default": [
+      "npm test",
+      "npm run build"
+    ],
+    "controlRoom": [
+      "npm run test:control-room-ui"
+    ],
+    "docsOnly": [
+      "Validate changed structured files",
+      "Run a diff sanity check"
+    ]
+  }
+}

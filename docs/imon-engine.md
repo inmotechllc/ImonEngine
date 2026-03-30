@@ -22,6 +22,12 @@ It also exposes scoped orchestrator chat inside each office:
 
 Business categories are normalized into reusable office-template profiles so department workspaces and worker cards stay consistent across store, audience, product, and service businesses.
 
+## Agent Context Hub
+
+Use [docs/autonomy/agents/README.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autonomy/agents/README.md) as the repo-aware custom-agent briefing for any agent working on ImonEngine. It points agents at the canonical docs, code surfaces, runtime artifacts, and validation paths for each subsystem.
+
+Use [docs/autonomy/agents/auto-documentation.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autonomy/agents/auto-documentation.md) for the required documentation follow-through whenever agents change commands, config, routes, runtime outputs, or operating rules.
+
 ## Managed Business Order
 
 1. Digital asset store
