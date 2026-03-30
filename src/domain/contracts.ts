@@ -217,7 +217,30 @@ export interface AgencyProfile {
   name: string;
   headline: string;
   supportingCopy: string;
-  pricing: Array<{ label: string; amount: string; details: string }>;
+  audience: string;
+  heroNote: string;
+  industries: string[];
   differentiators: string[];
   proofPoints: string[];
+  serviceStack: Array<{
+    title: string;
+    description: string;
+  }>;
+  process: Array<{
+    step: string;
+    title: string;
+    body: string;
+  }>;
+  pricing: Array<{
+    label: string;
+    amount: string;
+    details: string;
+    idealFor: string;
+    includes: string[];
+  }>;
+  faqs: Array<{
+    question: string;
+    answer: string;
+  }>;
+  closingNote: string;
 }

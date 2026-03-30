@@ -1,4 +1,5 @@
-import type { BusinessCategory } from "./engine.js";
+import type { ApprovalTask } from "./contracts.js";
+import type { BusinessCategory, ManagedBusinessSeed } from "./engine.js";
 
 export type OrgScope = "engine" | "business" | "department" | "position" | "task";
 
@@ -42,6 +43,63 @@ export type DepartmentKind =
   | "product_ops"
   | "technology_systems"
   | "risk_compliance";
+
+export type OfficeTemplateProfile =
+  | "catalog_store"
+  | "audience_brand"
+  | "product_business"
+  | "service_business";
+
+export type OfficeHandoffStatus =
+  | "queued"
+  | "awaiting_approval"
+  | "in_progress"
+  | "blocked"
+  | "completed";
+
+export type DepartmentExecutionStatus =
+  | "queued"
+  | "running"
+  | "blocked"
+  | "review"
+  | "done";
+
+export type OfficeWorkerType =
+  | "engine_orchestrator"
+  | "brand_orchestrator"
+  | "department_orchestrator"
+  | "task_agent"
+  | "sub_agent";
+
+export type OfficeChatMessageRole =
+  | "user"
+  | "assistant"
+  | "system"
+  | "action";
+
+export type OfficeChatActionStatus =
+  | "completed"
+  | "awaiting_confirmation"
+  | "routed"
+  | "failed"
+  | "dismissed";
+
+export type OfficeChatActionKind =
+  | "generate_report"
+  | "answer_question"
+  | "create_business_scaffold_draft"
+  | "apply_business_scaffold_draft"
+  | "route_task"
+  | "update_office_directives"
+  | "update_schedule_override"
+  | "create_execution_brief";
+
+export interface OfficeScheduleOverride {
+  cadence?: string;
+  maxRunsPerDay?: number;
+  preferredWindows: string[];
+  notes: string[];
+}
 
 export interface PermissionPolicy {
   id: string;
@@ -251,6 +309,184 @@ export interface OfficePanelSummary {
   alertCount: number;
 }
 
+export interface OfficeBreadcrumb {
+  id: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  title: string;
+  route: string;
+}
+
+export interface OfficeTreeNode {
+  id: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  title: string;
+  subtitle: string;
+  route: string;
+  status: string;
+  parentId?: string;
+  officeId: string;
+  businessId?: string;
+  departmentId?: string;
+  counts: {
+    approvals: number;
+    handoffs: number;
+    blockers: number;
+    executions: number;
+  };
+  children: OfficeTreeNode[];
+}
+
+export interface OfficeChatSummary {
+  officeId: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  threadId: string;
+  assistantLabel: string;
+  lastMessagePreview: string;
+  lastMessageAt?: string;
+  pendingActionCount: number;
+  reportCount: number;
+  latestActionTitles: string[];
+  latestReportTitles: string[];
+}
+
+export interface OfficeChatThread {
+  id: string;
+  officeId: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  businessId?: string;
+  departmentId?: string;
+  assistantLabel: string;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt?: string;
+}
+
+export interface OfficeChatMessage {
+  id: string;
+  threadId: string;
+  officeId: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  businessId?: string;
+  departmentId?: string;
+  role: OfficeChatMessageRole;
+  content: string;
+  actionIds: string[];
+  createdAt: string;
+}
+
+export interface OfficeChatAction {
+  id: string;
+  threadId: string;
+  officeId: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  businessId?: string;
+  departmentId?: string;
+  kind: OfficeChatActionKind;
+  status: OfficeChatActionStatus;
+  title: string;
+  summary: string;
+  payload: Record<string, unknown>;
+  resultLines: string[];
+  reportArtifactIds: string[];
+  taskEnvelopeIds: string[];
+  approvalIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfficeReportArtifact {
+  id: string;
+  officeId: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  businessId?: string;
+  departmentId?: string;
+  title: string;
+  summary: string;
+  markdownPath: string;
+  jsonPath: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessScaffoldDraft {
+  id: string;
+  officeId: string;
+  threadId: string;
+  proposedBusiness: ManagedBusinessSeed;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfficeOperatingConfig {
+  id: string;
+  officeId: string;
+  scope: Extract<OrgScope, "engine" | "business" | "department">;
+  businessId?: string;
+  departmentId?: string;
+  promptDirectives: string[];
+  scheduleOverride?: OfficeScheduleOverride;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfficeWorkerSummary {
+  id: string;
+  officeId: string;
+  businessId?: string;
+  departmentId?: string;
+  positionId?: string;
+  label: string;
+  title: string;
+  workerType: OfficeWorkerType;
+  route: string;
+  status: string;
+  summary: string;
+  metrics: string[];
+  toolTags: string[];
+}
+
+export interface OfficeHandoffRecord {
+  id: string;
+  scope: Extract<OrgScope, "engine" | "business">;
+  businessId?: string;
+  departmentId?: string;
+  sourceOfficeId: string;
+  targetOfficeId: string;
+  title: string;
+  summary: string;
+  workflowId?: string;
+  status: OfficeHandoffStatus;
+  roadblocks: string[];
+  ownerPositionId?: string;
+  ownerLabel: string;
+  approvalIds: string[];
+  taskEnvelopeIds: string[];
+  executionItemIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DepartmentExecutionItem {
+  id: string;
+  businessId?: string;
+  departmentId: string;
+  workflowId?: string;
+  taskEnvelopeId?: string;
+  title: string;
+  summary: string;
+  status: DepartmentExecutionStatus;
+  assignedWorkerId: string;
+  assignedWorkerLabel: string;
+  blockers: string[];
+  artifacts: string[];
+  metrics: string[];
+  approvalIds: string[];
+  auditRecordIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ExecutiveOfficeView {
   id: string;
   engineId: string;
@@ -259,7 +495,13 @@ export interface ExecutiveOfficeView {
   summary: string;
   businesses: OfficePanelSummary[];
   alerts: string[];
+  roadblocks: string[];
+  breadcrumbs: OfficeBreadcrumb[];
+  workers: OfficeWorkerSummary[];
+  handoffs: OfficeHandoffRecord[];
+  approvalTasks: ApprovalTask[];
   approvalsWaiting: number;
+  chatSummary?: OfficeChatSummary;
 }
 
 export interface BusinessOfficeView {
@@ -269,8 +511,15 @@ export interface BusinessOfficeView {
   generatedAt: string;
   title: string;
   summary: string;
+  templateProfile: OfficeTemplateProfile;
+  breadcrumbs: OfficeBreadcrumb[];
   departments: OfficePanelSummary[];
+  workers: OfficeWorkerSummary[];
+  handoffs: OfficeHandoffRecord[];
+  approvalTasks: ApprovalTask[];
+  roadblocks: string[];
   alerts: string[];
+  chatSummary?: OfficeChatSummary;
 }
 
 export interface DepartmentOfficeView {
@@ -281,17 +530,44 @@ export interface DepartmentOfficeView {
   generatedAt: string;
   title: string;
   summary: string;
+  templateProfile?: OfficeTemplateProfile;
+  breadcrumbs: OfficeBreadcrumb[];
   positions: OfficePanelSummary[];
+  workers: OfficeWorkerSummary[];
+  roadblocks: string[];
   alerts: string[];
+}
+
+export interface DepartmentWorkspaceView {
+  id: string;
+  engineId: string;
+  businessId: string;
+  departmentId: string;
+  generatedAt: string;
+  title: string;
+  summary: string;
+  templateProfile: OfficeTemplateProfile;
+  breadcrumbs: OfficeBreadcrumb[];
+  workers: OfficeWorkerSummary[];
+  executionItems: DepartmentExecutionItem[];
+  approvalTasks: ApprovalTask[];
+  roadblocks: string[];
+  alerts: string[];
+  metrics: string[];
+  widgetSections: string[];
+  recentActivity: OrgAuditRecord[];
+  chatSummary?: OfficeChatSummary;
 }
 
 export interface OfficeViewSnapshot {
   id: string;
   generatedAt: string;
   engineId: string;
+  officeTree: OfficeTreeNode;
   executiveView: ExecutiveOfficeView;
   businessViews: BusinessOfficeView[];
   departmentViews: DepartmentOfficeView[];
+  departmentWorkspaces: DepartmentWorkspaceView[];
 }
 
 export interface TaskRoutingRequest {
@@ -307,4 +583,13 @@ export interface TaskRoutingRequest {
   moneyMovement?: boolean;
   requiresVerifiedFinancialData?: boolean;
   requestedTools?: string[];
+}
+
+export interface OfficeChatView {
+  thread: OfficeChatThread;
+  messages: OfficeChatMessage[];
+  actions: OfficeChatAction[];
+  reports: OfficeReportArtifact[];
+  operatingConfig: OfficeOperatingConfig;
+  summary: OfficeChatSummary;
 }

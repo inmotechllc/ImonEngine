@@ -91,6 +91,13 @@ type ZonedDateParts = {
   weekday: number;
 };
 
+function envIsSet(...names: string[]): boolean {
+  return names.some((name) => {
+    const value = process.env[name];
+    return value !== undefined && value !== "";
+  });
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -214,7 +221,9 @@ function stopwords(): Set<string> {
     "abstract",
     "cartoon",
     "design",
+    "designs",
     "background",
+    "backgrounds",
     "v",
     "png",
     "jpeg",
@@ -225,14 +234,55 @@ function stopwords(): Set<string> {
     "and",
     "the",
     "for",
-    "2d"
+    "2d",
+    "solid",
+    "shirts",
+    "shirt",
+    "tee",
+    "tees",
+    "graphic",
+    "graphics"
   ]);
+}
+
+function unsafeReferencePhrases(): string[] {
+  return [
+    "adventure time",
+    "kanye",
+    "yeezy",
+    "pokemon",
+    "pikachu",
+    "naruto",
+    "dragon ball",
+    "goku",
+    "mario",
+    "sonic",
+    "rick and morty",
+    "simpsons",
+    "spongebob",
+    "hello kitty",
+    "harry potter",
+    "star wars",
+    "marvel",
+    "disney",
+    "pixar",
+    "batman",
+    "spiderman"
+  ];
+}
+
+function containsUnsafeReferenceCue(stem: string): boolean {
+  const normalized = stem.toLowerCase().replace(/[_-]+/g, " ");
+  return unsafeReferencePhrases().some((phrase) => normalized.includes(phrase));
 }
 
 function extractMotifs(files: string[]): string[] {
   const counts = new Map<string, number>();
   for (const filePath of files) {
     const stem = path.basename(filePath, path.extname(filePath)).toLowerCase();
+    if (containsUnsafeReferenceCue(stem)) {
+      continue;
+    }
     for (const token of stem.split(/[^a-z0-9]+/).filter(Boolean)) {
       if (token.length < 4 || stopwords().has(token)) {
         continue;
@@ -508,12 +558,8 @@ export class PodStudioService {
   ): PodScheduledPost[] {
     const schedule: PodScheduledPost[] = [];
     const weekCount = SOCIAL_WEEKS;
-    const productByDay = new Map<string, PodScheduledProduct>();
-    for (const product of productSchedule) {
-      productByDay.set(product.scheduledFor.slice(0, 10), product);
-    }
-
     const usedStoryTargets = new Set<string>();
+    const usedPinTargets = new Set<string>();
     for (let weekIndex = 0; weekIndex < weekCount; weekIndex += 1) {
       const weekProducts = productSchedule.slice(weekIndex * 7, weekIndex * 7 + 7);
       const feedTargets = shuffle(weekProducts, `${business.id}-feed-${weekIndex}`).slice(
@@ -577,6 +623,40 @@ export class PodStudioService {
           ]
         });
       }
+
+      const pinTargets = shuffle(weekProducts, `${business.id}-pins-${weekIndex}`).slice(
+        0,
+        Math.min(2, weekProducts.length)
+      );
+      for (const product of pinTargets) {
+        const key = `${product.designId}:${product.productType}`;
+        if (usedPinTargets.has(key)) {
+          continue;
+        }
+        usedPinTargets.add(key);
+        schedule.push({
+          id: slugify(`${business.id}-${product.id}-pin`),
+          businessId: business.id,
+          designId: product.designId,
+          designTitle: product.designTitle,
+          productType: product.productType,
+          productLabel: product.productLabel,
+          scheduledFor: dateAtDayPart(
+            new Date(product.scheduledFor),
+            1,
+            "midday",
+            `${business.id}-${product.id}-pin`
+          ),
+          platform: "pinterest",
+          kind: "pin",
+          assetDirection:
+            "Use a vertical crop with one hero mockup, one detail frame, and minimal text if the title stays readable.",
+          notes: [
+            "Link to the matching Shopify product or collection after it is live.",
+            "Skip this pin if the storefront page is still unpublished."
+          ]
+        });
+      }
     }
 
     return schedule.sort((left, right) => left.scheduledFor.localeCompare(right.scheduledFor));
@@ -601,7 +681,10 @@ export class PodStudioService {
       });
     }
 
-    if (!process.env.SHOPIFY_STORE_DOMAIN || !process.env.SHOPIFY_ADMIN_ACCESS_TOKEN) {
+    if (
+      !envIsSet("IMONIC_SHOPIFY_STORE_DOMAIN", "SHOPIFY_STORE_DOMAIN") ||
+      !envIsSet("IMONIC_SHOPIFY_ADMIN_ACCESS_TOKEN", "SHOPIFY_ADMIN_ACCESS_TOKEN")
+    ) {
       roadblocks.push({
         id: "shopify-admin-setup",
         category: "Shopify store setup",
@@ -609,7 +692,7 @@ export class PodStudioService {
         requiredFromOwner: [
           "Create the Shopify trial store for Imonic and leave it logged into the VPS Chrome profile.",
           "Create or install the Shopify app/access method used for Admin API product creation.",
-          "Save `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_ACCESS_TOKEN` in `/opt/imon-engine/.env`."
+          "Save `IMONIC_SHOPIFY_STORE_DOMAIN` and `IMONIC_SHOPIFY_ADMIN_ACCESS_TOKEN` in `/opt/imon-engine/.env`."
         ],
         continueAfterCompletion: [
           "Imon can begin creating deduplicated Shopify products from the queued design and product schedule.",
@@ -618,14 +701,17 @@ export class PodStudioService {
       });
     }
 
-    if (!process.env.PRINTIFY_API_TOKEN && !process.env.PRINTFUL_API_TOKEN) {
+    if (
+      !envIsSet("IMONIC_PRINTIFY_API_TOKEN", "PRINTIFY_API_TOKEN") &&
+      !envIsSet("IMONIC_PRINTFUL_API_TOKEN", "PRINTFUL_API_TOKEN")
+    ) {
       roadblocks.push({
         id: "pod-vendor-setup",
         category: "POD vendor integration",
         summary: "A POD vendor connection is required before Imon can turn designs into physical products.",
         requiredFromOwner: [
           "Connect at least one POD vendor account, such as Printify or Printful.",
-          "Save the vendor API token in `/opt/imon-engine/.env` as `PRINTIFY_API_TOKEN` or `PRINTFUL_API_TOKEN`.",
+          "Save the vendor API token in `/opt/imon-engine/.env` as `IMONIC_PRINTIFY_API_TOKEN` or `IMONIC_PRINTFUL_API_TOKEN`.",
           "If the vendor requires browser setup, leave the account signed into the VPS Chrome profile."
         ],
         continueAfterCompletion: [

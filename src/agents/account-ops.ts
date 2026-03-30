@@ -30,7 +30,7 @@ export class AccountOpsAgent {
           actionNeeded: "Add Stripe Payment Links for founding and standard offers",
           reason: "The outreach and proposal flow can draft offers, but cannot collect deposits without payment links.",
           ownerInstructions:
-            "Create Stripe payment links for the founding and standard packages, then add them to STRIPE_PAYMENT_LINK_FOUNDING and STRIPE_PAYMENT_LINK_STANDARD.",
+            "Create Stripe payment links for the founding and standard packages, then add them to NORTHLINE_STRIPE_PAYMENT_LINK_FOUNDING and NORTHLINE_STRIPE_PAYMENT_LINK_STANDARD.",
           relatedEntityType: "account",
           relatedEntityId: "stripe"
         })
@@ -38,7 +38,8 @@ export class AccountOpsAgent {
     } else {
       await this.deferTask(
         "approval-payment-links",
-        "Stripe links are not on the critical path until a direct-billing business becomes active."
+        "Stripe links are not on the critical path until a direct-billing business becomes active.",
+        "Create Stripe payment links for the founding and standard packages, then add them to NORTHLINE_STRIPE_PAYMENT_LINK_FOUNDING and NORTHLINE_STRIPE_PAYMENT_LINK_STANDARD."
       );
     }
 
@@ -53,7 +54,7 @@ export class AccountOpsAgent {
           actionNeeded: "Connect a real sales inbox on the business domain",
           reason: "Outbound and approval email should use a domain-owned inbox rather than a placeholder address.",
           ownerInstructions:
-            "Provision a sending inbox on the business domain and set BUSINESS_SALES_EMAIL. Add SMTP settings if you want approval notices sent automatically.",
+            "Provision a sending inbox on the Northline domain and set NORTHLINE_SALES_EMAIL. Add SMTP settings if you want approval notices sent automatically.",
           relatedEntityType: "account",
           relatedEntityId: "sales-email"
         })
@@ -61,11 +62,13 @@ export class AccountOpsAgent {
     } else {
       await this.deferTask(
         "approval-sales-inbox",
-        "A dedicated business inbox is not required until a direct-support or direct-billing business is active."
+        "A dedicated business inbox is not required until a direct-support or direct-billing business is active.",
+        "Provision a sending inbox on the Northline domain and set NORTHLINE_SALES_EMAIL. Add SMTP settings if you want approval notices sent automatically."
       );
       await this.deferTask(
         "approval-smtp-setup",
-        "SMTP can wait until live approval notifications matter for an active direct-support business."
+        "SMTP can wait until live approval notifications matter for an active direct-support business.",
+        "Add SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, and SMTP_FROM to enable live email notifications."
       );
     }
 
@@ -77,7 +80,7 @@ export class AccountOpsAgent {
           actionNeeded: "Connect the Gumroad seller identity to ImonEngine",
           reason: "The digital asset store is active, but the system does not yet know which Gumroad seller account it should track.",
           ownerInstructions:
-            "Add GUMROAD_SELLER_EMAIL to .env. If you have a profile URL, add GUMROAD_PROFILE_URL as well.",
+            "Add IMON_STORE_GUMROAD_SELLER_EMAIL to .env.example. If you have a profile URL, add IMON_STORE_GUMROAD_PROFILE_URL as well.",
           relatedEntityType: "account",
           relatedEntityId: "gumroad"
         })
@@ -85,7 +88,8 @@ export class AccountOpsAgent {
     } else {
       await this.deferTask(
         "approval-gumroad-seller",
-        "Gumroad seller identity is already connected or the digital asset store is not active."
+        "Gumroad seller identity is already connected or the digital asset store is not active.",
+        "Add IMON_STORE_GUMROAD_SELLER_EMAIL to .env.example. If you have a profile URL, add IMON_STORE_GUMROAD_PROFILE_URL as well."
       );
     }
 
@@ -100,7 +104,7 @@ export class AccountOpsAgent {
     const next: ApprovalTask = {
       ...task,
       notifyChannel: "email",
-      status: existing?.status ?? "open",
+      status: existing?.status === "completed" ? "open" : existing?.status ?? "open",
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     };
@@ -141,7 +145,7 @@ export class AccountOpsAgent {
     await writeTextFile(fallbackPath, `${subject}\n\n${body}\n`);
   }
 
-  private async deferTask(id: string, reason: string): Promise<void> {
+  private async deferTask(id: string, reason: string, ownerInstructions?: string): Promise<void> {
     const existing = (await this.store.getApprovals()).find((candidate) => candidate.id === id);
     if (!existing) {
       return;
@@ -151,6 +155,7 @@ export class AccountOpsAgent {
       ...existing,
       status: "waiting",
       reason,
+      ownerInstructions: ownerInstructions ?? existing.ownerInstructions,
       updatedAt: new Date().toISOString()
     });
   }

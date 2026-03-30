@@ -1,5 +1,11 @@
 # Autopilot Log
 
+## 2026-03-28
+
+- 2026-03-28T09:43:13.4747949-04:00 [phase-06-continuous-store-operations] PAUSED: The repo-controlled autopilot was paused by owner request so the control-room office explorer refactor can proceed without phase-06 restrictions.
+  - Updated `docs/autopilot/state.json` to `status: paused`
+  - The store autopilot runner should now idle until the program is reactivated
+
 ## 2026-03-26
 
 - Added a local operator control-room app that proxies the private VPS control room over an SSH tunnel instead of depending on noVNC for normal dashboard use.

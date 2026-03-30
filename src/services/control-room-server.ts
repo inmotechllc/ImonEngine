@@ -9,15 +9,23 @@ import { ControlRoomRenderer } from "./control-room-renderer.js";
 import { ControlRoomSnapshotService } from "./control-room-snapshot.js";
 import { OfficeDashboardService } from "./office-dashboard.js";
 import { FileStore } from "../storage/store.js";
+import { OfficeChatService } from "./office-chat.js";
 
 type RouteMatch =
   | { type: "home" }
+  | { type: "engine" }
   | { type: "login" }
   | { type: "logout" }
   | { type: "business"; businessId: string }
   | { type: "department"; businessId: string; departmentId: string }
   | { type: "api-snapshot" }
   | { type: "api-business"; businessId: string }
+  | { type: "api-department"; businessId: string; departmentId: string }
+  | { type: "api-chat-engine" }
+  | { type: "api-chat-business"; businessId: string }
+  | { type: "api-chat-department"; businessId: string; departmentId: string }
+  | { type: "api-chat-apply"; actionId: string }
+  | { type: "api-chat-dismiss"; actionId: string }
   | { type: "api-activity" }
   | { type: "api-approvals" }
   | { type: "api-tasks" }
@@ -87,9 +95,11 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
 
 function routePath(pathname: string): RouteMatch {
   if (pathname === "/") return { type: "home" };
+  if (pathname === "/engine") return { type: "engine" };
   if (pathname === "/login") return { type: "login" };
   if (pathname === "/logout") return { type: "logout" };
   if (pathname === "/api/control-room/snapshot") return { type: "api-snapshot" };
+  if (pathname === "/api/control-room/chat/engine") return { type: "api-chat-engine" };
   if (pathname === "/api/control-room/activity") return { type: "api-activity" };
   if (pathname === "/api/control-room/approvals") return { type: "api-approvals" };
   if (pathname === "/api/control-room/tasks") return { type: "api-tasks" };
@@ -119,6 +129,54 @@ function routePath(pathname: string): RouteMatch {
     return { type: "api-business", businessId: decodeURIComponent(apiBusinessMatch[1]) };
   }
 
+  const apiChatBusinessMatch = pathname.match(/^\/api\/control-room\/chat\/business\/([^/]+)$/);
+  if (apiChatBusinessMatch?.[1]) {
+    return {
+      type: "api-chat-business",
+      businessId: decodeURIComponent(apiChatBusinessMatch[1])
+    };
+  }
+
+  const apiDepartmentMatch = pathname.match(/^\/api\/control-room\/department\/([^/]+)\/([^/]+)$/);
+  if (apiDepartmentMatch?.[1] && apiDepartmentMatch?.[2]) {
+    return {
+      type: "api-department",
+      businessId: decodeURIComponent(apiDepartmentMatch[1]),
+      departmentId: decodeURIComponent(apiDepartmentMatch[2])
+    };
+  }
+
+  const apiChatDepartmentMatch = pathname.match(
+    /^\/api\/control-room\/chat\/department\/([^/]+)\/([^/]+)$/
+  );
+  if (apiChatDepartmentMatch?.[1] && apiChatDepartmentMatch?.[2]) {
+    return {
+      type: "api-chat-department",
+      businessId: decodeURIComponent(apiChatDepartmentMatch[1]),
+      departmentId: decodeURIComponent(apiChatDepartmentMatch[2])
+    };
+  }
+
+  const apiChatActionApplyMatch = pathname.match(
+    /^\/api\/control-room\/chat\/actions\/([^/]+)\/apply$/
+  );
+  if (apiChatActionApplyMatch?.[1]) {
+    return {
+      type: "api-chat-apply",
+      actionId: decodeURIComponent(apiChatActionApplyMatch[1])
+    };
+  }
+
+  const apiChatActionDismissMatch = pathname.match(
+    /^\/api\/control-room\/chat\/actions\/([^/]+)\/dismiss$/
+  );
+  if (apiChatActionDismissMatch?.[1]) {
+    return {
+      type: "api-chat-dismiss",
+      actionId: decodeURIComponent(apiChatActionDismissMatch[1])
+    };
+  }
+
   return { type: "missing" };
 }
 
@@ -131,6 +189,8 @@ export class ControlRoomServer {
 
   private readonly officeDashboard: OfficeDashboardService;
 
+  private readonly officeChat: OfficeChatService;
+
   private server?: Server;
 
   constructor(
@@ -141,6 +201,7 @@ export class ControlRoomServer {
     this.renderer = new ControlRoomRenderer();
     this.imonEngine = new ImonEngineAgent(config, store);
     this.officeDashboard = new OfficeDashboardService(config, store);
+    this.officeChat = new OfficeChatService(config, store);
   }
 
   async listen(): Promise<{ host: string; port: number }> {
@@ -239,6 +300,7 @@ export class ControlRoomServer {
 
     switch (route.type) {
       case "home":
+      case "engine":
       case "business":
       case "department": {
         const snapshot = await this.snapshotService.buildSnapshot();
@@ -269,6 +331,101 @@ export class ControlRoomServer {
           return;
         }
         json(res, 200, business);
+        return;
+      }
+      case "api-department": {
+        const snapshot = await this.snapshotService.buildSnapshot();
+        const workspace = snapshot.departmentWorkspaces.find(
+          (entry) =>
+            entry.businessId === route.businessId &&
+            entry.departmentId === route.departmentId
+        );
+        if (!workspace) {
+          json(res, 404, {
+            status: "missing",
+            businessId: route.businessId,
+            departmentId: route.departmentId
+          });
+          return;
+        }
+        json(res, 200, workspace);
+        return;
+      }
+      case "api-chat-engine": {
+        if (req.method === "POST") {
+          const body = await readJsonBody<{ message?: string }>(req);
+          json(
+            res,
+            200,
+            await this.officeChat.submitMessage({ scope: "engine" }, body.message ?? "")
+          );
+          return;
+        }
+        json(res, 200, await this.officeChat.getChat({ scope: "engine" }));
+        return;
+      }
+      case "api-chat-business": {
+        if (req.method === "POST") {
+          const body = await readJsonBody<{ message?: string }>(req);
+          json(
+            res,
+            200,
+            await this.officeChat.submitMessage(
+              { scope: "business", businessId: route.businessId },
+              body.message ?? ""
+            )
+          );
+          return;
+        }
+        json(
+          res,
+          200,
+          await this.officeChat.getChat({ scope: "business", businessId: route.businessId })
+        );
+        return;
+      }
+      case "api-chat-department": {
+        if (req.method === "POST") {
+          const body = await readJsonBody<{ message?: string }>(req);
+          json(
+            res,
+            200,
+            await this.officeChat.submitMessage(
+              {
+                scope: "department",
+                businessId: route.businessId,
+                departmentId: route.departmentId
+              },
+              body.message ?? ""
+            )
+          );
+          return;
+        }
+        json(
+          res,
+          200,
+          await this.officeChat.getChat({
+            scope: "department",
+            businessId: route.businessId,
+            departmentId: route.departmentId
+          })
+        );
+        return;
+      }
+      case "api-chat-apply": {
+        if (req.method !== "POST") {
+          json(res, 405, { status: "method_not_allowed" });
+          return;
+        }
+        json(res, 200, await this.officeChat.applyAction(route.actionId));
+        return;
+      }
+      case "api-chat-dismiss": {
+        if (req.method !== "POST") {
+          json(res, 405, { status: "method_not_allowed" });
+          return;
+        }
+        json(res, 200, await this.officeChat.dismissAction(route.actionId));
         return;
       }
       case "api-activity": {

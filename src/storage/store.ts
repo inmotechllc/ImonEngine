@@ -28,8 +28,16 @@ import type {
 import type { SocialProfileRecord } from "../domain/social.js";
 import type {
   ApprovalRoute,
+  BusinessScaffoldDraft,
+  DepartmentExecutionItem,
   DepartmentDefinition,
   MemoryNamespacePolicy,
+  OfficeChatAction,
+  OfficeChatMessage,
+  OfficeChatThread,
+  OfficeHandoffRecord,
+  OfficeOperatingConfig,
+  OfficeReportArtifact,
   OfficeViewSnapshot,
   OrganizationBlueprint,
   OrgAuditRecord,
@@ -51,6 +59,8 @@ type EntityCollectionMap = {
   businessRuns: BusinessRunRecord[];
   clients: ClientJob[];
   collectiveSnapshots: CollectiveFundSnapshot[];
+  businessScaffoldDrafts: BusinessScaffoldDraft[];
+  departmentExecutionItems: DepartmentExecutionItem[];
   departmentDefinitions: DepartmentDefinition[];
   growthQueue: GrowthWorkItem[];
   growthPolicies: CatalogGrowthPolicy[];
@@ -58,7 +68,13 @@ type EntityCollectionMap = {
   leads: LeadRecord[];
   memoryNamespacePolicies: MemoryNamespacePolicy[];
   offers: OfferConfig[];
+  officeChatActions: OfficeChatAction[];
+  officeChatMessages: OfficeChatMessage[];
+  officeChatThreads: OfficeChatThread[];
   officeViewSnapshots: OfficeViewSnapshot[];
+  officeHandoffs: OfficeHandoffRecord[];
+  officeOperatingConfigs: OfficeOperatingConfig[];
+  officeReportArtifacts: OfficeReportArtifact[];
   orgAuditRecords: OrgAuditRecord[];
   organizationBlueprints: OrganizationBlueprint[];
   outreach: OutreachDraft[];
@@ -90,8 +106,10 @@ export class FileStore {
       "assetPacks",
       "businesses",
       "businessRuns",
+      "businessScaffoldDrafts",
       "clients",
       "collectiveSnapshots",
+      "departmentExecutionItems",
       "departmentDefinitions",
       "growthPolicies",
       "growthQueue",
@@ -99,7 +117,13 @@ export class FileStore {
       "leads",
       "memoryNamespacePolicies",
       "offers",
+      "officeChatActions",
+      "officeChatMessages",
+      "officeChatThreads",
+      "officeOperatingConfigs",
+      "officeReportArtifacts",
       "officeViewSnapshots",
+      "officeHandoffs",
       "orgAuditRecords",
       "organizationBlueprints",
       "outreach",
@@ -295,6 +319,30 @@ export class FileStore {
     return this.readCollection("departmentDefinitions");
   }
 
+  async getDepartmentExecutionItems(): Promise<DepartmentExecutionItem[]> {
+    return this.readCollection("departmentExecutionItems");
+  }
+
+  async getBusinessScaffoldDrafts(): Promise<BusinessScaffoldDraft[]> {
+    return this.readCollection("businessScaffoldDrafts");
+  }
+
+  async saveBusinessScaffoldDraft(draft: BusinessScaffoldDraft): Promise<void> {
+    await this.upsert("businessScaffoldDrafts", draft);
+  }
+
+  async replaceBusinessScaffoldDrafts(drafts: BusinessScaffoldDraft[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("businessScaffoldDrafts"), drafts);
+  }
+
+  async saveDepartmentExecutionItem(item: DepartmentExecutionItem): Promise<void> {
+    await this.upsert("departmentExecutionItems", item);
+  }
+
+  async replaceDepartmentExecutionItems(items: DepartmentExecutionItem[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("departmentExecutionItems"), items);
+  }
+
   async saveDepartmentDefinition(definition: DepartmentDefinition): Promise<void> {
     await this.upsert("departmentDefinitions", definition);
   }
@@ -411,6 +459,78 @@ export class FileStore {
 
   async getOfficeViewSnapshots(): Promise<OfficeViewSnapshot[]> {
     return this.readCollection("officeViewSnapshots");
+  }
+
+  async getOfficeChatThreads(): Promise<OfficeChatThread[]> {
+    return this.readCollection("officeChatThreads");
+  }
+
+  async saveOfficeChatThread(thread: OfficeChatThread): Promise<void> {
+    await this.upsert("officeChatThreads", thread);
+  }
+
+  async replaceOfficeChatThreads(threads: OfficeChatThread[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("officeChatThreads"), threads);
+  }
+
+  async getOfficeChatMessages(): Promise<OfficeChatMessage[]> {
+    return this.readCollection("officeChatMessages");
+  }
+
+  async saveOfficeChatMessage(message: OfficeChatMessage): Promise<void> {
+    await this.upsert("officeChatMessages", message);
+  }
+
+  async replaceOfficeChatMessages(messages: OfficeChatMessage[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("officeChatMessages"), messages);
+  }
+
+  async getOfficeChatActions(): Promise<OfficeChatAction[]> {
+    return this.readCollection("officeChatActions");
+  }
+
+  async saveOfficeChatAction(action: OfficeChatAction): Promise<void> {
+    await this.upsert("officeChatActions", action);
+  }
+
+  async replaceOfficeChatActions(actions: OfficeChatAction[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("officeChatActions"), actions);
+  }
+
+  async getOfficeReportArtifacts(): Promise<OfficeReportArtifact[]> {
+    return this.readCollection("officeReportArtifacts");
+  }
+
+  async saveOfficeReportArtifact(artifact: OfficeReportArtifact): Promise<void> {
+    await this.upsert("officeReportArtifacts", artifact);
+  }
+
+  async replaceOfficeReportArtifacts(artifacts: OfficeReportArtifact[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("officeReportArtifacts"), artifacts);
+  }
+
+  async getOfficeOperatingConfigs(): Promise<OfficeOperatingConfig[]> {
+    return this.readCollection("officeOperatingConfigs");
+  }
+
+  async saveOfficeOperatingConfig(config: OfficeOperatingConfig): Promise<void> {
+    await this.upsert("officeOperatingConfigs", config);
+  }
+
+  async replaceOfficeOperatingConfigs(configs: OfficeOperatingConfig[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("officeOperatingConfigs"), configs);
+  }
+
+  async getOfficeHandoffs(): Promise<OfficeHandoffRecord[]> {
+    return this.readCollection("officeHandoffs");
+  }
+
+  async saveOfficeHandoff(record: OfficeHandoffRecord): Promise<void> {
+    await this.upsert("officeHandoffs", record);
+  }
+
+  async replaceOfficeHandoffs(records: OfficeHandoffRecord[]): Promise<void> {
+    await writeJsonFile(this.collectionPath("officeHandoffs"), records);
   }
 
   async saveOfficeViewSnapshot(snapshot: OfficeViewSnapshot): Promise<void> {

@@ -18,6 +18,14 @@ The org model is built around five scopes:
 4. `position`
 5. `task`
 
+The control-room explorer collapses those scopes into three navigation layers:
+
+- `engine office`
+- `business office`
+- `department workspace`
+
+Engine and business stay in the explorer. Departments open the execution workspace where task agents and sub-agents do the work.
+
 ## What It Stores
 
 - organization blueprints
@@ -30,6 +38,11 @@ The org model is built around five scopes:
 - approval routes
 - workflow ownership records
 - task envelopes
+- office handoff records
+- department execution records
+- office chat threads and messages
+- office chat actions and report artifacts
+- office operating configs and business scaffold drafts
 - org audit records
 - office view snapshots
 
@@ -51,6 +64,22 @@ Category-specific variants are layered on top:
 - Faceless social: `Content Studio`, `Community / QA`
 - Micro-SaaS: `Product Ops`
 - Engine layer: `Technology / Systems`, `Risk / Compliance`
+
+## Template Profiles
+
+Business categories are normalized into reusable office templates:
+
+- `catalog_store`: `digital_asset_store`, `print_on_demand_store`
+- `audience_brand`: `niche_content_site`, `faceless_social_brand`
+- `product_business`: `micro_saas_factory`
+- `service_business`: `client_services_agency`
+
+Each template defines:
+
+- required departments
+- approval and handoff sections
+- worker labels for engine, brand, department, task, and sub-agent layers
+- default department workspace widgets
 
 ## Workflow Ownership
 
@@ -90,6 +119,7 @@ Examples:
 - `npm run dev -- control-room-serve`
 - `npm run dev -- control-room-health`
 - `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
+- `npm run test:control-room-ui`
 
 ## Runtime Artifacts
 
@@ -113,6 +143,11 @@ Both modes are backed by the same shared control-room snapshot:
 
 - latest engine report
 - latest office snapshot
+- office tree hierarchy
+- office handoffs
+- department workspaces
+- department execution items
+- office chat summaries
 - approvals
 - task envelopes
 - audit records
@@ -123,10 +158,15 @@ The hosted app adds:
 - owner-only login
 - JSON endpoints
 - SSE-based live refresh
+- `/engine`, `/business/:id`, and `/department/:businessId/:departmentId` routes
 - freshness and stale-data reporting
 - private VPS service hosting
 
 It still does not invent or mutate its own business state.
+
+The department route is the final execution layer where blockers, artifacts, metrics, outputs, and recent activity are tracked.
+
+UI validation for this surface is browser-based Playwright against `control-room-local` with `npm run test:control-room-ui`. Electron is intentionally out of scope for this phase.
 
 See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted service and VPS setup.
 

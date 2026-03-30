@@ -1,0 +1,26 @@
+{
+  "businessId": "auto-funding-agency",
+  "clientName": "Example Service Co.",
+  "niche": "Plumbing",
+  "geo": "One metro or county",
+  "primaryPhone": "(555) 010-2400",
+  "primaryEmail": "owner@example.com",
+  "offerId": "founding-offer",
+  "billingStatus": "deposit_pending",
+  "formEndpoint": "https://forms.example.com/example-service-co",
+  "assets": {
+    "logoText": "Example Service Co.",
+    "brandColors": ["#0F172A", "#F08A41", "#F5EFE6"],
+    "heroImageHint": "Crew van parked outside a residential jobsite",
+    "services": ["Drain cleaning", "Water heater repair", "Emergency calls"],
+    "testimonials": ["Show one real operator quote once the pilot is delivered."],
+    "reviews": ["Add one Google review snippet after the first visible win."]
+  },
+  "intakeNotes": [
+    "Primary service to push first",
+    "Main cities or ZIP codes to prioritize",
+    "Current missed-call or form-routing issue",
+    "Any live Google Ads, LSA, or Google Business Profile notes"
+  ],
+  "nextAction": "Build the first Northline preview and send the booking or intake link"
+}

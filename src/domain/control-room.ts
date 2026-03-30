@@ -2,7 +2,10 @@ import type { ApprovalTask } from "./contracts.js";
 import type { EngineOverviewReport } from "./engine.js";
 import type {
   BusinessOfficeView,
+  DepartmentExecutionItem,
+  DepartmentWorkspaceView,
   ExecutiveOfficeView,
+  OfficeTreeNode,
   OrgAuditRecord,
   TaskEnvelope,
   WorkflowOwnershipRecord
@@ -37,6 +40,7 @@ export interface ControlRoomBusinessView {
   id: string;
   name: string;
   category: string;
+  templateProfile?: string;
   stage: string;
   summary: string;
   monthlyRevenue: number;
@@ -45,6 +49,7 @@ export interface ControlRoomBusinessView {
   automationCoverage: number;
   activeWorkItems: number;
   office?: BusinessOfficeView;
+  departmentWorkspaces: DepartmentWorkspaceView[];
   approvals: ApprovalTask[];
   workflowOwnership: WorkflowOwnershipRecord[];
   recentTasks: TaskEnvelope[];
@@ -73,13 +78,15 @@ export interface ControlRoomSnapshot {
   engineName: string;
   engineOverview: string;
   report?: EngineOverviewReport;
+  officeTree: OfficeTreeNode;
   executiveView: ExecutiveOfficeView;
   approvals: ApprovalTask[];
   businesses: ControlRoomBusinessView[];
+  departmentWorkspaces: DepartmentWorkspaceView[];
+  departmentExecutionItems: DepartmentExecutionItem[];
   recentAudits: OrgAuditRecord[];
   collectiveFund?: CollectiveFundSnapshot;
   executiveBudgetView?: ExecutiveOfficeBudgetView;
   globalWarnings: string[];
   health: ControlRoomHealthReport;
 }
-

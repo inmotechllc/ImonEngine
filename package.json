@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node build/index.js",
     "test": "tsx --test src/workflows.test.ts",
+    "test:control-room-ui": "tsx scripts/test-control-room-ui.ts",
     "bootstrap": "tsx src/index.ts bootstrap",
     "daily": "tsx src/index.ts daily-run --input examples/prospects/home-services.csv",
     "demo:agency": "tsx src/index.ts build-agency-site",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^24.6.0",
     "@types/nodemailer": "^7.0.11",
+    "playwright": "^1.58.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }

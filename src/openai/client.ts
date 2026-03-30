@@ -52,6 +52,61 @@ export class AIClient {
       return { data: fallback(), source: "fallback" };
     }
   }
+
+  async generateText({
+    prompt,
+    mode,
+    fallback
+  }: {
+    prompt: string;
+    mode: "fast" | "deep";
+    fallback: () => string;
+  }): Promise<{ text: string; source: "openai" | "fallback" }> {
+    if (!this.client) {
+      return { text: fallback(), source: "fallback" };
+    }
+
+    try {
+      const response = await this.client.responses.create({
+        model: mode === "fast" ? this.config.models.fast : this.config.models.deep,
+        input: prompt
+      });
+      const text = response.output_text?.trim();
+      return {
+        text: text || fallback(),
+        source: text ? "openai" : "fallback"
+      };
+    } catch {
+      return { text: fallback(), source: "fallback" };
+    }
+  }
+
+  async researchText({
+    prompt,
+    fallback
+  }: {
+    prompt: string;
+    fallback: () => string;
+  }): Promise<{ text: string; source: "web" | "fallback" }> {
+    if (!this.client) {
+      return { text: fallback(), source: "fallback" };
+    }
+
+    try {
+      const response = await (this.client.responses.create as any)({
+        model: this.config.models.deep,
+        input: prompt,
+        tools: [{ type: "web_search_preview" }]
+      });
+      const text = response?.output_text?.trim?.();
+      return {
+        text: text || fallback(),
+        source: text ? "web" : "fallback"
+      };
+    } catch {
+      return { text: fallback(), source: "fallback" };
+    }
+  }
 }
 
 export const ScoredLeadSchema = z.object({

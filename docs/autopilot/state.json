@@ -1,6 +1,6 @@
 {
   "program": "imonengine-store-autopilot",
-  "status": "active",
+  "status": "paused",
   "currentPhase": "phase-06-continuous-store-operations",
   "browserSession": {
     "required": true,
@@ -45,6 +45,7 @@
     }
   ],
   "notes": [
+    "The repo-controlled autopilot is paused by owner request while the control-room office explorer is being refactored.",
     "The first Gumroad product is live.",
     "The second Gumroad product is live and should be tracked as published inside ImonEngine.",
     "The VPS cron runner is now the primary scheduler for continuous store operations.",

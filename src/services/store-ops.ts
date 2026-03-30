@@ -40,7 +40,8 @@ const DEFAULT_BUSINESS_SEEDS = new Map(DEFAULT_MANAGED_BUSINESSES.map((seed) => 
 const STRATEGIC_FACEBOOK_CATEGORIES = new Set<BusinessCategory>([
   "faceless_social_brand",
   "micro_saas_factory",
-  "print_on_demand_store"
+  "print_on_demand_store",
+  "client_services_agency"
 ]);
 
 const PINTEREST_FIT_CATEGORIES = new Set<BusinessCategory>([
@@ -117,6 +118,15 @@ type CsvRow = Record<string, string>;
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function nextGrowthQueueStart(reference = new Date()): Date {
+  const start = new Date(reference);
+  start.setHours(9, 0, 0, 0);
+  if (start <= reference) {
+    start.setDate(start.getDate() + 1);
+  }
+  return start;
 }
 
 function normalize(value: string): string {
@@ -869,18 +879,22 @@ export class StoreOpsService {
     if (openQueueCount >= activePolicy.maxOpenPackQueue) {
       reasons.push(`Open pack queue is at ${openQueueCount}/${activePolicy.maxOpenPackQueue}.`);
     }
-    if (createdLast7Days >= activePolicy.maxNewPacksPer7Days) {
+    if (publishedCount >= activePolicy.maxPublishedPacks) {
+      reasons.push(`Catalog already has ${publishedCount}/${activePolicy.maxPublishedPacks} published packs.`);
+    }
+
+    const allowReserveBriefWhileQueueIsEmpty =
+      openQueueCount === 0 && publishedCount < activePolicy.maxPublishedPacks && reasons.length === 0;
+
+    if (!allowReserveBriefWhileQueueIsEmpty && createdLast7Days >= activePolicy.maxNewPacksPer7Days) {
       reasons.push(
         `Created ${createdLast7Days} pack(s) in the last 7 days, hitting the ${activePolicy.maxNewPacksPer7Days} pack generation cap.`
       );
     }
-    if (publishedLast7Days >= activePolicy.maxNewPacksPer7Days) {
+    if (!allowReserveBriefWhileQueueIsEmpty && publishedLast7Days >= activePolicy.maxNewPacksPer7Days) {
       reasons.push(
         `Published ${publishedLast7Days} pack(s) in the last 7 days, hitting the ${activePolicy.maxNewPacksPer7Days} pack cap.`
       );
-    }
-    if (publishedCount >= activePolicy.maxPublishedPacks) {
-      reasons.push(`Catalog already has ${publishedCount}/${activePolicy.maxPublishedPacks} published packs.`);
     }
 
     return {
@@ -1002,8 +1016,7 @@ export class StoreOpsService {
     const keep = [...new Map(existing.filter((item) => item.status === "posted").map((item) => [item.id, item])).values()];
     const queueDays = this.config.storeOps.growth.queueDays;
     const postsPerWeek = this.config.storeOps.growth.postsPerWeek;
-    const start = new Date();
-    start.setHours(9, 0, 0, 0);
+    const start = nextGrowthQueueStart();
     const planned: GrowthWorkItem[] = [];
 
     const channelSlots = published.flatMap((pack) =>
@@ -1014,12 +1027,14 @@ export class StoreOpsService {
     );
 
     const slotCount = Math.min(postsPerWeek, channelSlots.length);
+    const slotSpacingMs =
+      slotCount > 0 ? Math.max(1, Math.floor((queueDays * MS_PER_DAY) / slotCount)) : 0;
     for (let index = 0; index < slotCount; index += 1) {
       const slot = channelSlots[index % channelSlots.length];
       if (!slot) {
         continue;
       }
-      const scheduled = new Date(start.getTime() + index * Math.max(1, Math.floor((queueDays * MS_PER_DAY) / slotCount)));
+      const scheduled = new Date(start.getTime() + index * slotSpacingMs);
       const item: GrowthWorkItem = {
         id: slugify(`${slot.pack.id}-${slot.channel}-${scheduled.toISOString()}`),
         businessId,

@@ -18,6 +18,8 @@ Every phase agent must follow this protocol.
 - Use the ImonEngine Gmail account and signed-in browser session when a signup or email step is needed.
 - Reserve `ImonEngine` and `Imon` for parent-system accounts only unless a legacy store already depends on them.
 - Give every new business a distinct, relevant brand name and use `imonengine+<brandhandle>@gmail.com` for signup aliases.
+- For control-room UI changes, validate with browser-based Playwright against `control-room-local`; do not add Electron coverage unless the phase explicitly requires it.
+- For scoped orchestrator chat changes, the Playwright flow must exercise engine, business, and department chats plus any `Apply` or `Dismiss` actions exposed in the UI.
 - For X signup, prefer visual input and simulated clicks for the normal flow, then pause for a manual owner solve if Arkose or a similar human challenge appears.
 - If OpenClaw on the VPS can reduce human effort safely, use it and document how.
 
@@ -26,6 +28,8 @@ Every phase agent must follow this protocol.
 - Update [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
 - Append a short entry to [log.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/log.md).
 - Update any affected operational docs.
+- For control-room changes, run `npm test`, `npm run build`, and `npm run test:control-room-ui` before signoff.
+- For control-room changes that affect the webpage, sync the updated repo to `/opt/imon-engine`, restart `imon-engine-control-room.service`, and verify the hosted app plus `http://127.0.0.1:4310/` after publish.
 - Commit all durable repo changes.
 - Push to GitHub.
 - Pull the latest commit on the VPS and sync any required runtime state there.

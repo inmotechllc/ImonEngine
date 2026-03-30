@@ -20,7 +20,12 @@ import { buildAgencySite } from "./services/agency-site.js";
 import { OfficeDashboardService } from "./services/office-dashboard.js";
 import { ControlRoomServer } from "./services/control-room-server.js";
 import { ControlRoomLocalServer } from "./services/control-room-local-server.js";
+import { MicroSaasStudioService } from "./services/micro-saas-studio.js";
+import { NorthlineOpsService } from "./services/northline-ops.js";
+import { NorthlineSiteServer } from "./services/northline-site-server.js";
+import { PodAutonomyService } from "./services/pod-autonomy.js";
 import { PodStudioService } from "./services/pod-studio.js";
+import { buildStorefrontSite } from "./services/storefront-site.js";
 import { StoreOpsService } from "./services/store-ops.js";
 import { VentureStudioService } from "./services/venture-studio.js";
 
@@ -124,9 +129,15 @@ function usage(): string {
     "  npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]",
     "  npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]",
     "  npm run dev -- collective-fund-report [--days 30]",
+    "  npm run dev -- build-storefront-site",
     "  npm run dev -- social-profiles [--business <id>] [--all]",
     "  npm run dev -- venture-studio [--business <id>]",
+    "  npm run dev -- northline-plan [--business auto-funding-agency]",
+    "  npm run dev -- northline-site-serve",
+    "  npm run dev -- northline-site-health",
+    "  npm run dev -- micro-saas-plan [--business imon-micro-saas-factory] [--notify-roadblocks]",
     "  npm run dev -- pod-plan --business imon-pod-store --reference-dir <path> [--notify-roadblocks]",
+    "  npm run dev -- pod-autonomy --business imon-pod-store --reference-dir <path> [--notify-roadblocks]",
     "  npm run dev -- autopilot-run-once",
     "  npm run dev -- asset-packs",
     "  npm run dev -- approvals",
@@ -151,10 +162,14 @@ async function buildContext() {
   const storeAutopilot = new StoreAutopilotAgent(config, store, digitalAssetFactory, imonEngine);
   const storeOps = new StoreOpsService(config, store);
   const ventureStudio = new VentureStudioService(config, store);
+  const northlineOps = new NorthlineOpsService(config, store);
+  const microSaasStudio = new MicroSaasStudioService(config, store);
   const podStudio = new PodStudioService(config, store);
+  const podAutonomy = new PodAutonomyService(config, store, podStudio, storeOps);
   const officeDashboard = new OfficeDashboardService(config, store);
   const controlRoomServer = new ControlRoomServer(config, store);
   const controlRoomLocalServer = new ControlRoomLocalServer(config);
+  const northlineSiteServer = new NorthlineSiteServer(config);
 
   return {
     config,
@@ -170,10 +185,14 @@ async function buildContext() {
     storeAutopilot,
     storeOps,
     ventureStudio,
+    northlineOps,
+    microSaasStudio,
     podStudio,
+    podAutonomy,
     officeDashboard,
     controlRoomServer,
-    controlRoomLocalServer
+    controlRoomLocalServer,
+    northlineSiteServer
   };
 }
 
@@ -251,10 +270,14 @@ async function main(): Promise<void> {
     storeAutopilot,
     storeOps,
     ventureStudio,
+    northlineOps,
+    microSaasStudio,
     podStudio,
+    podAutonomy,
     officeDashboard,
     controlRoomServer,
-    controlRoomLocalServer
+    controlRoomLocalServer,
+    northlineSiteServer
   } =
     await buildContext();
 
@@ -662,6 +685,15 @@ async function main(): Promise<void> {
       console.log(JSON.stringify({ snapshot, artifacts }, null, 2));
       break;
     }
+    case "build-storefront-site": {
+      const result = await buildStorefrontSite(config, store);
+      logger.info(`Owned storefront generated at ${result.htmlPath}.`);
+      if (result.roadblocks.length > 0) {
+        logger.info(`Remaining storefront roadblocks: ${result.roadblocks.length}`);
+      }
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     case "social-profiles": {
       const businessId = typeof flags.business === "string" ? flags.business : undefined;
       const profiles = businessId
@@ -692,6 +724,40 @@ async function main(): Promise<void> {
       );
       break;
     }
+    case "northline-plan": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineOps.writePlan({ businessId });
+      logger.info(`Northline launch system refreshed for ${result.plan.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-site-serve": {
+      await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
+      const address = await northlineSiteServer.listen();
+      logger.info(`Northline site listening on http://${address.host}:${address.port}.`);
+      process.once("SIGINT", () => {
+        void northlineSiteServer.close();
+      });
+      process.once("SIGTERM", () => {
+        void northlineSiteServer.close();
+      });
+      await new Promise(() => {});
+      break;
+    }
+    case "northline-site-health": {
+      console.log(JSON.stringify(await northlineSiteServer.getHealth(), null, 2));
+      break;
+    }
+    case "micro-saas-plan": {
+      const businessId = typeof flags.business === "string" ? flags.business : "imon-micro-saas-factory";
+      const result = await microSaasStudio.writePlan({
+        businessId,
+        notifyRoadblocks: Boolean(flags["notify-roadblocks"])
+      });
+      logger.info(`Micro-SaaS launch plan refreshed for ${result.plan.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     case "pod-plan": {
       const businessId = typeof flags.business === "string" ? flags.business : "imon-pod-store";
       const referenceDirectory = typeof flags["reference-dir"] === "string" ? flags["reference-dir"] : undefined;
@@ -701,6 +767,18 @@ async function main(): Promise<void> {
         notifyRoadblocks: Boolean(flags["notify-roadblocks"])
       });
       logger.info(`POD launch plan refreshed for ${result.plan.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "pod-autonomy": {
+      const businessId = typeof flags.business === "string" ? flags.business : "imon-pod-store";
+      const referenceDirectory = typeof flags["reference-dir"] === "string" ? flags["reference-dir"] : undefined;
+      const result = await podAutonomy.writeOperatingSystem({
+        businessId,
+        referenceDirectory,
+        notifyRoadblocks: Boolean(flags["notify-roadblocks"])
+      });
+      logger.info(`Imonic autonomy system refreshed for ${result.plan.businessName}.`);
       console.log(JSON.stringify(result, null, 2));
       break;
     }

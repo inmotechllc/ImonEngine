@@ -8,6 +8,20 @@ It now also has a real `organization control plane`. That layer maps the engine 
 
 It now also has a private hosted `control room` app on top of the control plane plus a local `operator app` that connects back to the VPS. The VPS remains the execution and state layer. The local app is the normal dashboard/control surface, and the static dashboard export remains a fallback artifact.
 
+That control room now renders a folder-style office explorer:
+
+- `engine office`
+- `business office`
+- `department workspace`
+
+It also exposes scoped orchestrator chat inside each office:
+
+- engine chat for portfolio summaries, reports, and new deferred-business scaffolds
+- business chat for accounting, analytics, market-data summaries, and multi-department routing
+- department chat for worker steering, prompt overlays, schedule overrides, and execution briefs
+
+Business categories are normalized into reusable office-template profiles so department workspaces and worker cards stay consistent across store, audience, product, and service businesses.
+
 ## Managed Business Order
 
 1. Digital asset store
@@ -15,7 +29,7 @@ It now also has a private hosted `control room` app on top of the control plane 
 3. Faceless social brand
 4. Micro-SaaS factory
 5. Print-on-demand store
-6. Auto-Funding agency
+6. Northline Growth Systems
 
 The first two businesses are marked `ready` by default because they have the lightest setup burden and lowest ongoing support load. The later businesses are scaffolded under management but stay behind explicit owner or platform setup steps.
 
@@ -47,6 +61,7 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- control-room-local`
 - `npm run dev -- control-room-health`
 - `npm run dev -- control-room-password-hash --password "<value>"`
+- `npm run test:control-room-ui`
 - `npm run dev -- route-task --title "<title>" --summary "<summary>" --workflow <id> --business <id>`
 - `npm run dev -- autopilot-run-once`
 - `npm run dev -- activate-business --business <id>`
@@ -72,6 +87,8 @@ The first two businesses are marked `ready` by default because they have the lig
 - `runtime/state/positionDefinitions.json`
 - `runtime/state/workflowOwnership.json`
 - `runtime/state/taskEnvelopes.json`
+- `runtime/state/officeHandoffs.json`
+- `runtime/state/departmentExecutionItems.json`
 - `runtime/state/orgAuditRecords.json`
 - `runtime/ops/venture-studio.json`
 - `runtime/ops/venture-calendar.json`

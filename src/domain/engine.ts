@@ -8,7 +8,12 @@ export type BusinessCategory =
   | "print_on_demand_store"
   | "client_services_agency";
 
-export type BusinessLaunchStage = "scaffolded" | "ready" | "active" | "paused";
+export type BusinessLaunchStage =
+  | "scaffolded"
+  | "ready"
+  | "active"
+  | "paused"
+  | "deferred";
 
 export type RiskBand = "low" | "medium" | "high";
 
@@ -90,6 +95,7 @@ export interface ImonEngineState {
     trackedBusinesses: number;
     activeBusinesses: number;
     readyBusinesses: number;
+    deferredBusinesses: number;
     blockedBusinesses: number;
     nextRecommendedBusinessId?: string;
   };
@@ -154,6 +160,7 @@ export interface EngineOverviewReport {
     total: number;
     active: number;
     ready: number;
+    deferred: number;
     scaffolded: number;
     paused: number;
   };

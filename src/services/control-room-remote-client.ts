@@ -1,4 +1,5 @@
 import type { ControlRoomSnapshot } from "../domain/control-room.js";
+import { normalizeControlRoomSnapshot } from "./control-room-snapshot-compat.js";
 
 export class ControlRoomRemoteClient {
   private remoteSessionCookie?: string;
@@ -39,11 +40,76 @@ export class ControlRoomRemoteClient {
   }
 
   async fetchSnapshot(): Promise<ControlRoomSnapshot> {
-    return this.fetchJson<ControlRoomSnapshot>("/api/control-room/snapshot");
+    const snapshot = await this.fetchJson<ControlRoomSnapshot>("/api/control-room/snapshot");
+    return normalizeControlRoomSnapshot(snapshot);
+  }
+
+  async fetchEngineChat(): Promise<unknown> {
+    return this.fetchJson("/api/control-room/chat/engine");
+  }
+
+  async submitEngineChat(message: string): Promise<unknown> {
+    return this.fetchJson("/api/control-room/chat/engine", true, { message });
+  }
+
+  async fetchBusinessChat(businessId: string): Promise<unknown> {
+    return this.fetchJson(`/api/control-room/chat/business/${encodeURIComponent(businessId)}`);
+  }
+
+  async submitBusinessChat(businessId: string, message: string): Promise<unknown> {
+    return this.fetchJson(`/api/control-room/chat/business/${encodeURIComponent(businessId)}`, true, {
+      message
+    });
+  }
+
+  async fetchDepartmentChat(businessId: string, departmentId: string): Promise<unknown> {
+    return this.fetchJson(
+      `/api/control-room/chat/department/${encodeURIComponent(businessId)}/${encodeURIComponent(
+        departmentId
+      )}`
+    );
+  }
+
+  async submitDepartmentChat(
+    businessId: string,
+    departmentId: string,
+    message: string
+  ): Promise<unknown> {
+    return this.fetchJson(
+      `/api/control-room/chat/department/${encodeURIComponent(businessId)}/${encodeURIComponent(
+        departmentId
+      )}`,
+      true,
+      { message }
+    );
+  }
+
+  async applyChatAction(actionId: string): Promise<unknown> {
+    return this.fetchJson(
+      `/api/control-room/chat/actions/${encodeURIComponent(actionId)}/apply`,
+      true,
+      {}
+    );
+  }
+
+  async dismissChatAction(actionId: string): Promise<unknown> {
+    return this.fetchJson(
+      `/api/control-room/chat/actions/${encodeURIComponent(actionId)}/dismiss`,
+      true,
+      {}
+    );
   }
 
   async fetchBusiness(businessId: string): Promise<unknown> {
     return this.fetchJson(`/api/control-room/business/${encodeURIComponent(businessId)}`);
+  }
+
+  async fetchDepartment(businessId: string, departmentId: string): Promise<unknown> {
+    return this.fetchJson(
+      `/api/control-room/department/${encodeURIComponent(businessId)}/${encodeURIComponent(
+        departmentId
+      )}`
+    );
   }
 
   async fetchActivity(): Promise<unknown> {

@@ -9,11 +9,11 @@ export const DEFAULT_OFFERS: OfferConfig[] = [
     setupPrice: 749,
     monthlyPrice: 199,
     includedDeliverables: [
-      "One conversion-focused landing page",
-      "Call and form CTA wiring",
-      "Follow-up workflow copy and missed-call text-back playbook",
-      "Review response drafts",
-      "Monthly performance summary"
+      "One conversion-focused homepage or landing-page rebuild",
+      "Call-first mobile CTA and quote-form routing",
+      "Missed-call text-back and intake script pack",
+      "Review request and review-response starter library",
+      "Monthly operator summary with next-step recommendations"
     ],
     upsells: [
       "Google Business Profile optimization",
@@ -31,14 +31,15 @@ export const DEFAULT_OFFERS: OfferConfig[] = [
     setupPrice: 1250,
     monthlyPrice: 299,
     includedDeliverables: [
-      "Full service page stack",
-      "Lead capture and qualification assets",
-      "Monthly optimization report",
-      "Offer testing roadmap"
+      "Service page stack for core jobs and territories",
+      "Lead capture, qualification, and call-routing assets",
+      "Review pipeline and Google Business Profile support",
+      "Monthly optimization report with test queue",
+      "Ad landing page variants or seasonal campaign page"
     ],
     upsells: [
       "White-label fulfillment",
-      "Ad landing page variants",
+      "Local search or retargeting landing pages",
       "Intake script refinement"
     ],
     priceFloor: 1250,
@@ -49,31 +50,121 @@ export const DEFAULT_OFFERS: OfferConfig[] = [
 
 export const DEFAULT_AGENCY_PROFILE: AgencyProfile = {
   name: "Northline Growth Systems",
-  headline: "AI-operated lead generation for home-service companies",
+  headline: "Northline installs fast proof pages, intake systems, and follow-up flows for home-service operators.",
   supportingCopy:
-    "We turn weak local websites into conversion-ready funnels, then keep the follow-up and reporting loop moving so owners can stay in the field.",
-  pricing: [
-    {
-      label: "Founding",
-      amount: "$749 setup + $199/mo",
-      details: "For the first five clients. Built to prove speed, not drag out a consulting process."
-    },
-    {
-      label: "Standard",
-      amount: "$1,250 setup + $299/mo",
-      details: "For businesses that need a tighter funnel, monthly optimization, and recurring updates."
-    }
-  ],
+    "We tighten the gap between click, reply, and booked job: clearer offer framing, stronger intake routing, missed-call recovery, follow-up assets, and monthly conversion cleanup without a bloated agency process.",
+  audience:
+    "Built for plumbing, HVAC, electrical, roofing, and cleaning operators that already have demand but lose too many calls between click and dispatch.",
+  heroNote: "Pilot slots stay intentionally small so delivery stays fast, direct, and fully remote from teardown to launch.",
+  industries: ["Plumbing", "HVAC", "Electrical", "Roofing", "Cleaning"],
   differentiators: [
-    "Conversion-focused sites instead of brochure pages",
-    "Structured outreach and intake workflows built into delivery",
-    "Monthly reporting with upsell recommendations instead of passive maintenance"
+    "Operator-first proof pages built to drive replies and booked calls, not brochure browsing.",
+    "Hosted intake, missed-call, and quote-form workflows are packaged into delivery instead of added later.",
+    "Monthly cleanup stays focused on booked jobs and friction points instead of vanity reporting."
   ],
   proofPoints: [
-    "72-hour preview SLA for landing-page builds",
-    "File-backed workflow that can run without extra SaaS spend",
-    "Approval-first ops for payments, access, and compliance exceptions"
-  ]
+    "72-hour preview SLA for first-page rebuilds",
+    "Hosted intake path and quote capture in the initial scope",
+    "Follow-up assets included from day one"
+  ],
+  serviceStack: [
+    {
+      title: "Proof page rebuild",
+      description:
+        "Rework the first screen, service hierarchy, proof stack, and quote capture so existing traffic turns into replies and calls."
+    },
+    {
+      title: "Hosted intake and missed-call recovery",
+      description:
+        "Install intake routing, text-back guidance, and dispatch handoff flows so leads stop dying after hours."
+    },
+    {
+      title: "Follow-up and trust loop",
+      description:
+        "Give the business a repeatable follow-up and review-request system that strengthens proof instead of leaving it ad hoc."
+    },
+    {
+      title: "Campaign landing pages",
+      description:
+        "Ship clean pages for Google Ads, Local Services Ads support, seasonal promos, and referral pushes once the core funnel is working."
+    }
+  ],
+  process: [
+    {
+      step: "01",
+      title: "Audit the leak",
+      body: "Northline starts with a teardown of the homepage, CTA flow, mobile friction, and review surface."
+    },
+    {
+      step: "02",
+      title: "Ship the preview",
+      body: "You get a fast first-pass preview with direct copy, clearer calls to action, and a tighter service offer."
+    },
+    {
+      step: "03",
+      title: "Wire the follow-up",
+      body: "Forms, call-routing notes, missed-call text-back language, and review assets are packed into the launch instead of added later."
+    },
+    {
+      step: "04",
+      title: "Clean up monthly",
+      body: "Every month Northline reviews friction points, recommends the next test, and keeps the funnel from drifting back into brochure mode."
+    }
+  ],
+  pricing: [
+    {
+      label: "Pilot Launch",
+      amount: "$749 setup + $199/mo",
+      details:
+        "For the first five operators Northline brings on. Use this to replace a weak first page, stand up hosted intake, and tighten the follow-up basics.",
+      idealFor:
+        "Best for one-location operators that need a fast rebuild before they buy more traffic.",
+      includes: [
+        "Homepage or landing-page rebuild",
+        "Call CTA and quote-form cleanup",
+        "Missed-call text-back playbook",
+        "Review request and response starter pack"
+      ]
+    },
+    {
+      label: "Growth System",
+      amount: "$1,250 setup + $299/mo",
+      details:
+        "For teams that need a broader service stack, monthly optimization, and dedicated landing pages for active campaigns.",
+      idealFor:
+        "Best for operators already spending on demand generation or juggling multiple high-value services.",
+      includes: [
+        "Service-page stack",
+        "Review and Google Business Profile support",
+        "Campaign landing pages",
+        "Monthly optimization queue"
+      ]
+    }
+  ],
+  faqs: [
+    {
+      question: "Do you run ads from day one?",
+      answer:
+        "No. Northline fixes the close path first, then adds paid traffic once the proof page, intake path, and follow-up loop are ready."
+    },
+    {
+      question: "How fast can launch happen?",
+      answer:
+        "Pilot rebuilds are designed around a 72-hour preview, then a short review cycle once access, routing details, and approvals are in place."
+    },
+    {
+      question: "What do you need from the client?",
+      answer:
+        "Domain access, brand assets if they exist, service priorities, contact routing, and approval on the final CTA and offer stack."
+    },
+    {
+      question: "Is this a full custom agency retainer?",
+      answer:
+        "No. Northline is productized on purpose so small operators get useful systems without a long consulting cycle."
+    }
+  ],
+  closingNote:
+    "Northline is built to start lean: proof page, intake, and outbound first, search next, paid social only after the conversion path is proven."
 };
 
 export const DEFAULT_IMON_ENGINE: ImonEngineSeed = {
@@ -96,6 +187,7 @@ export const DEFAULT_IMON_ENGINE: ImonEngineSeed = {
     trackedBusinesses: 0,
     activeBusinesses: 0,
     readyBusinesses: 0,
+    deferredBusinesses: 0,
     blockedBusinesses: 0
   }
 };
@@ -162,7 +254,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
     module: "content-site-network",
     category: "niche_content_site",
     launchPriority: 2,
-    stage: "ready",
+    stage: "deferred",
     summary:
       "SEO-driven content site network that produces informational and affiliate pages around low-support niches.",
     rolloutReason:
@@ -217,7 +309,7 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
     module: "social-brand-studio",
     category: "faceless_social_brand",
     launchPriority: 3,
-    stage: "scaffolded",
+    stage: "deferred",
     summary:
       "Persona-driven content brand that publishes media, tests hooks, and measures engagement patterns across social platforms.",
     rolloutReason:
@@ -383,28 +475,39 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
   },
   {
     id: "auto-funding-agency",
-    name: "Auto-Funding Agency",
+    name: "Northline Growth Systems",
     module: "auto-funding-agency",
     category: "client_services_agency",
     launchPriority: 6,
     stage: "paused",
     summary:
-      "The existing home-services agency pipeline that prospects, drafts outreach, builds client sites, and produces retention reports.",
+      "Home-services growth lane that prospects operators, ships remote proof pages, routes intake, and packages follow-up, reviews, and recurring optimization.",
     rolloutReason:
-      "Kept under ImonEngine management, but intentionally paused while the lower-touch businesses are validated first.",
+      "Revenue can start quickly once the proof page, intake path, payment links, and inbox are live, without waiting on a local office footprint.",
     revenueModel: "Setup fees and monthly retainers",
-    platforms: ["Email outreach", "Cloudflare Pages", "Static previews", "Stripe"],
+    platforms: [
+      "Email outreach",
+      "VPS-hosted proof page",
+      "Static previews",
+      "Stripe",
+      "Meta Business Suite"
+    ],
     automationFocus: [
       "Prospecting and scoring",
+      "Offer packaging and teardown-first sales assets",
       "Outreach drafting and approval routing",
       "Client site builds and QA",
-      "Retention reporting"
+      "Retention reporting and review operations"
     ],
     ownerActions: [
-      "Decide when to promote the agency lane back into active rotation",
-      "Complete payment and inbox approvals when live outreach resumes"
+      "Connect a public proof page or hosted Northline site plus one live intake path",
+      "Connect Stripe payment links and a branded sales inbox",
+      "Add optional trust layers like social proof, reviews, and SMTP after the faceless pipeline is already live"
     ],
-    launchBlockers: [],
+    launchBlockers: [
+      "Northline still needs a public proof page and at least one live intake path.",
+      "Stripe payment links and the branded contact path are not fully connected."
+    ],
     approvalType: "manual",
     automationPotential: 8,
     setupComplexity: 5,
@@ -431,7 +534,8 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
       activeWorkItems: 0
     },
     notes: [
-      "Existing single-business commands remain intact; ImonEngine now governs when this lane should be active."
+      "Existing single-business commands remain intact; ImonEngine now governs when this lane should be active.",
+      "Treat outbound as the first acquisition channel until at least three proof assets exist."
     ]
   }
 ];

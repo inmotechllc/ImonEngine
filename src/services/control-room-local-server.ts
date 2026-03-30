@@ -9,12 +9,19 @@ import { ControlRoomRemoteClient } from "./control-room-remote-client.js";
 
 type LocalRouteMatch =
   | { type: "home" }
+  | { type: "engine" }
   | { type: "login" }
   | { type: "logout" }
   | { type: "business"; businessId: string }
   | { type: "department"; businessId: string; departmentId: string }
   | { type: "api-snapshot" }
   | { type: "api-business"; businessId: string }
+  | { type: "api-department"; businessId: string; departmentId: string }
+  | { type: "api-chat-engine" }
+  | { type: "api-chat-business"; businessId: string }
+  | { type: "api-chat-department"; businessId: string; departmentId: string }
+  | { type: "api-chat-apply"; actionId: string }
+  | { type: "api-chat-dismiss"; actionId: string }
   | { type: "api-activity" }
   | { type: "api-approvals" }
   | { type: "api-tasks" }
@@ -62,9 +69,11 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
 
 function routePath(pathname: string): LocalRouteMatch {
   if (pathname === "/") return { type: "home" };
+  if (pathname === "/engine") return { type: "engine" };
   if (pathname === "/login") return { type: "login" };
   if (pathname === "/logout") return { type: "logout" };
   if (pathname === "/api/control-room/snapshot") return { type: "api-snapshot" };
+  if (pathname === "/api/control-room/chat/engine") return { type: "api-chat-engine" };
   if (pathname === "/api/control-room/activity") return { type: "api-activity" };
   if (pathname === "/api/control-room/approvals") return { type: "api-approvals" };
   if (pathname === "/api/control-room/tasks") return { type: "api-tasks" };
@@ -91,6 +100,54 @@ function routePath(pathname: string): LocalRouteMatch {
   const apiBusinessMatch = pathname.match(/^\/api\/control-room\/business\/([^/]+)$/);
   if (apiBusinessMatch?.[1]) {
     return { type: "api-business", businessId: decodeURIComponent(apiBusinessMatch[1]) };
+  }
+
+  const apiChatBusinessMatch = pathname.match(/^\/api\/control-room\/chat\/business\/([^/]+)$/);
+  if (apiChatBusinessMatch?.[1]) {
+    return {
+      type: "api-chat-business",
+      businessId: decodeURIComponent(apiChatBusinessMatch[1])
+    };
+  }
+
+  const apiDepartmentMatch = pathname.match(/^\/api\/control-room\/department\/([^/]+)\/([^/]+)$/);
+  if (apiDepartmentMatch?.[1] && apiDepartmentMatch?.[2]) {
+    return {
+      type: "api-department",
+      businessId: decodeURIComponent(apiDepartmentMatch[1]),
+      departmentId: decodeURIComponent(apiDepartmentMatch[2])
+    };
+  }
+
+  const apiChatDepartmentMatch = pathname.match(
+    /^\/api\/control-room\/chat\/department\/([^/]+)\/([^/]+)$/
+  );
+  if (apiChatDepartmentMatch?.[1] && apiChatDepartmentMatch?.[2]) {
+    return {
+      type: "api-chat-department",
+      businessId: decodeURIComponent(apiChatDepartmentMatch[1]),
+      departmentId: decodeURIComponent(apiChatDepartmentMatch[2])
+    };
+  }
+
+  const apiChatApplyMatch = pathname.match(
+    /^\/api\/control-room\/chat\/actions\/([^/]+)\/apply$/
+  );
+  if (apiChatApplyMatch?.[1]) {
+    return {
+      type: "api-chat-apply",
+      actionId: decodeURIComponent(apiChatApplyMatch[1])
+    };
+  }
+
+  const apiChatDismissMatch = pathname.match(
+    /^\/api\/control-room\/chat\/actions\/([^/]+)\/dismiss$/
+  );
+  if (apiChatDismissMatch?.[1]) {
+    return {
+      type: "api-chat-dismiss",
+      actionId: decodeURIComponent(apiChatDismissMatch[1])
+    };
   }
 
   return { type: "missing" };
@@ -215,6 +272,7 @@ export class ControlRoomLocalServer {
     try {
       switch (route.type) {
         case "home":
+        case "engine":
         case "business":
         case "department": {
           const snapshot = await this.remoteClient.fetchSnapshot();
@@ -236,8 +294,80 @@ export class ControlRoomLocalServer {
         case "api-snapshot":
           json(res, 200, await this.remoteClient.fetchSnapshot());
           return;
-        case "api-business":
-          json(res, 200, await this.remoteClient.fetchBusiness(route.businessId));
+        case "api-business": {
+          const snapshot = await this.remoteClient.fetchSnapshot();
+          const business = snapshot.businesses.find((entry) => entry.id === route.businessId);
+          if (!business) {
+            json(res, 404, { status: "missing", message: `Business ${route.businessId} was not found.` });
+            return;
+          }
+          json(res, 200, business);
+          return;
+        }
+        case "api-department": {
+          const snapshot = await this.remoteClient.fetchSnapshot();
+          const workspace = snapshot.departmentWorkspaces.find(
+            (entry) =>
+              entry.businessId === route.businessId && entry.departmentId === route.departmentId
+          );
+          if (!workspace) {
+            json(res, 404, {
+              status: "missing",
+              message: `Department ${route.departmentId} was not found for ${route.businessId}.`
+            });
+            return;
+          }
+          json(res, 200, workspace);
+          return;
+        }
+        case "api-chat-engine": {
+          if (req.method === "POST") {
+            const body = await readJsonBody<{ message?: string }>(req);
+            json(res, 200, await this.remoteClient.submitEngineChat(body.message ?? ""));
+            return;
+          }
+          json(res, 200, await this.remoteClient.fetchEngineChat());
+          return;
+        }
+        case "api-chat-business": {
+          if (req.method === "POST") {
+            const body = await readJsonBody<{ message?: string }>(req);
+            json(
+              res,
+              200,
+              await this.remoteClient.submitBusinessChat(route.businessId, body.message ?? "")
+            );
+            return;
+          }
+          json(res, 200, await this.remoteClient.fetchBusinessChat(route.businessId));
+          return;
+        }
+        case "api-chat-department": {
+          if (req.method === "POST") {
+            const body = await readJsonBody<{ message?: string }>(req);
+            json(
+              res,
+              200,
+              await this.remoteClient.submitDepartmentChat(
+                route.businessId,
+                route.departmentId,
+                body.message ?? ""
+              )
+            );
+            return;
+          }
+          json(
+            res,
+            200,
+            await this.remoteClient.fetchDepartmentChat(route.businessId, route.departmentId)
+          );
+          return;
+        }
+        case "api-chat-apply":
+          json(res, 200, await this.remoteClient.applyChatAction(route.actionId));
+          return;
+        case "api-chat-dismiss":
+          json(res, 200, await this.remoteClient.dismissChatAction(route.actionId));
           return;
         case "api-activity":
           json(res, 200, await this.remoteClient.fetchActivity());

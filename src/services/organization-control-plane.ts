@@ -1,17 +1,25 @@
 import path from "node:path";
 import type { AppConfig } from "../config.js";
 import type { ApprovalTask } from "../domain/contracts.js";
+import type { AssetPackRecord } from "../domain/digital-assets.js";
 import type { BusinessCategory, ImonEngineState, ManagedBusiness } from "../domain/engine.js";
 import type {
   ApprovalActionClass,
   ApprovalRoute,
   ApprovalRiskLevel,
   BusinessOfficeView,
+  DepartmentExecutionItem,
   DepartmentDefinition,
   DepartmentOfficeView,
+  DepartmentWorkspaceView,
   ExecutiveOfficeView,
   MemoryNamespacePolicy,
+  OfficeBreadcrumb,
+  OfficeHandoffRecord,
   OfficePanelSummary,
+  OfficeTemplateProfile,
+  OfficeTreeNode,
+  OfficeWorkerSummary,
   OfficeViewSnapshot,
   OrganizationBlueprint,
   OrgScope,
@@ -24,9 +32,14 @@ import type {
   WorkflowOwnershipRecord,
   OrgAuditRecord
 } from "../domain/org.js";
+import type { GrowthWorkItem, RevenueAllocationSnapshot } from "../domain/store-ops.js";
 import { ensureDir, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
 import { FileStore } from "../storage/store.js";
+import {
+  getOfficeTemplateProfileSpec,
+  officeTemplateProfileForCategory
+} from "./office-templates.js";
 import {
   buildBusinessOrgTemplate,
   buildEngineOrgTemplate,
@@ -57,6 +70,16 @@ type BlueprintBundle = {
   approvalRoutes: ApprovalRoute[];
   workflowOwnership: WorkflowOwnershipRecord[];
 };
+
+type BusinessOfficeContext = {
+  business: ManagedBusiness;
+  bundle: BlueprintBundle;
+  templateProfile: OfficeTemplateProfile;
+};
+
+function isDeferredBusiness(business: ManagedBusiness): boolean {
+  return business.stage === "deferred";
+}
 
 export interface OrganizationSyncResult {
   engineBlueprint: OrganizationBlueprint;
@@ -91,7 +114,15 @@ export class OrganizationControlPlaneService {
     engine: ImonEngineState,
     businesses: ManagedBusiness[]
   ): Promise<OrganizationSyncResult> {
-    const approvals = await this.store.getApprovals();
+    const [approvals, taskEnvelopes, auditRecords, assetPacks, growthQueue, allocationSnapshots] =
+      await Promise.all([
+        this.store.getApprovals(),
+        this.store.getTaskEnvelopes(),
+        this.store.getOrgAuditRecords(),
+        this.store.getAssetPacks(),
+        this.store.getGrowthQueue(),
+        this.store.getAllocationSnapshots()
+      ]);
     const engineBundle = this.instantiateBlueprint({
       scope: "engine",
       engine,
@@ -147,12 +178,38 @@ export class OrganizationControlPlaneService {
       ...businessBundles.flatMap((bundle) => bundle.workflowOwnership)
     ]);
 
+    const departmentExecutionItems = this.buildDepartmentExecutionItems({
+      businesses,
+      businessBundles,
+      approvals,
+      taskEnvelopes,
+      auditRecords,
+      assetPacks,
+      growthQueue,
+      allocationSnapshots
+    });
+    await this.store.replaceDepartmentExecutionItems(departmentExecutionItems);
+
+    const officeHandoffs = this.buildOfficeHandoffs({
+      engine,
+      businesses,
+      businessBundles,
+      approvals,
+      taskEnvelopes,
+      departmentExecutionItems
+    });
+    await this.store.replaceOfficeHandoffs(officeHandoffs);
+
     const officeSnapshot = this.buildOfficeSnapshot({
       engine,
       businesses,
       approvals,
+      taskEnvelopes,
+      auditRecords,
       engineBundle,
-      businessBundles
+      businessBundles,
+      officeHandoffs,
+      departmentExecutionItems
     });
     await this.store.saveOfficeViewSnapshot(officeSnapshot);
     const artifactPaths = await this.writeArtifacts({
@@ -734,91 +791,301 @@ export class OrganizationControlPlaneService {
     engine: ImonEngineState;
     businesses: ManagedBusiness[];
     approvals: ApprovalTask[];
+    taskEnvelopes: TaskEnvelope[];
+    auditRecords: OrgAuditRecord[];
     engineBundle: BlueprintBundle;
     businessBundles: BlueprintBundle[];
+    officeHandoffs: OfficeHandoffRecord[];
+    departmentExecutionItems: DepartmentExecutionItem[];
   }): OfficeViewSnapshot {
     const generatedAt = nowIso();
-    const businessPanels: OfficePanelSummary[] = args.businesses.map((business) => ({
-      id: `office-panel-business-${business.id}`,
-      title: business.name,
-      subtitle: business.stage,
-      status:
-        business.launchBlockers.length > 0
-          ? "blocked"
-          : business.stage === "active"
-            ? "active"
-            : business.stage,
-      ownerPositionId: args.businessBundles.find((bundle) => bundle.blueprint.businessId === business.id)?.positions.find(
-        (position) => position.title === "General Manager / Brand Director"
-      )?.id,
-      metrics: [
-        `Revenue: $${business.metrics.currentMonthlyRevenue.toFixed(2)}`,
-        `Costs: $${business.metrics.currentMonthlyCosts.toFixed(2)}`,
-        `Automation: ${Math.round(business.metrics.automationCoverage * 100)}%`
-      ],
-      alertCount: business.launchBlockers.length
-    }));
+    const businessContexts: BusinessOfficeContext[] = args.businessBundles
+      .map((bundle) => {
+        const business = args.businesses.find(
+          (candidate) => candidate.id === bundle.blueprint.businessId
+        );
+        if (!business) {
+          return undefined;
+        }
+        return {
+          business,
+          bundle,
+          templateProfile: officeTemplateProfileForCategory(business.category)
+        };
+      })
+      .filter((context): context is BusinessOfficeContext => Boolean(context));
 
+    const businessOfficeData = businessContexts.map((context) =>
+      this.buildBusinessOfficeData({
+        engine: args.engine,
+        context,
+        generatedAt,
+        approvals: args.approvals,
+        auditRecords: args.auditRecords,
+        officeHandoffs: args.officeHandoffs,
+        departmentExecutionItems: args.departmentExecutionItems
+      })
+    );
+    const businessPanels: OfficePanelSummary[] = businessOfficeData.map(
+      ({ context, businessView }) => ({
+        id: `office-panel-business-${context.business.id}`,
+        title: context.business.name,
+        subtitle: context.business.stage,
+        status: this.businessOfficeStatus(context.business, businessView.handoffs),
+        ownerPositionId: this.businessOrchestratorPosition(context.bundle)?.id,
+        metrics: [
+          `Revenue: $${context.business.metrics.currentMonthlyRevenue.toFixed(2)}`,
+          `Automation: ${Math.round(context.business.metrics.automationCoverage * 100)}%`,
+          `Handoffs: ${businessView.handoffs.length}`
+        ],
+        alertCount:
+          context.business.launchBlockers.length + businessView.approvalTasks.length
+      })
+    );
+    const openApprovals = args.approvals.filter(
+      (approval) =>
+        approval.status !== "completed" &&
+        !(
+          approval.relatedEntityType === "business" &&
+          args.businesses.some(
+            (business) =>
+              business.id === approval.relatedEntityId && isDeferredBusiness(business)
+          )
+        )
+    );
     const executiveView: ExecutiveOfficeView = {
       id: `office-executive-${args.engine.id}`,
       engineId: args.engine.id,
       generatedAt,
       title: `${args.engine.name} Executive Office`,
-      summary: "Portfolio control-room view backed by the real organization registry.",
+      summary:
+        "Portfolio office explorer backed by the organization control plane and routed handoffs.",
       businesses: businessPanels,
       alerts: args.businesses
-        .filter((business) => business.launchBlockers.length > 0)
+        .filter((business) => !isDeferredBusiness(business) && business.launchBlockers.length > 0)
         .map((business) => `${business.name}: ${business.launchBlockers.join(" ")}`),
-      approvalsWaiting: args.approvals.filter((approval) => approval.status !== "completed").length
+      roadblocks: args.businesses
+        .filter((business) => !isDeferredBusiness(business) && business.launchBlockers.length > 0)
+        .map((business) => `${business.name}: ${business.launchBlockers.join(" ")}`),
+      breadcrumbs: this.engineBreadcrumbs(args.engine),
+      workers: this.buildExecutiveWorkers({
+        engine: args.engine,
+        engineBundle: args.engineBundle,
+        businessOfficeData
+      }),
+      handoffs: args.officeHandoffs.filter((record) => record.scope === "engine"),
+      approvalTasks: openApprovals,
+      approvalsWaiting: openApprovals.length
     };
-
-    const businessViews: BusinessOfficeView[] = args.businessBundles.map((bundle) => {
-      const business = args.businesses.find((candidate) => candidate.id === bundle.blueprint.businessId)!;
-      return {
-        id: `office-business-${business.id}`,
-        engineId: args.engine.id,
-        businessId: business.id,
-        generatedAt,
-        title: `${business.name} Business Office`,
-        summary: bundle.blueprint.summary,
-        departments: bundle.departments.map((department) =>
-          this.departmentPanelSummary(bundle, department, business.launchBlockers)
-        ),
-        alerts: business.launchBlockers
-      };
-    });
-
-    const departmentViews: DepartmentOfficeView[] = [
-      ...this.buildDepartmentViews(args.engine.id, args.engineBundle, generatedAt),
-      ...args.businessBundles.flatMap((bundle) =>
-        this.buildDepartmentViews(args.engine.id, bundle, generatedAt)
-      )
-    ];
+    const businessViews = businessOfficeData.map((data) => data.businessView);
+    const departmentViews = businessOfficeData.flatMap((data) => data.departmentViews);
+    const departmentWorkspaces = businessOfficeData.flatMap(
+      (data) => data.departmentWorkspaces
+    );
 
     return {
       id: `office-snapshot-${generatedAt.replaceAll(":", "-")}`,
       generatedAt,
       engineId: args.engine.id,
+      officeTree: this.buildOfficeTree({
+        engine: args.engine,
+        businesses: args.businesses,
+        executiveView,
+        businessViews,
+        departmentWorkspaces
+      }),
       executiveView,
       businessViews,
-      departmentViews
+      departmentViews,
+      departmentWorkspaces
     };
   }
 
-  private buildDepartmentViews(
-    engineId: string,
-    bundle: BlueprintBundle,
-    generatedAt: string
-  ): DepartmentOfficeView[] {
-    return bundle.departments.map((department) => ({
-      id: `office-department-${department.id}`,
-      engineId,
-      businessId: bundle.blueprint.businessId,
+  private buildBusinessOfficeData(args: {
+    engine: ImonEngineState;
+    context: BusinessOfficeContext;
+    generatedAt: string;
+    approvals: ApprovalTask[];
+    auditRecords: OrgAuditRecord[];
+    officeHandoffs: OfficeHandoffRecord[];
+    departmentExecutionItems: DepartmentExecutionItem[];
+  }): {
+    context: BusinessOfficeContext;
+    businessView: BusinessOfficeView;
+    departmentViews: DepartmentOfficeView[];
+    departmentWorkspaces: DepartmentWorkspaceView[];
+  } {
+    const { context } = args;
+    const { business, bundle, templateProfile } = context;
+    const approvalTasks = this.openApprovalsForBusiness(args.approvals, business);
+    const departmentWorkspaces = bundle.departments.map((department) =>
+      this.buildDepartmentWorkspace({
+        engine: args.engine,
+        business,
+        bundle,
+        department,
+        templateProfile,
+        generatedAt: args.generatedAt,
+        approvals: approvalTasks,
+        auditRecords: args.auditRecords,
+        departmentExecutionItems: args.departmentExecutionItems
+      })
+    );
+    const departmentViews = departmentWorkspaces.map((workspace) =>
+      this.toDepartmentOfficeView({
+        business,
+        bundle,
+        workspace
+      })
+    );
+    const handoffs = args.officeHandoffs.filter(
+      (record) => record.scope === "business" && record.businessId === business.id
+    );
+
+    return {
+      context,
+      businessView: {
+        id: `office-business-${business.id}`,
+        engineId: args.engine.id,
+        businessId: business.id,
+        generatedAt: args.generatedAt,
+        title: `${business.name} Business Office`,
+        summary: bundle.blueprint.summary,
+        templateProfile,
+        breadcrumbs: this.businessBreadcrumbs(args.engine, business),
+        departments: bundle.departments.map((department) =>
+          this.departmentPanelSummary(
+            bundle,
+            department,
+            business.launchBlockers,
+            args.departmentExecutionItems.filter(
+              (item) => item.businessId === business.id && item.departmentId === department.id
+            )
+          )
+        ),
+        workers: this.buildBusinessWorkers({
+          business,
+          bundle,
+          templateProfile,
+          approvalCount: approvalTasks.length,
+          handoffCount: handoffs.length,
+          departmentWorkspaces
+        }),
+        handoffs,
+        approvalTasks,
+        roadblocks: [...business.launchBlockers],
+        alerts: uniqueStrings([
+          ...business.launchBlockers,
+          ...handoffs
+            .filter((record) => ["blocked", "awaiting_approval"].includes(record.status))
+            .map((record) => `${record.title}: ${record.status.replaceAll("_", " ")}`)
+        ])
+      },
+      departmentViews,
+      departmentWorkspaces
+    };
+  }
+
+  private buildDepartmentWorkspace(args: {
+    engine: ImonEngineState;
+    business: ManagedBusiness;
+    bundle: BlueprintBundle;
+    department: DepartmentDefinition;
+    templateProfile: OfficeTemplateProfile;
+    generatedAt: string;
+    approvals: ApprovalTask[];
+    auditRecords: OrgAuditRecord[];
+    departmentExecutionItems: DepartmentExecutionItem[];
+  }): DepartmentWorkspaceView {
+    const executionItems = args.departmentExecutionItems
+      .filter(
+        (item) =>
+          item.businessId === args.business.id && item.departmentId === args.department.id
+      )
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    const recentActivity = args.auditRecords
+      .filter(
+        (record) =>
+          record.businessId === args.business.id && record.departmentId === args.department.id
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, 8);
+    const roadblocks = uniqueStrings([
+      ...args.business.launchBlockers,
+      ...executionItems.flatMap((item) => item.blockers)
+    ]);
+    const orchestrator = this.buildDepartmentOrchestratorWorker({
+      business: args.business,
+      bundle: args.bundle,
+      department: args.department,
+      templateProfile: args.templateProfile,
+      executionItems,
+      roadblocks,
+      approvalCount: args.approvals.length
+    });
+    const workers = [
+      orchestrator,
+      ...executionItems.map((item) =>
+        this.executionWorkerSummary({
+          business: args.business,
+          department: args.department,
+          item
+        })
+      )
+    ];
+
+    return {
+      id: `office-department-${args.department.id}`,
+      engineId: args.engine.id,
+      businessId: args.business.id,
+      departmentId: args.department.id,
+      generatedAt: args.generatedAt,
+      title: `${args.department.name} Department Workspace`,
+      summary: args.department.purpose,
+      templateProfile: args.templateProfile,
+      breadcrumbs: this.departmentBreadcrumbs(args.engine, args.business, args.department),
+      workers,
+      executionItems,
+      approvalTasks: [...args.approvals],
+      roadblocks,
+      alerts: uniqueStrings([
+        ...roadblocks,
+        ...executionItems
+          .filter((item) => item.status === "review")
+          .map((item) => `${item.title}: ready for review`)
+      ]),
+      metrics: [
+        `Execution items: ${executionItems.length}`,
+        `Workers: ${workers.length}`,
+        `KPIs: ${args.department.kpis.length}`
+      ],
+      widgetSections: this.widgetSectionsForDepartment(
+        args.templateProfile,
+        args.department.kind
+      ),
+      recentActivity
+    };
+  }
+
+  private toDepartmentOfficeView(args: {
+    business: ManagedBusiness;
+    bundle: BlueprintBundle;
+    workspace: DepartmentWorkspaceView;
+  }): DepartmentOfficeView {
+    const department = args.bundle.departments.find(
+      (candidate) => candidate.id === args.workspace.departmentId
+    )!;
+    return {
+      id: args.workspace.id,
+      engineId: args.workspace.engineId,
+      businessId: args.business.id,
       departmentId: department.id,
-      generatedAt,
+      generatedAt: args.workspace.generatedAt,
       title: `${department.name} Office`,
       summary: department.purpose,
-      positions: bundle.positions
+      templateProfile: args.workspace.templateProfile,
+      breadcrumbs: args.workspace.breadcrumbs,
+      positions: args.bundle.positions
         .filter((position) => position.departmentId === department.id)
         .map((position) => ({
           id: `office-panel-position-${position.id}`,
@@ -833,29 +1100,792 @@ export class OrganizationControlPlaneService {
           ],
           alertCount: 0
         })),
-      alerts: []
-    }));
+      workers: args.workspace.workers,
+      roadblocks: args.workspace.roadblocks,
+      alerts: args.workspace.alerts
+    };
+  }
+
+  private buildDepartmentExecutionItems(args: {
+    businesses: ManagedBusiness[];
+    businessBundles: BlueprintBundle[];
+    approvals: ApprovalTask[];
+    taskEnvelopes: TaskEnvelope[];
+    auditRecords: OrgAuditRecord[];
+    assetPacks: AssetPackRecord[];
+    growthQueue: GrowthWorkItem[];
+    allocationSnapshots: RevenueAllocationSnapshot[];
+  }): DepartmentExecutionItem[] {
+    const items: DepartmentExecutionItem[] = [];
+    const openApprovals = args.approvals.filter((approval) => approval.status !== "completed");
+
+    for (const business of args.businesses) {
+      const bundle = args.businessBundles.find(
+        (candidate) => candidate.blueprint.businessId === business.id
+      );
+      if (!bundle) {
+        continue;
+      }
+
+      for (const department of bundle.departments) {
+        const departmentTasks = args.taskEnvelopes.filter(
+          (task) =>
+            task.businessId === business.id && task.departmentId === department.id
+        );
+        const departmentAudits = args.auditRecords.filter(
+          (record) =>
+            record.businessId === business.id && record.departmentId === department.id
+        );
+        const workflowOwners = bundle.workflowOwnership.filter(
+          (record) => record.departmentId === department.id
+        );
+
+        for (const workflowOwner of workflowOwners) {
+          const relatedTasks = departmentTasks.filter(
+            (task) => task.workflowId === workflowOwner.workflowId
+          );
+          const businessApprovals = openApprovals.filter(
+            (approval) => approval.relatedEntityId === business.id
+          );
+          const blockers = uniqueStrings([
+            ...business.launchBlockers,
+            ...businessApprovals.map((approval) => approval.reason)
+          ]);
+          items.push({
+            id: `execution-${business.id}-${department.id}-${workflowOwner.workflowId}`,
+            businessId: business.id,
+            departmentId: department.id,
+            workflowId: workflowOwner.workflowId,
+            title: workflowOwner.workflowName,
+            summary: workflowOwner.successMetric,
+            status: this.executionStatusForWorkflow({
+              business,
+              blockers,
+              approvalCount: businessApprovals.length,
+              taskCount: relatedTasks.length
+            }),
+            assignedWorkerId: `worker-task-agent-${department.id}-${workflowOwner.workflowId}`,
+            assignedWorkerLabel: workflowOwner.positionName,
+            blockers,
+            artifacts: this.executionArtifactsForWorkflow({
+              business,
+              workflowOwner,
+              assetPacks: args.assetPacks,
+              growthQueue: args.growthQueue,
+              allocationSnapshots: args.allocationSnapshots
+            }),
+            metrics: [
+              `Tasks: ${relatedTasks.length}`,
+              `Approvals: ${businessApprovals.length}`,
+              `Model tier: ${workflowOwner.allowedModelTier}`
+            ],
+            approvalIds: businessApprovals.map((approval) => approval.id),
+            auditRecordIds: departmentAudits.slice(0, 4).map((record) => record.id),
+            createdAt: workflowOwner.updatedAt,
+            updatedAt: workflowOwner.updatedAt
+          });
+        }
+
+        for (const task of departmentTasks
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+          .slice(0, 3)) {
+          const relatedAudits = departmentAudits.filter(
+            (record) => record.taskEnvelopeId === task.id
+          );
+          const blockers = uniqueStrings([
+            ...business.launchBlockers,
+            ...(task.publicFacing || task.moneyMovement
+              ? ["Task is waiting for office review before public or money-sensitive action."]
+              : [])
+          ]);
+          items.push({
+            id: `execution-task-${task.id}`,
+            businessId: business.id,
+            departmentId: department.id,
+            workflowId: task.workflowId,
+            taskEnvelopeId: task.id,
+            title: task.title,
+            summary: task.summary,
+            status: this.executionStatusForTask(task, blockers),
+            assignedWorkerId: `worker-sub-agent-${task.id}`,
+            assignedWorkerLabel: task.positionId,
+            blockers,
+            artifacts: [
+              `Workflow: ${task.workflowId ?? "manual"}`,
+              `Primary memory: ${task.allowedMemoryNamespaces[0] ?? "n/a"}`
+            ],
+            metrics: [
+              `Risk: ${task.riskLevel}`,
+              `Tools: ${task.allowedTools.length}`,
+              `Actions: ${task.actionClasses.length}`
+            ],
+            approvalIds: [],
+            auditRecordIds: relatedAudits.map((record) => record.id),
+            createdAt: task.createdAt,
+            updatedAt: task.updatedAt
+          });
+        }
+      }
+    }
+
+    return items;
+  }
+
+  private buildOfficeHandoffs(args: {
+    engine: ImonEngineState;
+    businesses: ManagedBusiness[];
+    businessBundles: BlueprintBundle[];
+    approvals: ApprovalTask[];
+    taskEnvelopes: TaskEnvelope[];
+    departmentExecutionItems: DepartmentExecutionItem[];
+  }): OfficeHandoffRecord[] {
+    const records: OfficeHandoffRecord[] = [];
+    const openApprovals = args.approvals.filter((approval) => approval.status !== "completed");
+
+    for (const business of args.businesses) {
+      const bundle = args.businessBundles.find(
+        (candidate) => candidate.blueprint.businessId === business.id
+      );
+      if (!bundle) {
+        continue;
+      }
+
+      const businessApprovals = openApprovals.filter(
+        (approval) => approval.relatedEntityId === business.id
+      );
+      const businessTasks = args.taskEnvelopes.filter(
+        (task) => task.businessId === business.id
+      );
+      const businessExecutionItems = args.departmentExecutionItems.filter(
+        (item) => item.businessId === business.id
+      );
+
+      records.push({
+        id: `handoff-engine-${business.id}`,
+        scope: "engine",
+        businessId: business.id,
+        sourceOfficeId: `office-executive-${args.engine.id}`,
+        targetOfficeId: `office-business-${business.id}`,
+        title: `Route work into ${business.name}`,
+        summary: `${business.metrics.activeWorkItems} active work item(s) and ${businessExecutionItems.length} execution lane(s) are currently owned by ${business.name}.`,
+        workflowId: "business-governance",
+        status: this.handoffStatus({
+          stage: business.stage,
+          blockers: business.launchBlockers,
+          approvalCount: businessApprovals.length,
+          executionItems: businessExecutionItems
+        }),
+        roadblocks: [...business.launchBlockers],
+        ownerPositionId: this.businessOrchestratorPosition(bundle)?.id,
+        ownerLabel: this.businessOrchestratorPosition(bundle)?.title ?? business.name,
+        approvalIds: businessApprovals.map((approval) => approval.id),
+        taskEnvelopeIds: businessTasks.slice(0, 4).map((task) => task.id),
+        executionItemIds: businessExecutionItems.slice(0, 8).map((item) => item.id),
+        createdAt: nowIso(),
+        updatedAt: nowIso()
+      });
+
+      for (const department of bundle.departments) {
+        const departmentExecutionItems = businessExecutionItems.filter(
+          (item) => item.departmentId === department.id
+        );
+        const departmentTasks = businessTasks.filter(
+          (task) => task.departmentId === department.id
+        );
+        const roadblocks = uniqueStrings([
+          ...business.launchBlockers,
+          ...departmentExecutionItems.flatMap((item) => item.blockers)
+        ]);
+        records.push({
+          id: `handoff-business-${business.id}-${department.id}`,
+          scope: "business",
+          businessId: business.id,
+          departmentId: department.id,
+          sourceOfficeId: `office-business-${business.id}`,
+          targetOfficeId: `office-department-${department.id}`,
+          title: `Hand off to ${department.name}`,
+          summary: `${departmentExecutionItems.length} execution lane(s) are active inside ${department.name}.`,
+          workflowId: department.workflowIds[0],
+          status: this.handoffStatus({
+            stage: business.stage,
+            blockers: roadblocks,
+            approvalCount: businessApprovals.length,
+            executionItems: departmentExecutionItems
+          }),
+          roadblocks,
+          ownerPositionId: this.departmentOrchestratorPosition(bundle, department)?.id,
+          ownerLabel:
+            this.departmentOrchestratorPosition(bundle, department)?.title ??
+            department.name,
+          approvalIds: businessApprovals.map((approval) => approval.id),
+          taskEnvelopeIds: departmentTasks.slice(0, 4).map((task) => task.id),
+          executionItemIds: departmentExecutionItems.map((item) => item.id),
+          createdAt: nowIso(),
+          updatedAt: nowIso()
+        });
+      }
+    }
+
+    return records;
+  }
+
+  private buildExecutiveWorkers(args: {
+    engine: ImonEngineState;
+    engineBundle: BlueprintBundle;
+    businessOfficeData: Array<{
+      context: BusinessOfficeContext;
+      businessView: BusinessOfficeView;
+    }>;
+  }): OfficeWorkerSummary[] {
+    const enginePosition =
+      args.engineBundle.positions.find(
+        (position) => position.title === "Chief Operating Officer / Chief of Staff"
+      ) ??
+      args.engineBundle.positions.find(
+        (position) => position.title === "Chief Executive / Portfolio Director"
+      ) ??
+      args.engineBundle.positions[0];
+    const workers: OfficeWorkerSummary[] = [];
+
+    if (enginePosition) {
+      workers.push({
+        id: `worker-engine-orchestrator-${args.engine.id}`,
+        officeId: `office-executive-${args.engine.id}`,
+        positionId: enginePosition.id,
+        label: getOfficeTemplateProfileSpec("catalog_store").workerLabels.engine_orchestrator,
+        title: enginePosition.title,
+        workerType: "engine_orchestrator",
+        route: this.engineRoute(),
+        status:
+          args.businessOfficeData.some(({ context }) => context.business.stage === "active")
+            ? "active"
+            : "ready",
+        summary: enginePosition.mission,
+        metrics: [
+          `Businesses: ${args.businessOfficeData.length}`,
+          `Approvals: ${args.businessOfficeData.reduce(
+            (sum, entry) => sum + entry.businessView.approvalTasks.length,
+            0
+          )}`,
+          `Handoffs: ${args.businessOfficeData.length}`
+        ],
+        toolTags: enginePosition.toolTags
+      });
+    }
+
+    for (const { context, businessView } of args.businessOfficeData) {
+      const position = this.businessOrchestratorPosition(context.bundle);
+      workers.push({
+        id: `worker-brand-orchestrator-${context.business.id}`,
+        officeId: `office-executive-${args.engine.id}`,
+        businessId: context.business.id,
+        positionId: position?.id,
+        label: getOfficeTemplateProfileSpec(context.templateProfile).workerLabels.brand_orchestrator,
+        title: context.business.name,
+        workerType: "brand_orchestrator",
+        route: this.businessRoute(context.business.id),
+        status: this.businessOfficeStatus(context.business, businessView.handoffs),
+        summary: position?.mission ?? context.business.summary,
+        metrics: [
+          `Departments: ${businessView.departments.length}`,
+          `Approvals: ${businessView.approvalTasks.length}`,
+          `Handoffs: ${businessView.handoffs.length}`
+        ],
+        toolTags: position?.toolTags ?? []
+      });
+    }
+
+    return workers;
+  }
+
+  private buildBusinessWorkers(args: {
+    business: ManagedBusiness;
+    bundle: BlueprintBundle;
+    templateProfile: OfficeTemplateProfile;
+    approvalCount: number;
+    handoffCount: number;
+    departmentWorkspaces: DepartmentWorkspaceView[];
+  }): OfficeWorkerSummary[] {
+    const spec = getOfficeTemplateProfileSpec(args.templateProfile);
+    const brandOrchestrator = this.businessOrchestratorPosition(args.bundle);
+    const workers: OfficeWorkerSummary[] = [];
+
+    if (brandOrchestrator) {
+      workers.push({
+        id: `worker-brand-office-${args.business.id}`,
+        officeId: `office-business-${args.business.id}`,
+        businessId: args.business.id,
+        positionId: brandOrchestrator.id,
+        label: spec.workerLabels.brand_orchestrator,
+        title: brandOrchestrator.title,
+        workerType: "brand_orchestrator",
+        route: this.businessRoute(args.business.id),
+        status: this.businessOfficeStatus(args.business, []),
+        summary: brandOrchestrator.mission,
+        metrics: [
+          `Departments: ${args.bundle.departments.length}`,
+          `Approvals: ${args.approvalCount}`,
+          `Handoffs: ${args.handoffCount}`
+        ],
+        toolTags: brandOrchestrator.toolTags
+      });
+    }
+
+    for (const workspace of args.departmentWorkspaces) {
+      const worker = workspace.workers.find(
+        (candidate) => candidate.workerType === "department_orchestrator"
+      );
+      if (worker) {
+        workers.push({
+          ...worker,
+          officeId: `office-business-${args.business.id}`
+        });
+      }
+    }
+
+    return workers;
+  }
+
+  private buildDepartmentOrchestratorWorker(args: {
+    business: ManagedBusiness;
+    bundle: BlueprintBundle;
+    department: DepartmentDefinition;
+    templateProfile: OfficeTemplateProfile;
+    executionItems: DepartmentExecutionItem[];
+    roadblocks: string[];
+    approvalCount: number;
+  }): OfficeWorkerSummary {
+    const position = this.departmentOrchestratorPosition(args.bundle, args.department);
+    const spec = getOfficeTemplateProfileSpec(args.templateProfile);
+    return {
+      id: `worker-department-orchestrator-${args.department.id}`,
+      officeId: `office-department-${args.department.id}`,
+      businessId: args.business.id,
+      departmentId: args.department.id,
+      positionId: position?.id,
+      label: spec.workerLabels.department_orchestrator,
+      title: position?.title ?? args.department.name,
+      workerType: "department_orchestrator",
+      route: this.departmentRoute(args.business.id, args.department.id),
+      status: this.departmentWorkspaceStatus(
+        args.executionItems,
+        args.roadblocks,
+        args.approvalCount
+      ),
+      summary: position?.mission ?? args.department.purpose,
+      metrics: [
+        `Execution: ${args.executionItems.length}`,
+        `Approvals: ${args.approvalCount}`,
+        `KPIs: ${args.department.kpis.length}`
+      ],
+      toolTags: position?.toolTags ?? args.department.toolTags
+    };
+  }
+
+  private executionWorkerSummary(args: {
+    business: ManagedBusiness;
+    department: DepartmentDefinition;
+    item: DepartmentExecutionItem;
+  }): OfficeWorkerSummary {
+    const workerType = args.item.taskEnvelopeId ? "sub_agent" : "task_agent";
+    return {
+      id: args.item.assignedWorkerId,
+      officeId: `office-department-${args.department.id}`,
+      businessId: args.business.id,
+      departmentId: args.department.id,
+      label: workerType === "sub_agent" ? "Sub-agent" : "Task Agent",
+      title: args.item.title,
+      workerType,
+      route: this.departmentRoute(args.business.id, args.department.id),
+      status: args.item.status,
+      summary: args.item.summary,
+      metrics: args.item.metrics,
+      toolTags: []
+    };
+  }
+
+  private buildOfficeTree(args: {
+    engine: ImonEngineState;
+    businesses: ManagedBusiness[];
+    executiveView: ExecutiveOfficeView;
+    businessViews: BusinessOfficeView[];
+    departmentWorkspaces: DepartmentWorkspaceView[];
+  }): OfficeTreeNode {
+    return {
+      id: `office-tree-engine-${args.engine.id}`,
+      scope: "engine",
+      title: args.engine.name,
+      subtitle: "Engine Office",
+      route: this.engineRoute(),
+      status:
+        args.executiveView.roadblocks.length > 0 ||
+        args.executiveView.approvalTasks.length > 0
+          ? "attention-needed"
+          : "active",
+      officeId: args.executiveView.id,
+      counts: {
+        approvals: args.executiveView.approvalTasks.length,
+        handoffs: args.executiveView.handoffs.length,
+        blockers: args.executiveView.roadblocks.length,
+        executions: args.departmentWorkspaces.reduce(
+          (sum, workspace) => sum + workspace.executionItems.length,
+          0
+        )
+      },
+      children: args.businessViews.map((businessView) => {
+        const business = args.businesses.find(
+          (candidate) => candidate.id === businessView.businessId
+        )!;
+        const workspaces = args.departmentWorkspaces.filter(
+          (workspace) => workspace.businessId === business.id
+        );
+        return {
+          id: `office-tree-business-${business.id}`,
+          scope: "business",
+          title: business.name,
+          subtitle: `${business.stage} | ${businessView.templateProfile.replaceAll("_", " ")}`,
+          route: this.businessRoute(business.id),
+          status: this.businessOfficeStatus(business, businessView.handoffs),
+          parentId: `office-tree-engine-${args.engine.id}`,
+          officeId: businessView.id,
+          businessId: business.id,
+          counts: {
+            approvals: businessView.approvalTasks.length,
+            handoffs: businessView.handoffs.length,
+            blockers: businessView.roadblocks.length,
+            executions: workspaces.reduce(
+              (sum, workspace) => sum + workspace.executionItems.length,
+              0
+            )
+          },
+          children: workspaces.map((workspace) => ({
+            id: `office-tree-department-${workspace.departmentId}`,
+            scope: "department",
+            title: workspace.title.replace(" Department Workspace", ""),
+            subtitle: workspace.templateProfile.replaceAll("_", " "),
+            route: this.departmentRoute(workspace.businessId, workspace.departmentId),
+            status: this.departmentWorkspaceStatus(
+              workspace.executionItems,
+              workspace.roadblocks,
+              workspace.approvalTasks.length
+            ),
+            parentId: `office-tree-business-${business.id}`,
+            officeId: workspace.id,
+            businessId: workspace.businessId,
+            departmentId: workspace.departmentId,
+            counts: {
+              approvals: workspace.approvalTasks.length,
+              handoffs: 0,
+              blockers: workspace.roadblocks.length,
+              executions: workspace.executionItems.length
+            },
+            children: []
+          }))
+        };
+      })
+    };
   }
 
   private departmentPanelSummary(
     bundle: BlueprintBundle,
     department: DepartmentDefinition,
-    launchBlockers: string[]
+    launchBlockers: string[],
+    executionItems: DepartmentExecutionItem[]
   ): OfficePanelSummary {
     const positions = bundle.positions.filter((position) => position.departmentId === department.id);
+    const blockedItems = executionItems.filter((item) => item.status === "blocked").length;
     return {
       id: `office-panel-department-${department.id}`,
       title: department.name,
       subtitle: department.kind,
-      status: launchBlockers.length > 0 ? "attention-needed" : "ready",
-      ownerPositionId: department.budgetOwnerPositionId ?? positions[0]?.id,
+      status:
+        launchBlockers.length > 0 || blockedItems > 0
+          ? "attention-needed"
+          : executionItems.some((item) => item.status === "running")
+            ? "active"
+            : "ready",
+      ownerPositionId:
+        this.departmentOrchestratorPosition(bundle, department)?.id ??
+        department.budgetOwnerPositionId ??
+        positions[0]?.id,
       metrics: [
         `Positions: ${positions.length}`,
-        `Workflows: ${department.workflowIds.length}`,
-        `KPIs: ${department.kpis.length}`
+        `Execution: ${executionItems.length}`,
+        `Blocked: ${blockedItems}`
       ],
-      alertCount: launchBlockers.length
+      alertCount: launchBlockers.length + blockedItems
     };
+  }
+
+  private openApprovalsForBusiness(
+    approvals: ApprovalTask[],
+    business: ManagedBusiness
+  ): ApprovalTask[] {
+    if (isDeferredBusiness(business)) {
+      return [];
+    }
+
+    return approvals.filter(
+      (approval) =>
+        approval.status !== "completed" &&
+        approval.relatedEntityType === "business" &&
+        approval.relatedEntityId === business.id
+    );
+  }
+
+  private executionStatusForWorkflow(args: {
+    business: ManagedBusiness;
+    blockers: string[];
+    approvalCount: number;
+    taskCount: number;
+  }): DepartmentExecutionItem["status"] {
+    if (args.blockers.length > 0) {
+      return "blocked";
+    }
+    if (args.approvalCount > 0) {
+      return "review";
+    }
+    if (args.taskCount > 0 || args.business.stage === "active") {
+      return "running";
+    }
+    return "queued";
+  }
+
+  private executionStatusForTask(
+    task: TaskEnvelope,
+    blockers: string[]
+  ): DepartmentExecutionItem["status"] {
+    if (blockers.length > 0) {
+      return "blocked";
+    }
+    if (task.publicFacing || task.moneyMovement || task.riskLevel !== "low") {
+      return "review";
+    }
+    return "running";
+  }
+
+  private handoffStatus(args: {
+    stage: ManagedBusiness["stage"];
+    blockers: string[];
+    approvalCount: number;
+    executionItems: DepartmentExecutionItem[];
+  }): OfficeHandoffRecord["status"] {
+    if (args.stage === "deferred") {
+      return "queued";
+    }
+    if (args.blockers.length > 0) {
+      return "blocked";
+    }
+    if (args.approvalCount > 0) {
+      return "awaiting_approval";
+    }
+    if (args.executionItems.some((item) => item.status === "running")) {
+      return "in_progress";
+    }
+    if (args.stage === "active") {
+      return "in_progress";
+    }
+    if (
+      args.executionItems.length > 0 &&
+      args.executionItems.every((item) => item.status === "done")
+    ) {
+      return "completed";
+    }
+    return "queued";
+  }
+
+  private businessOfficeStatus(
+    business: ManagedBusiness,
+    handoffs: OfficeHandoffRecord[]
+  ): string {
+    if (isDeferredBusiness(business)) {
+      return "deferred";
+    }
+    if (
+      business.launchBlockers.length > 0 ||
+      handoffs.some((handoff) => handoff.status === "blocked")
+    ) {
+      return "blocked";
+    }
+    if (handoffs.some((handoff) => handoff.status === "awaiting_approval")) {
+      return "awaiting_approval";
+    }
+    if (business.stage === "active") {
+      return "active";
+    }
+    return business.stage;
+  }
+
+  private departmentWorkspaceStatus(
+    executionItems: DepartmentExecutionItem[],
+    roadblocks: string[],
+    approvalCount: number
+  ): string {
+    if (roadblocks.length > 0 || executionItems.some((item) => item.status === "blocked")) {
+      return "blocked";
+    }
+    if (approvalCount > 0 || executionItems.some((item) => item.status === "review")) {
+      return "review";
+    }
+    if (executionItems.some((item) => item.status === "running")) {
+      return "active";
+    }
+    if (
+      executionItems.length > 0 &&
+      executionItems.every((item) => item.status === "done")
+    ) {
+      return "done";
+    }
+    return "queued";
+  }
+
+  private executionArtifactsForWorkflow(args: {
+    business: ManagedBusiness;
+    workflowOwner: WorkflowOwnershipRecord;
+    assetPacks: AssetPackRecord[];
+    growthQueue: GrowthWorkItem[];
+    allocationSnapshots: RevenueAllocationSnapshot[];
+  }): string[] {
+    const defaultArtifacts = [
+      `Workflow id: ${args.workflowOwner.workflowId}`,
+      `Success metric: ${args.workflowOwner.successMetric}`
+    ];
+
+    if (args.workflowOwner.workflowId === "digital-asset-factory") {
+      const packs = args.assetPacks
+        .filter((pack) => pack.businessId === args.business.id)
+        .slice(0, 2);
+      return packs.length > 0
+        ? packs.map((pack) => `${pack.title}: ${pack.status}`)
+        : defaultArtifacts;
+    }
+
+    if (args.workflowOwner.workflowId === "store-autopilot") {
+      const queueItems = args.growthQueue.filter((item) => item.businessId === args.business.id);
+      return [
+        `${args.assetPacks.filter((pack) => pack.businessId === args.business.id).length} pack(s) in state`,
+        `${queueItems.filter((item) => item.status !== "posted").length} growth item(s) pending`
+      ];
+    }
+
+    if (args.workflowOwner.workflowId === "growth-publishing") {
+      const queueItems = args.growthQueue.filter((item) => item.businessId === args.business.id);
+      return [
+        `${queueItems.filter((item) => item.status === "planned").length} planned growth item(s)`,
+        `${uniqueStrings(queueItems.map((item) => item.channel)).join(", ") || "No channels queued"}`
+      ];
+    }
+
+    if (args.workflowOwner.workflowId.includes("finance")) {
+      const allocation = [...args.allocationSnapshots]
+        .filter((snapshot) => snapshot.businessId === args.business.id)
+        .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))[0];
+      return allocation
+        ? [
+            `Allocation snapshot: ${allocation.id}`,
+            `Verified net revenue: $${(
+              allocation.dataQuality?.verifiedNetRevenue ?? allocation.netRevenue
+            ).toFixed(2)}`
+          ]
+        : defaultArtifacts;
+    }
+
+    return defaultArtifacts;
+  }
+
+  private engineBreadcrumbs(engine: ImonEngineState): OfficeBreadcrumb[] {
+    return [
+      {
+        id: `crumb-engine-${engine.id}`,
+        scope: "engine",
+        title: engine.name,
+        route: this.engineRoute()
+      }
+    ];
+  }
+
+  private businessBreadcrumbs(
+    engine: ImonEngineState,
+    business: ManagedBusiness
+  ): OfficeBreadcrumb[] {
+    return [
+      ...this.engineBreadcrumbs(engine),
+      {
+        id: `crumb-business-${business.id}`,
+        scope: "business",
+        title: business.name,
+        route: this.businessRoute(business.id)
+      }
+    ];
+  }
+
+  private departmentBreadcrumbs(
+    engine: ImonEngineState,
+    business: ManagedBusiness,
+    department: DepartmentDefinition
+  ): OfficeBreadcrumb[] {
+    return [
+      ...this.businessBreadcrumbs(engine, business),
+      {
+        id: `crumb-department-${department.id}`,
+        scope: "department",
+        title: department.name,
+        route: this.departmentRoute(business.id, department.id)
+      }
+    ];
+  }
+
+  private widgetSectionsForDepartment(
+    templateProfile: OfficeTemplateProfile,
+    departmentKind: DepartmentDefinition["kind"]
+  ): string[] {
+    const spec = getOfficeTemplateProfileSpec(templateProfile);
+    if (departmentKind === "growth_marketing") {
+      return [...spec.departmentWidgetSections, "campaign_queue"];
+    }
+    if (departmentKind === "finance") {
+      return [...spec.departmentWidgetSections, "allocation_policy"];
+    }
+    if (departmentKind === "analytics_research") {
+      return [...spec.departmentWidgetSections, "signal_review"];
+    }
+    return [...spec.departmentWidgetSections];
+  }
+
+  private engineRoute(): string {
+    return "/engine";
+  }
+
+  private businessRoute(businessId: string): string {
+    return `/business/${encodeURIComponent(businessId)}`;
+  }
+
+  private departmentRoute(businessId: string, departmentId: string): string {
+    return `/department/${encodeURIComponent(businessId)}/${encodeURIComponent(departmentId)}`;
+  }
+
+  private businessOrchestratorPosition(bundle: BlueprintBundle): PositionDefinition | undefined {
+    return (
+      bundle.positions.find((position) => position.title === "General Manager / Brand Director") ??
+      bundle.positions[0]
+    );
+  }
+
+  private departmentOrchestratorPosition(
+    bundle: BlueprintBundle,
+    department: DepartmentDefinition
+  ): PositionDefinition | undefined {
+    return (
+      bundle.positions.find((position) => {
+        const workflowOwner = bundle.workflowOwnership.find(
+          (record) =>
+            record.departmentId === department.id && record.positionId === position.id
+        );
+        return Boolean(workflowOwner);
+      }) ??
+      bundle.positions.find((position) => position.id === department.budgetOwnerPositionId) ??
+      bundle.positions.find((position) => position.departmentId === department.id)
+    );
   }
 
   private async writeArtifacts(args: {
@@ -929,15 +1959,31 @@ export class OrganizationControlPlaneService {
     approvals: ApprovalTask[];
     engineBundle: BlueprintBundle;
     businessBundles: BlueprintBundle[];
+    officeSnapshot: OfficeViewSnapshot;
   }): string {
+    const handoffCount =
+      args.officeSnapshot.executiveView.handoffs.length +
+      args.officeSnapshot.businessViews.reduce(
+        (sum, view) => sum + view.handoffs.length,
+        0
+      );
+    const executionCount = args.officeSnapshot.departmentWorkspaces.reduce(
+      (sum, workspace) => sum + workspace.executionItems.length,
+      0
+    );
     return [
       "# Organization Control Plane",
       "",
       `Generated at: ${nowIso()}`,
       `Approvals waiting: ${args.approvals.filter((approval) => approval.status !== "completed").length}`,
+      `Office tree root: ${args.officeSnapshot.officeTree.title}`,
+      `Office handoffs: ${handoffCount}`,
+      `Department execution items: ${executionCount}`,
       "",
       "## Engine Blueprint",
       `- ${args.engineBundle.blueprint.name}: ${args.engineBundle.blueprint.summary}`,
+      `- Engine office workers: ${args.officeSnapshot.executiveView.workers.length}`,
+      `- Engine roadblocks: ${args.officeSnapshot.executiveView.roadblocks.length}`,
       ...args.engineBundle.workflowOwnership.map(
         (record) => `- Workflow owner: ${record.workflowName} -> ${record.departmentName} / ${record.positionName}`
       ),
@@ -946,9 +1992,11 @@ export class OrganizationControlPlaneService {
       ...args.businessBundles.flatMap((bundle) => [
         `### ${bundle.blueprint.name}`,
         `- Blueprint: ${bundle.blueprint.id}`,
+        `- Template profile: ${bundle.blueprint.businessCategory && bundle.blueprint.businessCategory !== "engine" ? officeTemplateProfileForCategory(bundle.blueprint.businessCategory) : "service_business"}`,
         `- Departments: ${bundle.departments.length}`,
         `- Positions: ${bundle.positions.length}`,
         `- Workflow ownership: ${bundle.workflowOwnership.length}`,
+        `- Department workspaces: ${args.officeSnapshot.departmentWorkspaces.filter((workspace) => workspace.businessId === bundle.blueprint.businessId).length}`,
         ...bundle.workflowOwnership.map(
           (record) => `- ${record.workflowName}: ${record.departmentName} / ${record.positionName}`
         ),
@@ -963,9 +2011,19 @@ export class OrganizationControlPlaneService {
       "",
       `Generated at: ${snapshot.generatedAt}`,
       "",
+      "## Office Tree",
+      `- Root: ${snapshot.officeTree.title}`,
+      `- Businesses: ${snapshot.officeTree.children.length}`,
+      `- Department workspaces: ${snapshot.departmentWorkspaces.length}`,
+      "",
       "## Executive Office",
       `- ${snapshot.executiveView.title}`,
       `- Approvals waiting: ${snapshot.executiveView.approvalsWaiting}`,
+      `- Handoffs: ${snapshot.executiveView.handoffs.length}`,
+      `- Workers: ${snapshot.executiveView.workers.length}`,
+      ...(snapshot.executiveView.roadblocks.length > 0
+        ? snapshot.executiveView.roadblocks.map((roadblock) => `- Roadblock: ${roadblock}`)
+        : ["- Roadblock: none"]),
       ...snapshot.executiveView.businesses.map(
         (panel) => `- ${panel.title}: ${panel.status} (${panel.metrics.join("; ")})`
       ),
@@ -973,10 +2031,28 @@ export class OrganizationControlPlaneService {
       "## Business Offices",
       ...snapshot.businessViews.flatMap((view) => [
         `### ${view.title}`,
+        `- Template profile: ${view.templateProfile}`,
+        `- Handoffs: ${view.handoffs.length}`,
+        `- Workers: ${view.workers.length}`,
+        ...(view.roadblocks.length > 0
+          ? view.roadblocks.map((roadblock) => `- Roadblock: ${roadblock}`)
+          : ["- Roadblock: none"]),
         ...view.departments.map(
           (panel) => `- ${panel.title}: ${panel.status} (${panel.metrics.join("; ")})`
         ),
         ...(view.alerts.length > 0 ? view.alerts.map((alert) => `- Alert: ${alert}`) : ["- Alert: none"]),
+        ""
+      ]),
+      "## Department Workspaces",
+      ...snapshot.departmentWorkspaces.flatMap((workspace) => [
+        `### ${workspace.title}`,
+        `- Template profile: ${workspace.templateProfile}`,
+        `- Execution items: ${workspace.executionItems.length}`,
+        `- Workers: ${workspace.workers.length}`,
+        `- Widgets: ${workspace.widgetSections.join(", ")}`,
+        ...(workspace.roadblocks.length > 0
+          ? workspace.roadblocks.map((roadblock) => `- Roadblock: ${roadblock}`)
+          : ["- Roadblock: none"]),
         ""
       ])
     ].join("\n");

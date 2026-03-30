@@ -1,5 +1,6 @@
-import "dotenv/config";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { parse as parseDotenv } from "dotenv";
 import { ensureDir } from "./lib/fs.js";
 
 export interface AppConfig {
@@ -34,6 +35,14 @@ export interface AppConfig {
     siteUrl: string;
     domain: string;
     approvalEmail: string;
+    bookingUrl?: string;
+    leadFormAction?: string;
+    primaryServiceArea?: string;
+    googleBusinessProfileUrl?: string;
+    googleReviewUrl?: string;
+    facebookUrl?: string;
+    instagramUrl?: string;
+    linkedinUrl?: string;
     stripeFounding?: string;
     stripeStandard?: string;
   };
@@ -58,6 +67,16 @@ export interface AppConfig {
       refundBufferRate: number;
       cashoutThreshold: number;
     };
+  };
+  storefront: {
+    siteUrl?: string;
+    emailCaptureAction?: string;
+    emailCaptureEmail: string;
+  };
+  northlineSite: {
+    bindHost: string;
+    port: number;
+    submissionStorePath: string;
   };
   controlRoom: {
     bindHost: string;
@@ -91,7 +110,57 @@ export interface AppConfig {
   };
 }
 
+function normalizeEnvValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function readEnvFile(filePath: string): Record<string, string> {
+  if (!existsSync(filePath)) {
+    return {};
+  }
+  const parsed = parseDotenv(readFileSync(filePath, "utf8"));
+  return Object.fromEntries(
+    Object.entries(parsed).flatMap(([key, value]) => {
+      const normalized = normalizeEnvValue(value);
+      return normalized ? [[key, normalized] as const] : [];
+    })
+  );
+}
+
+function hydrateProcessEnv(projectRoot: string): void {
+  const mergedFiles = {
+    ...readEnvFile(path.join(projectRoot, ".env")),
+    ...readEnvFile(path.join(projectRoot, ".env.example"))
+  };
+
+  for (const [key, value] of Object.entries(mergedFiles)) {
+    if (!normalizeEnvValue(process.env[key])) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function envValue(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = normalizeEnvValue(process.env[name]);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function envValueOr(defaultValue: string, ...names: string[]): string {
+  return envValue(...names) ?? defaultValue;
+}
+
+function envNumber(defaultValue: string, ...names: string[]): number {
+  return Number(envValue(...names) ?? defaultValue);
+}
+
 export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig> {
+  hydrateProcessEnv(projectRoot);
   const outputDir = path.join(projectRoot, "runtime");
   const stateDir = path.join(outputDir, "state");
   const previewDir = path.join(outputDir, "previews");
@@ -100,6 +169,7 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
   const opsDir = path.join(outputDir, "ops");
   const assetStoreDir = path.join(outputDir, "asset-store");
   const controlRoomDir = path.join(opsDir, "control-room");
+  const northlineSubmissionStorePath = path.join(stateDir, "northlineIntakeSubmissions.json");
 
   await Promise.all([
     ensureDir(outputDir),
@@ -112,26 +182,28 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
     ensureDir(controlRoomDir)
   ]);
 
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const smtpFrom = process.env.SMTP_FROM;
+  const smtpHost = envValue("SMTP_HOST");
+  const smtpUser = envValue("SMTP_USER");
+  const smtpPass = envValue("SMTP_PASS");
+  const smtpFrom = envValue("SMTP_FROM");
 
   const smtp =
     smtpHost && smtpUser && smtpPass && smtpFrom
       ? {
           host: smtpHost,
-          port: Number(process.env.SMTP_PORT ?? "587"),
-          secure: process.env.SMTP_SECURE === "true",
+          port: envNumber("587", "SMTP_PORT"),
+          secure: envValue("SMTP_SECURE") === "true",
           user: smtpUser,
           pass: smtpPass,
           from: smtpFrom
         }
       : undefined;
 
-  const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN;
-  const cloudflarePagesProject = process.env.CLOUDFLARE_PAGES_PROJECT;
+  const cloudflareAccountId = envValue("CLOUDFLARE_ACCOUNT_ID");
+  const cloudflareApiToken = envValue("CLOUDFLARE_API_TOKEN");
+  const cloudflarePagesProject = envValue("CLOUDFLARE_PAGES_PROJECT");
+  const imonStoreGumroadSellerEmail = envValue("IMON_STORE_GUMROAD_SELLER_EMAIL", "GUMROAD_SELLER_EMAIL");
+  const imonStoreGumroadProfileUrl = envValue("IMON_STORE_GUMROAD_PROFILE_URL", "GUMROAD_PROFILE_URL");
 
   return {
     projectRoot,
@@ -142,73 +214,119 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
     notificationDir,
     opsDir,
     assetStoreDir,
-    openAiApiKey: process.env.OPENAI_API_KEY,
+    openAiApiKey: envValue("OPENAI_API_KEY"),
     models: {
-      fast: process.env.OPENAI_MODEL_FAST ?? "gpt-4.1-mini",
-      deep: process.env.OPENAI_MODEL_DEEP ?? "gpt-5"
+      fast: envValueOr("gpt-4.1-mini", "OPENAI_MODEL_FAST"),
+      deep: envValueOr("gpt-5", "OPENAI_MODEL_DEEP")
     },
     engine: {
-      name: process.env.IMON_ENGINE_NAME ?? "ImonEngine",
-      timezone: process.env.IMON_ENGINE_TIMEZONE ?? "America/New_York",
-      hostLabel: process.env.IMON_ENGINE_HOST_LABEL ?? "OpenClaw VPS",
-      hostProvider: process.env.IMON_ENGINE_HOST_PROVIDER ?? "Contabo",
-      hostPrimaryIp: process.env.IMON_ENGINE_HOST_IP,
-      maxConcurrentBusinesses: Number(process.env.IMON_ENGINE_MAX_CONCURRENT_BUSINESSES ?? "2"),
-      cpuUtilizationTarget: Number(process.env.IMON_ENGINE_CPU_TARGET ?? "0.7"),
-      memoryUtilizationTarget: Number(process.env.IMON_ENGINE_MEMORY_TARGET ?? "0.75"),
-      minDiskFreeGb: Number(process.env.IMON_ENGINE_MIN_DISK_FREE_GB ?? "40")
+      name: envValueOr("ImonEngine", "IMON_ENGINE_NAME"),
+      timezone: envValueOr("America/New_York", "IMON_ENGINE_TIMEZONE"),
+      hostLabel: envValueOr("OpenClaw VPS", "IMON_ENGINE_HOST_LABEL"),
+      hostProvider: envValueOr("Contabo", "IMON_ENGINE_HOST_PROVIDER"),
+      hostPrimaryIp: envValue("IMON_ENGINE_HOST_IP"),
+      maxConcurrentBusinesses: envNumber("2", "IMON_ENGINE_MAX_CONCURRENT_BUSINESSES"),
+      cpuUtilizationTarget: envNumber("0.7", "IMON_ENGINE_CPU_TARGET"),
+      memoryUtilizationTarget: envNumber("0.75", "IMON_ENGINE_MEMORY_TARGET"),
+      minDiskFreeGb: envNumber("40", "IMON_ENGINE_MIN_DISK_FREE_GB")
     },
     business: {
-      name: process.env.BUSINESS_NAME ?? "Northline Growth Systems",
-      phone: process.env.BUSINESS_PHONE ?? "(555) 010-1400",
-      salesEmail: process.env.BUSINESS_SALES_EMAIL ?? "sales@example.com",
-      siteUrl: process.env.BUSINESS_SITE_URL ?? "https://example.com",
-      domain: process.env.BUSINESS_DOMAIN ?? "example.com",
-      approvalEmail: process.env.APPROVAL_EMAIL ?? "owner@example.com",
-      stripeFounding: process.env.STRIPE_PAYMENT_LINK_FOUNDING,
-      stripeStandard: process.env.STRIPE_PAYMENT_LINK_STANDARD
+      name: envValueOr("Northline Growth Systems", "NORTHLINE_NAME", "BUSINESS_NAME"),
+      phone: envValueOr("(555) 010-1400", "NORTHLINE_PHONE", "BUSINESS_PHONE"),
+      salesEmail: envValueOr("sales@example.com", "NORTHLINE_SALES_EMAIL", "BUSINESS_SALES_EMAIL"),
+      siteUrl: envValueOr("https://example.com", "NORTHLINE_SITE_URL", "BUSINESS_SITE_URL"),
+      domain: envValueOr("example.com", "NORTHLINE_DOMAIN", "BUSINESS_DOMAIN"),
+      approvalEmail: envValueOr("owner@example.com", "APPROVAL_EMAIL"),
+      bookingUrl: envValue("NORTHLINE_BOOKING_URL", "BUSINESS_BOOKING_URL"),
+      leadFormAction: envValue("NORTHLINE_LEAD_FORM_ACTION", "BUSINESS_LEAD_FORM_ACTION"),
+      primaryServiceArea: envValue("NORTHLINE_PRIMARY_SERVICE_AREA", "BUSINESS_PRIMARY_SERVICE_AREA"),
+      googleBusinessProfileUrl: envValue(
+        "NORTHLINE_GOOGLE_BUSINESS_PROFILE_URL",
+        "BUSINESS_GOOGLE_BUSINESS_PROFILE_URL"
+      ),
+      googleReviewUrl: envValue("NORTHLINE_GOOGLE_REVIEW_URL", "BUSINESS_GOOGLE_REVIEW_URL"),
+      facebookUrl: envValue("NORTHLINE_FACEBOOK_URL", "BUSINESS_FACEBOOK_URL"),
+      instagramUrl: envValue("NORTHLINE_INSTAGRAM_URL", "BUSINESS_INSTAGRAM_URL"),
+      linkedinUrl: envValue("NORTHLINE_LINKEDIN_URL", "BUSINESS_LINKEDIN_URL"),
+      stripeFounding: envValue(
+        "NORTHLINE_STRIPE_PAYMENT_LINK_FOUNDING",
+        "STRIPE_PAYMENT_LINK_FOUNDING"
+      ),
+      stripeStandard: envValue(
+        "NORTHLINE_STRIPE_PAYMENT_LINK_STANDARD",
+        "STRIPE_PAYMENT_LINK_STANDARD"
+      )
     },
     marketplaces: {
-      gumroadSellerEmail: process.env.GUMROAD_SELLER_EMAIL,
-      gumroadProfileUrl: process.env.GUMROAD_PROFILE_URL
+      gumroadSellerEmail: imonStoreGumroadSellerEmail,
+      gumroadProfileUrl: imonStoreGumroadProfileUrl
     },
     storeOps: {
       catalog: {
-        maxNewPacksPer7Days: Number(process.env.STORE_MAX_NEW_PACKS_7D ?? "2"),
-        maxPublishedPacks: Number(process.env.STORE_MAX_PUBLISHED_PACKS ?? "36"),
-        maxSharePerAssetType: Number(process.env.STORE_MAX_ASSET_TYPE_SHARE ?? "0.4"),
-        maxOpenPackQueue: Number(process.env.STORE_MAX_OPEN_PACK_QUEUE ?? "2")
+        maxNewPacksPer7Days: envNumber("2", "IMON_STORE_MAX_NEW_PACKS_7D", "STORE_MAX_NEW_PACKS_7D"),
+        maxPublishedPacks: envNumber("36", "IMON_STORE_MAX_PUBLISHED_PACKS", "STORE_MAX_PUBLISHED_PACKS"),
+        maxSharePerAssetType: envNumber(
+          "0.4",
+          "IMON_STORE_MAX_ASSET_TYPE_SHARE",
+          "STORE_MAX_ASSET_TYPE_SHARE"
+        ),
+        maxOpenPackQueue: envNumber("2", "IMON_STORE_MAX_OPEN_PACK_QUEUE", "STORE_MAX_OPEN_PACK_QUEUE")
       },
       growth: {
-        postsPerWeek: Number(process.env.STORE_POSTS_PER_WEEK ?? "6"),
-        queueDays: Number(process.env.STORE_GROWTH_QUEUE_DAYS ?? "7")
+        postsPerWeek: envNumber("6", "IMON_STORE_POSTS_PER_WEEK", "STORE_POSTS_PER_WEEK"),
+        queueDays: envNumber("7", "IMON_STORE_GROWTH_QUEUE_DAYS", "STORE_GROWTH_QUEUE_DAYS")
       },
       finance: {
-        taxReserveRate: Number(process.env.STORE_TAX_RESERVE_RATE ?? "0.2"),
-        reinvestmentRate: Number(process.env.STORE_REINVESTMENT_RATE ?? "0.35"),
-        refundBufferRate: Number(process.env.STORE_REFUND_BUFFER_RATE ?? "0.1"),
-        cashoutThreshold: Number(process.env.STORE_CASHOUT_THRESHOLD ?? "100")
+        taxReserveRate: envNumber("0.2", "IMON_STORE_TAX_RESERVE_RATE", "STORE_TAX_RESERVE_RATE"),
+        reinvestmentRate: envNumber(
+          "0.35",
+          "IMON_STORE_REINVESTMENT_RATE",
+          "STORE_REINVESTMENT_RATE"
+        ),
+        refundBufferRate: envNumber(
+          "0.1",
+          "IMON_STORE_REFUND_BUFFER_RATE",
+          "STORE_REFUND_BUFFER_RATE"
+        ),
+        cashoutThreshold: envNumber("100", "IMON_STORE_CASHOUT_THRESHOLD", "STORE_CASHOUT_THRESHOLD")
       }
     },
+    storefront: {
+      siteUrl: envValue("IMON_STORE_SITE_URL", "STORE_SITE_URL"),
+      emailCaptureAction: envValue("IMON_STORE_EMAIL_CAPTURE_ACTION", "STORE_EMAIL_CAPTURE_ACTION"),
+      emailCaptureEmail:
+        envValue(
+          "IMON_STORE_EMAIL_CAPTURE_EMAIL",
+          "STORE_EMAIL_CAPTURE_EMAIL",
+          "IMON_STORE_GUMROAD_SELLER_EMAIL",
+          "GUMROAD_SELLER_EMAIL"
+        ) ??
+        "sales@example.com"
+    },
+    northlineSite: {
+      bindHost: envValueOr("0.0.0.0", "NORTHLINE_SITE_BIND_HOST"),
+      port: envNumber("4181", "NORTHLINE_SITE_PORT"),
+      submissionStorePath: envValueOr(northlineSubmissionStorePath, "NORTHLINE_SUBMISSION_STORE_PATH")
+    },
     controlRoom: {
-      bindHost: process.env.CONTROL_ROOM_BIND_HOST ?? "127.0.0.1",
-      port: Number(process.env.CONTROL_ROOM_PORT ?? "4177"),
-      sessionSecret: process.env.CONTROL_ROOM_SESSION_SECRET,
-      passwordHash: process.env.CONTROL_ROOM_PASSWORD_HASH,
-      sessionTtlHours: Number(process.env.CONTROL_ROOM_SESSION_TTL_HOURS ?? "12"),
-      staleThresholdMinutes: Number(process.env.CONTROL_ROOM_STALE_THRESHOLD_MINUTES ?? "120"),
+      bindHost: envValueOr("127.0.0.1", "CONTROL_ROOM_BIND_HOST"),
+      port: envNumber("4177", "CONTROL_ROOM_PORT"),
+      sessionSecret: envValue("CONTROL_ROOM_SESSION_SECRET"),
+      passwordHash: envValue("CONTROL_ROOM_PASSWORD_HASH"),
+      sessionTtlHours: envNumber("12", "CONTROL_ROOM_SESSION_TTL_HOURS"),
+      staleThresholdMinutes: envNumber("120", "CONTROL_ROOM_STALE_THRESHOLD_MINUTES"),
       serviceLogPath:
-        process.env.CONTROL_ROOM_SERVICE_LOG_PATH ??
+        envValue("CONTROL_ROOM_SERVICE_LOG_PATH") ??
         path.join(controlRoomDir, "server.log"),
       local: {
-        bindHost: process.env.CONTROL_ROOM_LOCAL_BIND_HOST ?? "127.0.0.1",
-        port: Number(process.env.CONTROL_ROOM_LOCAL_PORT ?? "4310"),
+        bindHost: envValueOr("127.0.0.1", "CONTROL_ROOM_LOCAL_BIND_HOST"),
+        port: envNumber("4310", "CONTROL_ROOM_LOCAL_PORT"),
         remoteUrl:
-          process.env.CONTROL_ROOM_REMOTE_URL ??
-          `http://127.0.0.1:${process.env.CONTROL_ROOM_TUNNEL_PORT ?? "4311"}`,
-        tunnelEnabled: process.env.CONTROL_ROOM_AUTO_TUNNEL !== "false",
-        tunnelLocalPort: Number(process.env.CONTROL_ROOM_TUNNEL_PORT ?? "4311"),
-        tunnelPythonBin: process.env.CONTROL_ROOM_TUNNEL_PYTHON_BIN ?? "python"
+          envValue("CONTROL_ROOM_REMOTE_URL") ??
+          `http://127.0.0.1:${envNumber("4311", "CONTROL_ROOM_TUNNEL_PORT")}`,
+        tunnelEnabled: envValue("CONTROL_ROOM_AUTO_TUNNEL") !== "false",
+        tunnelLocalPort: envNumber("4311", "CONTROL_ROOM_TUNNEL_PORT"),
+        tunnelPythonBin: envValueOr("python", "CONTROL_ROOM_TUNNEL_PYTHON_BIN")
       }
     },
     smtp,

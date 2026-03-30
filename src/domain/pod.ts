@@ -13,7 +13,7 @@ export type PodProductType =
   | "hoodie"
   | "sticker";
 
-export type PodPostKind = "carousel" | "story" | "reel";
+export type PodPostKind = "carousel" | "story" | "reel" | "pin";
 
 export type PodPostPlatform = "instagram_account" | "pinterest" | "facebook_page" | "shopify_store";
 
@@ -111,4 +111,3 @@ export interface PodAutomationPlan {
   roadblocks: PodRoadblock[];
   nextAutomationSteps: string[];
 }
-

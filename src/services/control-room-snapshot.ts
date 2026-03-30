@@ -4,6 +4,11 @@ import type { ApprovalTask } from "../domain/contracts.js";
 import type { ControlRoomHealthReport, ControlRoomSnapshot } from "../domain/control-room.js";
 import type { EngineOverviewReport, ImonEngineState, ManagedBusiness } from "../domain/engine.js";
 import type {
+  OfficeChatAction,
+  OfficeChatMessage,
+  OfficeChatThread,
+  OfficeOperatingConfig,
+  OfficeReportArtifact,
   OfficeViewSnapshot,
   OrgAuditRecord,
   TaskEnvelope,
@@ -14,6 +19,7 @@ import type {
   RevenueAllocationSnapshot
 } from "../domain/store-ops.js";
 import { FileStore } from "../storage/store.js";
+import { buildOfficeChatSummary } from "./office-chat-shared.js";
 
 function latestByTimestamp<T>(
   items: T[],
@@ -54,6 +60,50 @@ export class ControlRoomSnapshotService {
     );
 
     const officeSnapshot = state.officeSnapshot;
+    const officeChatThreadsByOfficeId = new Map(
+      state.officeChatThreads.map((thread) => [thread.officeId, thread])
+    );
+    const officeChatMessagesByOfficeId = this.groupByOfficeId(state.officeChatMessages);
+    const officeChatActionsByOfficeId = this.groupByOfficeId(state.officeChatActions);
+    const officeReportArtifactsByOfficeId = this.groupByOfficeId(state.officeReportArtifacts);
+    const deferredBusinessIds = new Set(
+      state.businesses
+        .filter((business) => business.stage === "deferred")
+        .map((business) => business.id)
+    );
+    const executiveView = {
+      ...officeSnapshot.executiveView,
+      chatSummary: buildOfficeChatSummary({
+        officeId: officeSnapshot.executiveView.id,
+        scope: "engine",
+        thread: officeChatThreadsByOfficeId.get(officeSnapshot.executiveView.id),
+        messages: officeChatMessagesByOfficeId.get(officeSnapshot.executiveView.id) ?? [],
+        actions: officeChatActionsByOfficeId.get(officeSnapshot.executiveView.id) ?? [],
+        reports: officeReportArtifactsByOfficeId.get(officeSnapshot.executiveView.id) ?? []
+      })
+    };
+    const businessViews = officeSnapshot.businessViews.map((view) => ({
+      ...view,
+      chatSummary: buildOfficeChatSummary({
+        officeId: view.id,
+        scope: "business",
+        thread: officeChatThreadsByOfficeId.get(view.id),
+        messages: officeChatMessagesByOfficeId.get(view.id) ?? [],
+        actions: officeChatActionsByOfficeId.get(view.id) ?? [],
+        reports: officeReportArtifactsByOfficeId.get(view.id) ?? []
+      })
+    }));
+    const departmentWorkspaces = officeSnapshot.departmentWorkspaces.map((workspace) => ({
+      ...workspace,
+      chatSummary: buildOfficeChatSummary({
+        officeId: workspace.id,
+        scope: "department",
+        thread: officeChatThreadsByOfficeId.get(workspace.id),
+        messages: officeChatMessagesByOfficeId.get(workspace.id) ?? [],
+        actions: officeChatActionsByOfficeId.get(workspace.id) ?? [],
+        reports: officeReportArtifactsByOfficeId.get(workspace.id) ?? []
+      })
+    }));
 
     const businesses = [...state.businesses]
       .sort((left, right) => left.launchPriority - right.launchPriority)
@@ -62,13 +112,20 @@ export class ControlRoomSnapshotService {
         const dataQuality = allocationSnapshot?.dataQuality;
         const budgetView = allocationSnapshot
           ? {
-              basedOnVerifiedDataOnly: allocationSnapshot.recommendations.basedOnVerifiedDataOnly,
+              basedOnVerifiedDataOnly:
+                allocationSnapshot.recommendations.basedOnVerifiedDataOnly ?? true,
               verifiedNetRevenue:
                 dataQuality?.verifiedNetRevenue ?? allocationSnapshot.netRevenue,
               relayDeposits: allocationSnapshot.relayDeposits,
               relaySpend: allocationSnapshot.relaySpend,
-              growthReinvestment: allocationSnapshot.recommendations.growthReinvestment,
-              collectiveTransfer: allocationSnapshot.recommendations.collectiveTransfer,
+              growthReinvestment:
+                allocationSnapshot.recommendations.growthReinvestment ??
+                (allocationSnapshot.recommendations as { reinvestment?: number }).reinvestment ??
+                0,
+              collectiveTransfer:
+                allocationSnapshot.recommendations.collectiveTransfer ??
+                (allocationSnapshot.recommendations as { tools?: number }).tools ??
+                0,
               ownerCashoutReady: allocationSnapshot.recommendations.ownerCashoutReady,
               excludedFromAllocationCount: dataQuality?.excludedFromAllocationCount ?? 0,
               warnings:
@@ -82,6 +139,7 @@ export class ControlRoomSnapshotService {
           id: business.id,
           name: business.name,
           category: business.category,
+          templateProfile: businessViews.find((view) => view.businessId === business.id)?.templateProfile,
           stage: business.stage,
           summary: business.summary,
           monthlyRevenue: business.metrics.currentMonthlyRevenue,
@@ -90,13 +148,19 @@ export class ControlRoomSnapshotService {
             business.metrics.currentMonthlyRevenue - business.metrics.currentMonthlyCosts,
           automationCoverage: business.metrics.automationCoverage,
           activeWorkItems: business.metrics.activeWorkItems,
-          office: officeSnapshot.businessViews.find((view) => view.businessId === business.id),
-          approvals: state.approvals.filter(
-            (approval) =>
-              approval.relatedEntityType === "business" &&
-              approval.relatedEntityId === business.id &&
-              approval.status !== "completed"
+          office: businessViews.find((view) => view.businessId === business.id),
+          departmentWorkspaces: departmentWorkspaces.filter(
+            (workspace) => workspace.businessId === business.id
           ),
+          approvals:
+            business.stage === "deferred"
+              ? []
+              : state.approvals.filter(
+                  (approval) =>
+                    approval.relatedEntityType === "business" &&
+                    approval.relatedEntityId === business.id &&
+                    approval.status !== "completed"
+                ),
           workflowOwnership: state.workflowOwnership.filter(
             (record) => record.businessId === business.id
           ),
@@ -115,13 +179,14 @@ export class ControlRoomSnapshotService {
 
     const executiveBudgetView = collectiveFund
       ? {
-          basedOnVerifiedDataOnly: collectiveFund.recommendations.basedOnVerifiedDataOnly,
+          basedOnVerifiedDataOnly:
+            collectiveFund.recommendations.basedOnVerifiedDataOnly ?? true,
           growthReinvestment: collectiveFund.totals.growthReinvestment,
           collectiveTransfer: collectiveFund.totals.collectiveTransfer,
           sharedToolsReinvestmentCap:
-            collectiveFund.recommendations.sharedToolsReinvestmentCap,
+            collectiveFund.recommendations.sharedToolsReinvestmentCap ?? 0,
           reserveAfterSharedReinvestment:
-            collectiveFund.recommendations.reserveAfterSharedReinvestment,
+            collectiveFund.recommendations.reserveAfterSharedReinvestment ?? 0,
           warnings:
             collectiveFund.dataQuality?.warnings ?? [
               "Legacy collective snapshot without explicit data-quality metadata."
@@ -138,6 +203,11 @@ export class ControlRoomSnapshotService {
         approvals: state.approvals,
         audits: state.auditRecords,
         tasks: state.taskEnvelopes,
+        officeChatThreads: state.officeChatThreads,
+        officeChatMessages: state.officeChatMessages,
+        officeChatActions: state.officeChatActions,
+        officeReportArtifacts: state.officeReportArtifacts,
+        officeOperatingConfigs: state.officeOperatingConfigs,
         allocationSnapshots: state.allocationSnapshots,
         collectiveSnapshots: state.collectiveSnapshots
       }),
@@ -145,9 +215,21 @@ export class ControlRoomSnapshotService {
       engineName: state.engine.name,
       engineOverview: state.engine.overview,
       report: state.engineReport,
-      executiveView: officeSnapshot.executiveView,
-      approvals: state.approvals.filter((approval) => approval.status !== "completed"),
+      officeTree: officeSnapshot.officeTree,
+      executiveView,
+      approvals: state.approvals.filter(
+        (approval) =>
+          approval.status !== "completed" &&
+          !(
+            approval.relatedEntityType === "business" &&
+            deferredBusinessIds.has(approval.relatedEntityId)
+          )
+      ),
       businesses,
+      departmentWorkspaces,
+      departmentExecutionItems: departmentWorkspaces.flatMap(
+        (workspace) => workspace.executionItems
+      ),
       recentAudits: [...state.auditRecords]
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .slice(0, 12),
@@ -176,6 +258,11 @@ export class ControlRoomSnapshotService {
     auditRecords: OrgAuditRecord[];
     taskEnvelopes: TaskEnvelope[];
     workflowOwnership: WorkflowOwnershipRecord[];
+    officeChatThreads: OfficeChatThread[];
+    officeChatMessages: OfficeChatMessage[];
+    officeChatActions: OfficeChatAction[];
+    officeReportArtifacts: OfficeReportArtifact[];
+    officeOperatingConfigs: OfficeOperatingConfig[];
     allocationSnapshots: RevenueAllocationSnapshot[];
     collectiveSnapshots: CollectiveFundSnapshot[];
   }> {
@@ -188,6 +275,11 @@ export class ControlRoomSnapshotService {
       auditRecords,
       taskEnvelopes,
       workflowOwnership,
+      officeChatThreads,
+      officeChatMessages,
+      officeChatActions,
+      officeReportArtifacts,
+      officeOperatingConfigs,
       allocationSnapshots,
       collectiveSnapshots
     ] = await Promise.all([
@@ -199,6 +291,11 @@ export class ControlRoomSnapshotService {
       this.store.getOrgAuditRecords(),
       this.store.getTaskEnvelopes(),
       this.store.getWorkflowOwnership(),
+      this.store.getOfficeChatThreads(),
+      this.store.getOfficeChatMessages(),
+      this.store.getOfficeChatActions(),
+      this.store.getOfficeReportArtifacts(),
+      this.store.getOfficeOperatingConfigs(),
       this.store.getAllocationSnapshots(),
       this.store.getCollectiveSnapshots()
     ]);
@@ -212,9 +309,26 @@ export class ControlRoomSnapshotService {
       auditRecords,
       taskEnvelopes,
       workflowOwnership,
+      officeChatThreads,
+      officeChatMessages,
+      officeChatActions,
+      officeReportArtifacts,
+      officeOperatingConfigs,
       allocationSnapshots,
       collectiveSnapshots
     };
+  }
+
+  private groupByOfficeId<
+    T extends { officeId: string }
+  >(items: T[]): Map<string, T[]> {
+    const grouped = new Map<string, T[]>();
+    for (const item of items) {
+      const current = grouped.get(item.officeId) ?? [];
+      current.push(item);
+      grouped.set(item.officeId, current);
+    }
+    return grouped;
   }
 
   private latestAllocationByBusiness(

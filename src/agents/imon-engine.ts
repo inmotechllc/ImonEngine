@@ -40,6 +40,11 @@ function isTrustedLedgerSource(source: string): boolean {
   return source === "gumroad";
 }
 
+const DEFERRED_STAGE_MIGRATIONS: Record<string, ManagedBusiness["stage"][]> = {
+  "imon-niche-content-sites": ["ready"],
+  "imon-faceless-social-brand": ["scaffolded"]
+};
+
 export class ImonEngineAgent {
   private readonly accountOps: AccountOpsAgent;
 
@@ -108,7 +113,7 @@ export class ImonEngineAgent {
       );
     }
 
-    if (!["ready", "paused"].includes(business.stage)) {
+    if (!["ready", "paused", "deferred"].includes(business.stage)) {
       throw new Error(`Business ${id} is not ready to activate from stage ${business.stage}.`);
     }
 
@@ -169,6 +174,32 @@ export class ImonEngineAgent {
     });
     await this.sync();
     return next;
+  }
+
+  async createBusinessFromSeed(seed: ManagedBusinessSeed): Promise<ManagedBusiness> {
+    const existing = await this.store.getManagedBusiness(seed.id);
+    if (existing) {
+      throw new Error(`Business ${seed.id} already exists.`);
+    }
+
+    const timestamp = nowIso();
+    const business: ManagedBusiness = {
+      ...seed,
+      orgBlueprintId: `org-business-${seed.id}`,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    await this.store.saveManagedBusiness(business);
+    await this.store.saveBusinessRun({
+      id: `run-${seed.id}-${new Date().toISOString().replaceAll(":", "-")}`,
+      businessId: seed.id,
+      startedAt: timestamp,
+      finishedAt: timestamp,
+      status: "skipped",
+      summary: `Created ${seed.name} from a control-room scaffold draft.`
+    });
+    await this.sync();
+    return business;
   }
 
   async writeVpsArtifacts(): Promise<{
@@ -350,21 +381,25 @@ export class ImonEngineAgent {
 
     const dynamicNotes = current.notes.filter(
       (note) =>
+        note.startsWith("Northline plan refreshed") ||
+        note.startsWith("Current sales inbox:") ||
         note.startsWith("Imonic plan refreshed") ||
+        note.startsWith("QuietPivot plan refreshed") ||
         note.startsWith("Primary alias:") ||
-        note.includes("launch dossier lives under runtime/ops/pod-businesses/")
+        note.includes("launch dossier lives under runtime/ops/northline-growth-system") ||
+        note.includes("launch dossier lives under runtime/ops/pod-businesses/") ||
+        note.includes("launch dossier lives under runtime/ops/micro-saas-businesses/")
     );
+    const ownerActions = current.ownerActions.length > 0 ? current.ownerActions : template.ownerActions;
 
     return {
       ...template,
       orgBlueprintId: `org-business-${template.id}`,
-      stage: current.stage,
+      stage: this.seedStage(template, current),
       launchBlockers:
         current.stage === "active"
           ? []
-          : current.launchBlockers.length > 0
-            ? current.launchBlockers
-            : template.launchBlockers,
+          : current.launchBlockers,
       metrics: {
         ...template.metrics,
         currentMonthlyRevenue: current.metrics.currentMonthlyRevenue,
@@ -375,10 +410,27 @@ export class ImonEngineAgent {
         lastRunAt: current.metrics.lastRunAt,
         nextRunAt: current.metrics.nextRunAt
       },
-      notes: [...template.notes, ...dynamicNotes.filter((note) => !template.notes.includes(note))],
+      ownerActions,
+      notes: [...new Set([...template.notes, ...dynamicNotes.filter((note) => !template.notes.includes(note))])],
       createdAt: current.createdAt,
       updatedAt: timestamp
     };
+  }
+
+  private seedStage(
+    template: ManagedBusinessSeed,
+    current?: ManagedBusiness
+  ): ManagedBusiness["stage"] {
+    if (!current) {
+      return template.stage;
+    }
+
+    const migratableStages = DEFERRED_STAGE_MIGRATIONS[template.id];
+    if (template.stage === "deferred" && migratableStages?.includes(current.stage)) {
+      return "deferred";
+    }
+
+    return current.stage;
   }
 
   private async refreshPortfolioMetrics(businesses: ManagedBusiness[]): Promise<ManagedBusiness[]> {
@@ -476,9 +528,25 @@ export class ImonEngineAgent {
     businesses: ManagedBusiness[]
   ): Promise<ApprovalTask[]> {
     const tasks: ApprovalTask[] = [];
+    const existingApprovals = await this.store.getApprovals();
 
     for (const business of businesses) {
+      const existing = existingApprovals.find(
+        (approval) =>
+          approval.relatedEntityType === "business" &&
+          approval.relatedEntityId === business.id
+      );
+
       if (business.launchBlockers.length === 0) {
+        if (existing && existing.status !== "completed") {
+          await this.store.saveApproval({
+            ...existing,
+            status: "completed",
+            reason: `No launch blockers are currently detected for ${business.name}.`,
+            ownerInstructions: "No immediate owner action is required right now.",
+            updatedAt: nowIso()
+          });
+        }
         continue;
       }
 
@@ -506,8 +574,11 @@ export class ImonEngineAgent {
     const readyBusinesses = businesses
       .filter((business) => business.stage === "ready")
       .sort((left, right) => left.launchPriority - right.launchPriority);
+    const deferredBusinesses = businesses.filter((business) => business.stage === "deferred");
     const blockedBusinesses = businesses.filter(
-      (business) => business.stage !== "active" && business.launchBlockers.length > 0
+      (business) =>
+        !["active", "deferred"].includes(business.stage) &&
+        business.launchBlockers.length > 0
     );
 
     return {
@@ -517,6 +588,7 @@ export class ImonEngineAgent {
         trackedBusinesses: businesses.length,
         activeBusinesses: businesses.filter((business) => business.stage === "active").length,
         readyBusinesses: readyBusinesses.length,
+        deferredBusinesses: deferredBusinesses.length,
         blockedBusinesses: blockedBusinesses.length,
         nextRecommendedBusinessId: readyBusinesses[0]?.id
       },
@@ -539,7 +611,11 @@ export class ImonEngineAgent {
       .slice(0, Math.max(1, snapshot.recommendedConcurrency))
       .map((business) => business.id);
     const blockedBusinesses = businesses
-      .filter((business) => business.launchBlockers.length > 0 && business.stage !== "active")
+      .filter(
+        (business) =>
+          business.launchBlockers.length > 0 &&
+          !["active", "deferred"].includes(business.stage)
+      )
       .map((business) => business.id);
     const monthlyRevenue = businesses.reduce(
       (sum, business) => sum + business.metrics.currentMonthlyRevenue,
@@ -559,6 +635,7 @@ export class ImonEngineAgent {
         total: businesses.length,
         active: activeBusinesses.length,
         ready: businesses.filter((business) => business.stage === "ready").length,
+        deferred: businesses.filter((business) => business.stage === "deferred").length,
         scaffolded: businesses.filter((business) => business.stage === "scaffolded").length,
         paused: businesses.filter((business) => business.stage === "paused").length
       },
@@ -581,7 +658,9 @@ export class ImonEngineAgent {
     const actions: string[] = [];
     const activeCount = businesses.filter((business) => business.stage === "active").length;
     const readyBusinesses = businesses.filter((business) => business.stage === "ready");
-    const blockedBusinesses = businesses.filter((business) => business.launchBlockers.length > 0);
+    const blockedBusinesses = businesses.filter(
+      (business) => business.stage !== "deferred" && business.launchBlockers.length > 0
+    );
 
     if (readyBusinesses.length > 0 && activeCount < snapshot.recommendedConcurrency) {
       actions.push(
@@ -607,7 +686,9 @@ export class ImonEngineAgent {
     }
 
     if (actions.length === 0) {
-      actions.push("Portfolio is within resource targets. Keep the digital asset store and content sites at the front of the rollout queue.");
+      actions.push(
+        "Portfolio is within resource targets. Keep the digital asset store at the front of the rollout queue while deferred ideas stay shelved."
+      );
     }
 
     return actions;

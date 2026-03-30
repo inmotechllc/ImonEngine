@@ -9,16 +9,18 @@ ImonEngine-based portfolio controller for multiple AI businesses, with the origi
 - Consolidates portfolio-level revenue and cost signals with JSON-backed state.
 - Writes VPS bootstrap and cron artifacts for a Contabo/OpenClaw style host.
 - Generates a Gumroad-first digital asset launch queue with pack manifests, listing copy, and production checklists.
+- Builds an Imonic POD operating system with design prompts, Shopify-ready listing drafts, collection plans, growth loops, ad gates, analytics, and revenue guardrails.
 - Imports public business lists from CSV or JSON and converts them into typed `LeadRecord` objects.
 - Scores prospects for a home-services website and follow-up offer using heuristics by default, or OpenAI when `OPENAI_API_KEY` is available.
 - Drafts compliant outreach with approval fallbacks written to email or `runtime/notifications/`.
 - Creates `ClientJob` records from intake briefs, builds static landing pages, and runs QA checks before deploy.
 - Generates operational run reports and monthly retention reports with review-response drafts and upsell ideas.
-- Builds an agency marketing site for inbound traffic at `runtime/agency-site/`.
+- Builds a Northline proof-page surface at `runtime/agency-site/`, including the homepage, intake page, privacy page, and launch checklist.
+- Can host the Northline proof page and intake endpoint directly from the VPS with a lightweight Node service.
 
 ## Quick Start
 
-1. Copy `.env.example` to `.env` and fill in the fields you have.
+1. Fill the business-scoped sections in `.env.example`. If you want machine-local overrides, add only the missing values to `.env`.
 2. Install dependencies with `npm install`.
 3. Bootstrap the workspace:
 
@@ -61,6 +63,14 @@ npm run dev -- retain --client sunrise-plumbing
 - `npm run dev -- stage-asset-pack --pack <id>`
 - `npm run dev -- ready-asset-pack --pack <id>`
 - `npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>`
+- `npm run dev -- social-profiles [--business <id>] [--all]`
+- `npm run dev -- venture-studio [--business <id>]`
+- `npm run dev -- northline-plan [--business auto-funding-agency]`
+- `npm run dev -- northline-site-serve`
+- `npm run dev -- northline-site-health`
+- `npm run dev -- micro-saas-plan [--business imon-micro-saas-factory] [--notify-roadblocks]`
+- `npm run dev -- pod-plan --business imon-pod-store --reference-dir <path> [--notify-roadblocks]`
+- `npm run dev -- pod-autonomy --business imon-pod-store --reference-dir <path> [--notify-roadblocks]`
 - `npm run dev -- asset-packs`
 - `npm run dev -- approvals`
 - `npm run dev -- report`
@@ -69,9 +79,13 @@ npm run dev -- retain --client sunrise-plumbing
 ## Required Owner Actions
 
 - Add `OPENAI_API_KEY` if you want model-generated scoring, copy, and reports instead of fallback heuristics.
-- Add Stripe payment links for the founding and standard offers.
-- Connect a real sales inbox and SMTP if you want live approval notifications.
+- Add `NORTHLINE_STRIPE_PAYMENT_LINK_FOUNDING` and `NORTHLINE_STRIPE_PAYMENT_LINK_STANDARD` before taking Northline live.
+- Connect a real `NORTHLINE_SALES_EMAIL` inbox. SMTP is optional unless you want live approval or intake notifications.
+- Keep `NORTHLINE_LEAD_FORM_ACTION=/api/northline-intake` if you want the VPS-hosted proof page to own intake submissions.
+- Keep `NORTHLINE_BOOKING_URL=/book.html` if you want the repo-hosted booking page to stay live beside the intake form.
 - Add Cloudflare Pages credentials before running `deploy`.
+- Review `docs/northline-launch-checklist.md` and the generated `runtime/agency-site/launch-checklist.md` before taking Northline live.
+- Run `northline-plan` to generate the current Northline launch dossier under `runtime/ops/northline-growth-system/`.
 
 ## State Layout
 
@@ -89,13 +103,20 @@ npm run dev -- retain --client sunrise-plumbing
 - `runtime/reports/*.json`
 - `runtime/previews/<client-id>/`
 - `runtime/agency-site/`
+- `runtime/ops/micro-saas-businesses/<business-id>/`
+- `runtime/ops/pod-businesses/<business-id>/`
 
 ## Notes
 
 - The system is intentionally conservative: it creates approval tasks instead of guessing through payments, marketplace access, email, or deployment when account credentials are missing.
 - `ImonEngine` does not auto-activate new businesses blindly. It ranks what should launch next and checks the VPS before you promote another business into the active set.
-- The first live business path is Gumroad-first. `GUMROAD_SELLER_EMAIL` is enough to connect the seller identity before you buy a business inbox.
+- The first live business path is Gumroad-first. `IMON_STORE_GUMROAD_SELLER_EMAIL` is enough to connect the seller identity before you buy a Northline inbox.
 - After a Gumroad product goes live, record it with `publish-asset-pack`, then run `engine-sync` so ImonEngine reflects the live store state.
 - When a generated pack is complete but not yet published, mark it with `ready-asset-pack` so the queue distinguishes upload-ready products from drafts.
+- Run `northline-plan` when you want the current Northline proof-page audit, outbound sprint, proof checklist, and launch blockers written to disk.
+- Run `northline-site-serve` when you want the repo to host the Northline proof page and intake endpoint directly.
+- Run `micro-saas-plan` when you are ready to operationalize QuietPivot Labs; it writes a concrete product backlog, launch calendar, social plan, income stack, and blocker list under `runtime/ops/micro-saas-businesses/`.
+- Run `pod-autonomy` when you are ready to operationalize Imonic; it writes the launch plan, storefront engine, growth engine, analytics, revenue guardrails, and owner checklist under `runtime/ops/pod-businesses/`.
+- `.env.example` is the canonical business-scoped config file in this workspace, and `.env` is treated as an optional fallback layer for keys that are still missing there.
 - Outreach validation rejects guarantee language and unsupported performance claims by default.
 - The stack is file-backed so it can run before you add a database or hosted queue.

@@ -4,8 +4,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import type { AppConfig } from "../config.js";
 import type { AssetPackRecord, AssetPackStatus, DigitalAssetType } from "../domain/digital-assets.js";
+import type { GrowthWorkItem } from "../domain/store-ops.js";
 import { exists, readJsonFile, readTextFile, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { StoreOpsService } from "../services/store-ops.js";
+import { buildStorefrontSite } from "../services/storefront-site.js";
 import { FileStore } from "../storage/store.js";
 import { DigitalAssetFactoryAgent } from "./digital-asset-factory.js";
 import { ImonEngineAgent } from "./imon-engine.js";
@@ -160,6 +162,18 @@ export class StoreAutopilotAgent {
         status: "idle",
         summary: "The repo-controlled autopilot has already completed its roadmap.",
         details: ["No further scheduled work is required."],
+        changed: false
+      };
+      await this.writeRunReport(result);
+      return result;
+    }
+
+    if (state.status !== "active") {
+      const result: AutopilotRunResult = {
+        phaseId: state.currentPhase,
+        status: "idle",
+        summary: `The repo-controlled autopilot is ${state.status} and will not execute work units.`,
+        details: ["Set docs/autopilot/state.json back to status: active to resume the phase runner."],
         changed: false
       };
       await this.writeRunReport(result);
@@ -830,12 +844,15 @@ export class StoreAutopilotAgent {
     const existingQueue = await this.store.getGrowthQueue();
     const publishedPacks = packs.filter((pack) => pack.status === "published" && pack.productUrl);
     const marketingRefresh = await this.refreshMarketingAssetsIfNeeded(publishedPacks, force);
+    const storefrontRefresh =
+      publishedPacks.length > 0 ? await buildStorefrontSite(this.config, this.store) : undefined;
     const plannedQueue = existingQueue.filter((item) => item.status === "planned");
     const knownPackIds = new Set(publishedPacks.map((pack) => pack.id));
     const queueHasUnknownPack = plannedQueue.some((item) => !knownPackIds.has(item.packId));
     const queueTooSmall =
       plannedQueue.length < Math.min(this.config.storeOps.growth.postsPerWeek, publishedPacks.length);
-    const queueNeedsRefresh = force || queueHasUnknownPack || queueTooSmall;
+    const staleAttemptedCount = this.countStaleAttemptedGrowthItems(plannedQueue);
+    const queueNeedsRefresh = force || queueHasUnknownPack || queueTooSmall || staleAttemptedCount > 0;
 
     if (queueNeedsRefresh) {
       const before = JSON.stringify(existingQueue, null, 2);
@@ -849,10 +866,18 @@ export class StoreAutopilotAgent {
           summary: "Refreshed the store growth queue, social profile registry, and channel-ready promo assets.",
           details: [
             `Planned queue items: ${nextQueue.filter((item) => item.status === "planned").length}`,
+            ...(staleAttemptedCount > 0 ? [`Rescheduled stale attempted queue items: ${staleAttemptedCount}`] : []),
             `Queue JSON: ${artifacts.jsonPath}`,
             `Queue Markdown: ${artifacts.markdownPath}`,
             `Social JSON: ${socialArtifacts.jsonPath}`,
             `Social Markdown: ${socialArtifacts.markdownPath}`,
+            ...(storefrontRefresh
+              ? [
+                  `Storefront HTML: ${storefrontRefresh.htmlPath}`,
+                  `Storefront catalog: ${storefrontRefresh.catalogPath}`,
+                  ...storefrontRefresh.roadblocks.map((item) => `Storefront roadblock: ${item}`)
+                ]
+              : []),
             ...marketingRefresh.details
           ],
           changed: true
@@ -860,12 +885,25 @@ export class StoreAutopilotAgent {
       }
     }
 
-    if (marketingRefresh.refreshed) {
+    if (marketingRefresh.refreshed || storefrontRefresh?.changed) {
       return {
         phaseId: "phase-06-continuous-store-operations",
         status: "progress",
-        summary: "Regenerated growth promo assets and refreshed social profile artifacts.",
-        details: [...marketingRefresh.details, `Social JSON: ${socialArtifacts.jsonPath}`, `Social Markdown: ${socialArtifacts.markdownPath}`],
+        summary: storefrontRefresh
+          ? "Regenerated the owned storefront, growth promo assets, and social profile artifacts."
+          : "Regenerated growth promo assets and refreshed social profile artifacts.",
+        details: [
+          ...marketingRefresh.details,
+          ...(storefrontRefresh
+            ? [
+                `Storefront HTML: ${storefrontRefresh.htmlPath}`,
+                `Storefront notes: ${storefrontRefresh.notesPath}`,
+                ...storefrontRefresh.roadblocks.map((item) => `Storefront roadblock: ${item}`)
+              ]
+            : []),
+          `Social JSON: ${socialArtifacts.jsonPath}`,
+          `Social Markdown: ${socialArtifacts.markdownPath}`
+        ],
         changed: true
       };
     }
@@ -900,6 +938,16 @@ export class StoreAutopilotAgent {
     }
 
     return null;
+  }
+
+  private countStaleAttemptedGrowthItems(queue: GrowthWorkItem[]): number {
+    const now = new Date().toISOString();
+    return queue.filter(
+      (item) =>
+        item.status === "planned" &&
+        item.scheduledFor <= now &&
+        item.notes.some((note) => /^Attempted on /i.test(note))
+    ).length;
   }
 
   private async refreshMarketingAssetsIfNeeded(
@@ -1300,6 +1348,11 @@ export class StoreAutopilotAgent {
 
   private composeEnvExample(): string {
     return [
+      "# Canonical env names are business-scoped.",
+      "# Legacy fallbacks still load for now: BUSINESS_*, GUMROAD_*, STORE_*,",
+      "# SHOPIFY_*, PRINTIFY_*, PRINTFUL_*, and STRIPE_PAYMENT_LINK_*.",
+      "",
+      "# Shared AI and engine",
       "OPENAI_API_KEY=",
       "OPENAI_MODEL_FAST=gpt-4.1-mini",
       "OPENAI_MODEL_DEEP=gpt-5",
@@ -1318,40 +1371,27 @@ export class StoreAutopilotAgent {
       "IMON_ENGINE_VPS_PASSWORD=",
       "IMON_ENGINE_VPS_REPO_PATH=/opt/imon-engine",
       "IMON_ENGINE_VPS_BRANCH=main",
+      "",
+      "# Shared control room and VPS browser access",
       "VPS_VNC_PASSWORD=",
       "VPS_VNC_PORT=5900",
       "VPS_NOVNC_PORT=6080",
-      "GUMROAD_SELLER_EMAIL=imonengine@gmail.com",
-      "GUMROAD_USERNAME=imonengine",
-      "GUMROAD_PROFILE_URL=imonengine.gumroad.com",
-      "META_GRAPH_API_VERSION=v23.0",
-      "META_PAGE_ID=",
-      "META_PAGE_ACCESS_TOKEN=",
-      "SHOPIFY_STORE_DOMAIN=",
-      "SHOPIFY_ADMIN_ACCESS_TOKEN=",
-      "SHOPIFY_STOREFRONT_ACCESS_TOKEN=",
-      "SHOPIFY_LOCATION_ID=",
-      "PRINTIFY_API_TOKEN=",
-      "PRINTIFY_SHOP_ID=",
-      "PRINTFUL_API_TOKEN=",
-      "STORE_MAX_NEW_PACKS_7D=2",
-      "STORE_MAX_PUBLISHED_PACKS=36",
-      "STORE_MAX_ASSET_TYPE_SHARE=0.4",
-      "STORE_MAX_OPEN_PACK_QUEUE=2",
-      "STORE_POSTS_PER_WEEK=6",
-      "STORE_GROWTH_QUEUE_DAYS=7",
-      "STORE_TAX_RESERVE_RATE=0.2",
-      "STORE_REINVESTMENT_RATE=0.35",
-      "STORE_REFUND_BUFFER_RATE=0.1",
-      "STORE_CASHOUT_THRESHOLD=100",
+      "CONTROL_ROOM_BIND_HOST=127.0.0.1",
+      "CONTROL_ROOM_PORT=4177",
+      "CONTROL_ROOM_SESSION_SECRET=",
+      "CONTROL_ROOM_PASSWORD_HASH=",
+      "CONTROL_ROOM_SESSION_TTL_HOURS=12",
+      "CONTROL_ROOM_STALE_THRESHOLD_MINUTES=120",
+      "CONTROL_ROOM_SERVICE_LOG_PATH=/opt/imon-engine/runtime/ops/control-room/server.log",
+      "CONTROL_ROOM_LOCAL_BIND_HOST=127.0.0.1",
+      "CONTROL_ROOM_LOCAL_PORT=4310",
+      "CONTROL_ROOM_REMOTE_URL=http://127.0.0.1:4311",
+      "CONTROL_ROOM_AUTO_TUNNEL=true",
+      "CONTROL_ROOM_TUNNEL_PORT=4311",
+      "CONTROL_ROOM_TUNNEL_PYTHON_BIN=python",
+      "",
+      "# Shared owner notifications and deployment",
       "APPROVAL_EMAIL=owner@example.com",
-      "BUSINESS_NAME=Imon Engine Automation",
-      "BUSINESS_PHONE=(914) 714-0656",
-      "BUSINESS_SALES_EMAIL=imonengine+sales@gmail.com",
-      "BUSINESS_SITE_URL=https://example.com",
-      "BUSINESS_DOMAIN=example.com",
-      "STRIPE_PAYMENT_LINK_FOUNDING=",
-      "STRIPE_PAYMENT_LINK_STANDARD=",
       "SMTP_HOST=",
       "SMTP_PORT=587",
       "SMTP_SECURE=false",
@@ -1361,6 +1401,77 @@ export class StoreAutopilotAgent {
       "CLOUDFLARE_ACCOUNT_ID=",
       "CLOUDFLARE_API_TOKEN=",
       "CLOUDFLARE_PAGES_PROJECT=",
+      "",
+      "# Shared Meta Business Suite / umbrella Facebook page",
+      "META_GRAPH_API_VERSION=v23.0",
+      "META_PAGE_ID=",
+      "META_PAGE_ACCESS_TOKEN=",
+      "",
+      "# Imon Digital Asset Store",
+      "IMON_STORE_GUMROAD_SELLER_EMAIL=imonengine@gmail.com",
+      "IMON_STORE_GUMROAD_USERNAME=imonengine",
+      "IMON_STORE_GUMROAD_PROFILE_URL=imonengine.gumroad.com",
+      "IMON_STORE_SITE_URL=",
+      "IMON_STORE_EMAIL_CAPTURE_ACTION=",
+      "IMON_STORE_EMAIL_CAPTURE_EMAIL=",
+      "IMON_STORE_MAX_NEW_PACKS_7D=2",
+      "IMON_STORE_MAX_PUBLISHED_PACKS=36",
+      "IMON_STORE_MAX_ASSET_TYPE_SHARE=0.4",
+      "IMON_STORE_MAX_OPEN_PACK_QUEUE=2",
+      "IMON_STORE_POSTS_PER_WEEK=6",
+      "IMON_STORE_GROWTH_QUEUE_DAYS=7",
+      "IMON_STORE_TAX_RESERVE_RATE=0.2",
+      "IMON_STORE_REINVESTMENT_RATE=0.35",
+      "IMON_STORE_REFUND_BUFFER_RATE=0.1",
+      "IMON_STORE_CASHOUT_THRESHOLD=100",
+      "",
+      "# Northbeam Atlas Network",
+      "# Reserved namespace for future content-site launch.",
+      "# NORTHBEAM_PRIMARY_DOMAIN=",
+      "# NORTHBEAM_ANALYTICS_PROPERTY_ID=",
+      "# NORTHBEAM_AFFILIATE_DISCLOSURE_URL=",
+      "",
+      "# Velora Echo Media",
+      "# Reserved namespace for future social-brand launch.",
+      "# VELORA_TIKTOK_HANDLE=",
+      "# VELORA_INSTAGRAM_URL=",
+      "# VELORA_YOUTUBE_CHANNEL_URL=",
+      "",
+      "# QuietPivot Labs",
+      "# Reserved namespace for future micro-SaaS launch.",
+      "# QUIETPIVOT_SITE_URL=",
+      "# QUIETPIVOT_SUPPORT_EMAIL=",
+      "# QUIETPIVOT_STRIPE_PAYMENT_LINK_STARTER=",
+      "# QUIETPIVOT_STRIPE_PAYMENT_LINK_PRO=",
+      "",
+      "# Imonic",
+      "IMONIC_SHOPIFY_STORE_DOMAIN=",
+      "IMONIC_SHOPIFY_ADMIN_ACCESS_TOKEN=",
+      "IMONIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN=",
+      "IMONIC_SHOPIFY_LOCATION_ID=",
+      "IMONIC_PRINTIFY_API_TOKEN=",
+      "IMONIC_PRINTIFY_SHOP_ID=",
+      "IMONIC_PRINTFUL_API_TOKEN=",
+      "",
+      "# Northline Growth Systems",
+      "NORTHLINE_NAME=Northline Growth Systems",
+      "NORTHLINE_PHONE=",
+      "NORTHLINE_SALES_EMAIL=sales@example.com",
+      "NORTHLINE_SITE_URL=https://example.com",
+      "NORTHLINE_DOMAIN=example.com",
+      "NORTHLINE_BOOKING_URL=/book.html",
+      "NORTHLINE_LEAD_FORM_ACTION=/api/northline-intake",
+      "NORTHLINE_PRIMARY_SERVICE_AREA=",
+      "NORTHLINE_GOOGLE_BUSINESS_PROFILE_URL=",
+      "NORTHLINE_GOOGLE_REVIEW_URL=",
+      "NORTHLINE_FACEBOOK_URL=",
+      "NORTHLINE_INSTAGRAM_URL=",
+      "NORTHLINE_LINKEDIN_URL=",
+      "NORTHLINE_STRIPE_PAYMENT_LINK_FOUNDING=",
+      "NORTHLINE_STRIPE_PAYMENT_LINK_STANDARD=",
+      "NORTHLINE_SITE_BIND_HOST=0.0.0.0",
+      "NORTHLINE_SITE_PORT=4181",
+      "# NORTHLINE_SUBMISSION_STORE_PATH=/opt/imon-engine/runtime/state/northlineIntakeSubmissions.json",
       ""
     ].join("\n");
   }
@@ -1635,8 +1746,8 @@ export class StoreAutopilotAgent {
         category: "Shopify store setup",
         requiredFromOwner: [
           "Create or finish the Shopify store for the affected brand and leave the admin signed into the VPS Chrome profile if browser work is still required.",
-          "Save `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_ACCESS_TOKEN` in `/opt/imon-engine/.env` on the VPS.",
-          "If storefront reads are needed later, add `SHOPIFY_STOREFRONT_ACCESS_TOKEN` after the admin token is confirmed."
+          "Save `IMONIC_SHOPIFY_STORE_DOMAIN` and `IMONIC_SHOPIFY_ADMIN_ACCESS_TOKEN` in `/opt/imon-engine/.env` on the VPS.",
+          "If storefront reads are needed later, add `IMONIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN` after the admin token is confirmed."
         ],
         continueAfterCompletion: [
           "Imon can resume product creation and Shopify publishing as soon as the store credentials are live.",
@@ -1650,7 +1761,7 @@ export class StoreAutopilotAgent {
         category: "Print-on-demand vendor setup",
         requiredFromOwner: [
           "Connect at least one POD vendor account for the brand.",
-          "Save the vendor API token in `/opt/imon-engine/.env` as `PRINTIFY_API_TOKEN` or `PRINTFUL_API_TOKEN`.",
+          "Save the vendor API token in `/opt/imon-engine/.env` as `IMONIC_PRINTIFY_API_TOKEN` or `IMONIC_PRINTFUL_API_TOKEN`.",
           "If the vendor requires browser-only setup, leave the account signed into the VPS Chrome profile when you are done."
         ],
         continueAfterCompletion: [

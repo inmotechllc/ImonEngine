@@ -71,6 +71,7 @@ That structure is generated from the same control-plane templates used by the li
 - `npm run dev -- venture-studio`
 - `npm run dev -- venture-studio --business <id>`
 - `npm run dev -- social-profiles`
+- `npm run dev -- micro-saas-plan --business imon-micro-saas-factory [--notify-roadblocks]`
 - `npm run dev -- autopilot-run-once`
 
 ## Runtime Artifacts
@@ -81,6 +82,8 @@ That structure is generated from the same control-plane templates used by the li
 - `runtime/ops/venture-calendar.md`
 - `runtime/ops/venture-blueprints/<business-id>.json`
 - `runtime/ops/venture-blueprints/<business-id>.md`
+- `runtime/ops/micro-saas-businesses/<business-id>/plan.json`
+- `runtime/ops/micro-saas-businesses/<business-id>/plan.md`
 - `runtime/ops/org-control-plane.json`
 - `runtime/ops/org-blueprints/<blueprint-id>.json`
 
