@@ -29,6 +29,7 @@ ensure_base_packages() {
     ca-certificates \
     curl \
     dbus-x11 \
+    ffmpeg \
     git \
     gnupg \
     jq \
@@ -45,6 +46,31 @@ ensure_base_packages() {
     x11vnc \
     xvfb \
     xz-utils
+}
+
+ensure_media_tooling() {
+  if command -v yt-dlp >/dev/null 2>&1; then
+    log "yt-dlp already installed."
+    return
+  fi
+
+  if apt-cache show yt-dlp >/dev/null 2>&1; then
+    log "Installing yt-dlp from apt."
+    apt-get install -y yt-dlp
+  else
+    log "Installing yt-dlp from pip."
+    python3 -m pip install --upgrade --break-system-packages yt-dlp
+  fi
+}
+
+ensure_transcription_tooling() {
+  if python3 -m whisper --help >/dev/null 2>&1; then
+    log "Whisper already installed."
+    return
+  fi
+
+  log "Installing OpenAI Whisper transcription CLI."
+  python3 -m pip install --upgrade --break-system-packages openai-whisper
 }
 
 ensure_docker() {
@@ -126,6 +152,7 @@ RUN apt-get update && \
       ca-certificates \
       curl \
       dbus-x11 \
+  ffmpeg \
       git \
       gnupg \
       jq \
@@ -134,6 +161,7 @@ RUN apt-get update && \
       python3-pil \
       python3-venv \
       python3-websocket \
+  yt-dlp \
       unzip \
       x11-utils \
       xauth \
@@ -141,7 +169,8 @@ RUN apt-get update && \
       xz-utils && \
     rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @openai/codex playwright && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages openai-whisper && \
+    npm install -g @openai/codex playwright && \
     playwright install --with-deps chromium
 
 WORKDIR /workspace
@@ -196,6 +225,8 @@ EOF
 
 main() {
   ensure_base_packages
+  ensure_media_tooling
+  ensure_transcription_tooling
   ensure_docker
   ensure_chrome
   ensure_playwright
@@ -211,6 +242,9 @@ main() {
   log "docker version"
   log "docker compose version"
   log "google-chrome --version"
+  log "ffmpeg -version"
+  log "yt-dlp --version"
+  log "python3 -m whisper --help"
   log "x11vnc -version"
   log "novnc_proxy --help"
   log "xvfb-run --help"

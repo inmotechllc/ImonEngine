@@ -1,10 +1,13 @@
 import path from "node:path";
+import { normalizeClientJob, normalizeLeadRecord } from "../domain/contracts.js";
 import type {
   ApprovalTask,
   ClientJob,
+  LeadReplyRecord,
   LeadRecord,
   OfferConfig,
   OutreachDraft,
+  ProofBundle,
   RetentionReport,
   RunReport
 } from "../domain/contracts.js";
@@ -66,6 +69,7 @@ type EntityCollectionMap = {
   growthPolicies: CatalogGrowthPolicy[];
   engineReports: EngineOverviewReport[];
   leads: LeadRecord[];
+  leadReplies: LeadReplyRecord[];
   memoryNamespacePolicies: MemoryNamespacePolicy[];
   offers: OfferConfig[];
   officeChatActions: OfficeChatAction[];
@@ -78,6 +82,7 @@ type EntityCollectionMap = {
   orgAuditRecords: OrgAuditRecord[];
   organizationBlueprints: OrganizationBlueprint[];
   outreach: OutreachDraft[];
+  proofBundles: ProofBundle[];
   allocationSnapshots: RevenueAllocationSnapshot[];
   permissionPolicies: PermissionPolicy[];
   positionAssignments: PositionAssignment[];
@@ -94,6 +99,8 @@ type EntityCollectionMap = {
 };
 
 export class FileStore {
+  private readonly writeQueues = new Map<string, Promise<void>>();
+
   constructor(private readonly stateDir: string) {}
 
   async init(): Promise<void> {
@@ -115,6 +122,7 @@ export class FileStore {
       "growthQueue",
       "engineReports",
       "leads",
+      "leadReplies",
       "memoryNamespacePolicies",
       "offers",
       "officeChatActions",
@@ -127,6 +135,7 @@ export class FileStore {
       "orgAuditRecords",
       "organizationBlueprints",
       "outreach",
+      "proofBundles",
       "permissionPolicies",
       "positionAssignments",
       "positionDefinitions",
@@ -145,13 +154,13 @@ export class FileStore {
       collections.map(async (name) => {
         const filePath = this.collectionPath(name);
         const existing = await readJsonFile(filePath, []);
-        await writeJsonFile(filePath, existing);
+        await this.writeCollection(name, existing);
       })
     );
 
     const enginePath = this.engineStatePath();
     const engine = await readJsonFile<ImonEngineState | null>(enginePath, null);
-    await writeJsonFile(enginePath, engine);
+    await this.writeStateFile(enginePath, engine);
   }
 
   async getOffers(): Promise<OfferConfig[]> {
@@ -163,7 +172,7 @@ export class FileStore {
   }
 
   async getLeads(): Promise<LeadRecord[]> {
-    return this.readCollection("leads");
+    return (await this.readCollection("leads")).map((lead) => normalizeLeadRecord(lead));
   }
 
   async getLead(id: string): Promise<LeadRecord | undefined> {
@@ -172,11 +181,19 @@ export class FileStore {
   }
 
   async saveLead(lead: LeadRecord): Promise<void> {
-    await this.upsert("leads", lead);
+    await this.upsert("leads", normalizeLeadRecord(lead));
+  }
+
+  async getLeadReplies(): Promise<LeadReplyRecord[]> {
+    return this.readCollection("leadReplies");
+  }
+
+  async saveLeadReply(reply: LeadReplyRecord): Promise<void> {
+    await this.upsert("leadReplies", reply);
   }
 
   async getClients(): Promise<ClientJob[]> {
-    return this.readCollection("clients");
+    return (await this.readCollection("clients")).map((client) => normalizeClientJob(client));
   }
 
   async getClient(id: string): Promise<ClientJob | undefined> {
@@ -185,7 +202,7 @@ export class FileStore {
   }
 
   async saveClient(client: ClientJob): Promise<void> {
-    await this.upsert("clients", client);
+    await this.upsert("clients", normalizeClientJob(client));
   }
 
   async getManagedBusinesses(): Promise<ManagedBusiness[]> {
@@ -231,7 +248,7 @@ export class FileStore {
   }
 
   async replaceApprovalRoutes(routes: ApprovalRoute[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("approvalRoutes"), routes);
+    await this.writeCollection("approvalRoutes", routes);
   }
 
   async getGrowthQueue(): Promise<GrowthWorkItem[]> {
@@ -243,7 +260,7 @@ export class FileStore {
   }
 
   async replaceGrowthQueue(items: GrowthWorkItem[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("growthQueue"), items);
+    await this.writeCollection("growthQueue", items);
   }
 
   async getAllocationPolicies(): Promise<RevenueAllocationPolicy[]> {
@@ -295,7 +312,7 @@ export class FileStore {
   }
 
   async replaceSocialProfiles(profiles: SocialProfileRecord[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("socialProfiles"), profiles);
+    await this.writeCollection("socialProfiles", profiles);
   }
 
   async getOrganizationBlueprints(): Promise<OrganizationBlueprint[]> {
@@ -312,7 +329,7 @@ export class FileStore {
   }
 
   async replaceOrganizationBlueprints(blueprints: OrganizationBlueprint[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("organizationBlueprints"), blueprints);
+    await this.writeCollection("organizationBlueprints", blueprints);
   }
 
   async getDepartmentDefinitions(): Promise<DepartmentDefinition[]> {
@@ -332,7 +349,7 @@ export class FileStore {
   }
 
   async replaceBusinessScaffoldDrafts(drafts: BusinessScaffoldDraft[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("businessScaffoldDrafts"), drafts);
+    await this.writeCollection("businessScaffoldDrafts", drafts);
   }
 
   async saveDepartmentExecutionItem(item: DepartmentExecutionItem): Promise<void> {
@@ -340,7 +357,7 @@ export class FileStore {
   }
 
   async replaceDepartmentExecutionItems(items: DepartmentExecutionItem[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("departmentExecutionItems"), items);
+    await this.writeCollection("departmentExecutionItems", items);
   }
 
   async saveDepartmentDefinition(definition: DepartmentDefinition): Promise<void> {
@@ -348,7 +365,7 @@ export class FileStore {
   }
 
   async replaceDepartmentDefinitions(definitions: DepartmentDefinition[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("departmentDefinitions"), definitions);
+    await this.writeCollection("departmentDefinitions", definitions);
   }
 
   async getPositionDefinitions(): Promise<PositionDefinition[]> {
@@ -360,7 +377,7 @@ export class FileStore {
   }
 
   async replacePositionDefinitions(definitions: PositionDefinition[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("positionDefinitions"), definitions);
+    await this.writeCollection("positionDefinitions", definitions);
   }
 
   async getPositionAssignments(): Promise<PositionAssignment[]> {
@@ -372,7 +389,7 @@ export class FileStore {
   }
 
   async replacePositionAssignments(assignments: PositionAssignment[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("positionAssignments"), assignments);
+    await this.writeCollection("positionAssignments", assignments);
   }
 
   async getReportingLines(): Promise<ReportingLine[]> {
@@ -384,7 +401,7 @@ export class FileStore {
   }
 
   async replaceReportingLines(reportingLines: ReportingLine[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("reportingLines"), reportingLines);
+    await this.writeCollection("reportingLines", reportingLines);
   }
 
   async getPermissionPolicies(): Promise<PermissionPolicy[]> {
@@ -396,7 +413,7 @@ export class FileStore {
   }
 
   async replacePermissionPolicies(policies: PermissionPolicy[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("permissionPolicies"), policies);
+    await this.writeCollection("permissionPolicies", policies);
   }
 
   async getMemoryNamespacePolicies(): Promise<MemoryNamespacePolicy[]> {
@@ -408,7 +425,7 @@ export class FileStore {
   }
 
   async replaceMemoryNamespacePolicies(policies: MemoryNamespacePolicy[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("memoryNamespacePolicies"), policies);
+    await this.writeCollection("memoryNamespacePolicies", policies);
   }
 
   async getWorkflowOwnership(): Promise<WorkflowOwnershipRecord[]> {
@@ -430,7 +447,7 @@ export class FileStore {
   }
 
   async replaceWorkflowOwnership(records: WorkflowOwnershipRecord[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("workflowOwnership"), records);
+    await this.writeCollection("workflowOwnership", records);
   }
 
   async getTaskEnvelopes(): Promise<TaskEnvelope[]> {
@@ -442,7 +459,7 @@ export class FileStore {
   }
 
   async replaceTaskEnvelopes(envelopes: TaskEnvelope[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("taskEnvelopes"), envelopes);
+    await this.writeCollection("taskEnvelopes", envelopes);
   }
 
   async getOrgAuditRecords(): Promise<OrgAuditRecord[]> {
@@ -454,7 +471,7 @@ export class FileStore {
   }
 
   async replaceOrgAuditRecords(records: OrgAuditRecord[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("orgAuditRecords"), records);
+    await this.writeCollection("orgAuditRecords", records);
   }
 
   async getOfficeViewSnapshots(): Promise<OfficeViewSnapshot[]> {
@@ -470,7 +487,7 @@ export class FileStore {
   }
 
   async replaceOfficeChatThreads(threads: OfficeChatThread[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("officeChatThreads"), threads);
+    await this.writeCollection("officeChatThreads", threads);
   }
 
   async getOfficeChatMessages(): Promise<OfficeChatMessage[]> {
@@ -482,7 +499,7 @@ export class FileStore {
   }
 
   async replaceOfficeChatMessages(messages: OfficeChatMessage[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("officeChatMessages"), messages);
+    await this.writeCollection("officeChatMessages", messages);
   }
 
   async getOfficeChatActions(): Promise<OfficeChatAction[]> {
@@ -494,7 +511,7 @@ export class FileStore {
   }
 
   async replaceOfficeChatActions(actions: OfficeChatAction[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("officeChatActions"), actions);
+    await this.writeCollection("officeChatActions", actions);
   }
 
   async getOfficeReportArtifacts(): Promise<OfficeReportArtifact[]> {
@@ -506,7 +523,7 @@ export class FileStore {
   }
 
   async replaceOfficeReportArtifacts(artifacts: OfficeReportArtifact[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("officeReportArtifacts"), artifacts);
+    await this.writeCollection("officeReportArtifacts", artifacts);
   }
 
   async getOfficeOperatingConfigs(): Promise<OfficeOperatingConfig[]> {
@@ -518,7 +535,7 @@ export class FileStore {
   }
 
   async replaceOfficeOperatingConfigs(configs: OfficeOperatingConfig[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("officeOperatingConfigs"), configs);
+    await this.writeCollection("officeOperatingConfigs", configs);
   }
 
   async getOfficeHandoffs(): Promise<OfficeHandoffRecord[]> {
@@ -530,7 +547,7 @@ export class FileStore {
   }
 
   async replaceOfficeHandoffs(records: OfficeHandoffRecord[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("officeHandoffs"), records);
+    await this.writeCollection("officeHandoffs", records);
   }
 
   async saveOfficeViewSnapshot(snapshot: OfficeViewSnapshot): Promise<void> {
@@ -538,7 +555,7 @@ export class FileStore {
   }
 
   async replaceOfficeViewSnapshots(snapshots: OfficeViewSnapshot[]): Promise<void> {
-    await writeJsonFile(this.collectionPath("officeViewSnapshots"), snapshots);
+    await this.writeCollection("officeViewSnapshots", snapshots);
   }
 
   async getOutreachDrafts(): Promise<OutreachDraft[]> {
@@ -547,6 +564,14 @@ export class FileStore {
 
   async saveOutreachDraft(draft: OutreachDraft): Promise<void> {
     await this.upsert("outreach", draft);
+  }
+
+  async getProofBundles(): Promise<ProofBundle[]> {
+    return this.readCollection("proofBundles");
+  }
+
+  async saveProofBundle(bundle: ProofBundle): Promise<void> {
+    await this.upsert("proofBundles", bundle, (existing) => existing.clientId === bundle.clientId);
   }
 
   async getReports(): Promise<RunReport[]> {
@@ -570,7 +595,7 @@ export class FileStore {
   }
 
   async saveEngineState(state: ImonEngineState): Promise<void> {
-    await writeJsonFile(this.engineStatePath(), state);
+    await this.writeStateFile(this.engineStatePath(), state);
   }
 
   async getBusinessRuns(): Promise<BusinessRunRecord[]> {
@@ -619,27 +644,58 @@ export class FileStore {
     return readJsonFile(this.collectionPath(name), [] as EntityCollectionMap[K]);
   }
 
+  private async writeCollection<K extends keyof EntityCollectionMap>(
+    name: K,
+    value: EntityCollectionMap[K]
+  ): Promise<void> {
+    await this.writeStateFile(this.collectionPath(name), value);
+  }
+
+  private async writeStateFile<T>(filePath: string, value: T): Promise<void> {
+    await this.queueWrite(filePath, async () => {
+      await writeJsonFile(filePath, value);
+    });
+  }
+
+  private async queueWrite(filePath: string, operation: () => Promise<void>): Promise<void> {
+    const previous = this.writeQueues.get(filePath) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(operation);
+    this.writeQueues.set(filePath, next);
+
+    try {
+      await next;
+    } finally {
+      if (this.writeQueues.get(filePath) === next) {
+        this.writeQueues.delete(filePath);
+      }
+    }
+  }
+
   private async upsert<K extends keyof EntityCollectionMap>(
     name: K,
     item: EntityCollectionMap[K][number],
     matcher?: (candidate: EntityCollectionMap[K][number]) => boolean
   ): Promise<void> {
-    const current = await this.readCollection(name);
-    const predicate =
-      matcher ??
-      ((candidate: EntityCollectionMap[K][number]) =>
-        "id" in candidate &&
-        "id" in item &&
-        candidate.id === item.id);
-    const next = [...current];
-    const index = next.findIndex(predicate);
+    const filePath = this.collectionPath(name);
 
-    if (index >= 0) {
-      next[index] = item;
-    } else {
-      next.push(item);
-    }
+    await this.queueWrite(filePath, async () => {
+      const current = await readJsonFile(filePath, [] as EntityCollectionMap[K]);
+      const predicate =
+        matcher ??
+        ((candidate: EntityCollectionMap[K][number]) =>
+          "id" in candidate &&
+          "id" in item &&
+          candidate.id === item.id);
+      const next = [...current];
+      const index = next.findIndex(predicate);
 
-    await writeJsonFile(this.collectionPath(name), next);
+      if (index >= 0) {
+        next[index] = item;
+      } else {
+        next.push(item);
+      }
+
+      await writeJsonFile(filePath, next);
+    });
   }
 }

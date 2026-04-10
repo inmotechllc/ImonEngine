@@ -185,10 +185,6 @@ def resolve_meta_asset_id(profiles: list[dict[str, Any]], business_id: str) -> s
 
 
 def resolve_facebook_page_id(profiles: list[dict[str, Any]], business_id: str) -> str:
-    page_id = str(os.getenv("META_PAGE_ID") or os.getenv("META_FACEBOOK_PAGE_ID") or "").strip()
-    if page_id:
-        return page_id
-
     for profile in profiles:
         if profile.get("businessId") != business_id:
             continue
@@ -200,6 +196,10 @@ def resolve_facebook_page_id(profiles: list[dict[str, Any]], business_id: str) -
         profile_url = str(profile.get("profileUrl") or "")
         if "id=" in profile_url:
             return profile_url.split("id=", 1)[1].split("&", 1)[0]
+
+    page_id = str(os.getenv("META_PAGE_ID") or os.getenv("META_FACEBOOK_PAGE_ID") or "").strip()
+    if page_id:
+        return page_id
     return ""
 
 
@@ -214,6 +214,33 @@ def resolve_profile_url(
     return ""
 
 
+def resolve_profile_identity(
+    profiles: list[dict[str, Any]],
+    business_id: str,
+    platform: str,
+) -> str:
+    for profile in profiles:
+        if profile.get("businessId") != business_id or profile.get("platform") != platform:
+            continue
+        handle = str(profile.get("handle") or "").strip()
+        if handle:
+            return handle
+        brand_name = str(profile.get("brandName") or "").strip()
+        if brand_name:
+            return brand_name
+    return ""
+
+
+def resolve_facebook_page_profile_url(profiles: list[dict[str, Any]], business_id: str) -> str:
+    profile_url = resolve_profile_url(profiles, business_id, "facebook_page")
+    if profile_url:
+        return profile_url
+    page_id = resolve_facebook_page_id(profiles, business_id)
+    if page_id:
+        return f"https://www.facebook.com/profile.php?id={page_id}"
+    return ""
+
+
 def resolve_meta_page_access_token() -> str:
     return str(
         os.getenv("META_PAGE_ACCESS_TOKEN")
@@ -222,8 +249,57 @@ def resolve_meta_page_access_token() -> str:
     ).strip()
 
 
+def resolve_meta_instagram_access_token() -> str:
+    return str(
+        os.getenv("META_INSTAGRAM_ACCESS_TOKEN")
+        or os.getenv("INSTAGRAM_ACCESS_TOKEN")
+        or resolve_meta_page_access_token()
+        or ""
+    ).strip()
+
+
 def resolve_meta_graph_api_version() -> str:
     return str(os.getenv("META_GRAPH_API_VERSION") or DEFAULT_META_GRAPH_API_VERSION).strip() or DEFAULT_META_GRAPH_API_VERSION
+
+
+def resolve_instagram_business_account_id(
+    profiles: list[dict[str, Any]],
+    business_id: str,
+    *,
+    graph_version: str,
+    access_token: str,
+) -> str:
+    env_id = str(
+        os.getenv("META_INSTAGRAM_ACCOUNT_ID")
+        or os.getenv("META_INSTAGRAM_BUSINESS_ACCOUNT_ID")
+        or os.getenv("INSTAGRAM_ACCOUNT_ID")
+        or ""
+    ).strip()
+    if env_id:
+        return env_id
+
+    for profile in profiles:
+        if profile.get("businessId") != business_id:
+            continue
+        if profile.get("platform") != "instagram_account":
+            continue
+        external_id = str(profile.get("externalId") or "").strip()
+        if external_id:
+            return external_id
+
+    page_id = resolve_facebook_page_id(profiles, business_id)
+    if not page_id:
+        return ""
+
+    response = http_get_json(
+        f"https://graph.facebook.com/{graph_version}/{page_id}",
+        params={
+            "access_token": access_token,
+            "fields": "instagram_business_account{id,username}",
+        },
+    )
+    instagram_account = response.get("instagram_business_account") or {}
+    return str(instagram_account.get("id") or "").strip()
 
 
 def append_destination_url(caption: str, destination_url: str) -> str:
@@ -235,6 +311,57 @@ def append_destination_url(caption: str, destination_url: str) -> str:
     if not caption.strip():
         return destination
     return f"{caption.rstrip()}\n\n{destination}"
+
+
+def resolve_public_asset_url(asset_path: str, asset_url: str, destination_url: str) -> str:
+    explicit_url = asset_url.strip()
+    if explicit_url:
+        return explicit_url
+
+    resolved_destination = destination_url.strip()
+    if not asset_path.strip() or not resolved_destination:
+        return ""
+
+    parsed = urllib.parse.urlsplit(resolved_destination)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    normalized_asset = Path(asset_path).resolve().as_posix()
+    for marker in ("/runtime/agency-site/", "/runtime/storefront-site/"):
+        if marker not in normalized_asset:
+            continue
+        relative = normalized_asset.split(marker, 1)[1].lstrip("/")
+        return f"{origin}/{relative}"
+    return ""
+
+
+def wait_for_instagram_media_ready(
+    creation_id: str,
+    *,
+    access_token: str,
+    graph_version: str,
+    timeout: float = 60.0,
+    interval: float = 2.0,
+) -> None:
+    deadline = time.time() + timeout
+    last_status = "unknown"
+    while time.time() < deadline:
+        response = http_get_json(
+            f"https://graph.facebook.com/{graph_version}/{creation_id}",
+            params={
+                "access_token": access_token,
+                "fields": "status_code,status",
+            },
+        )
+        status_code = str(response.get("status_code") or response.get("status") or "").upper()
+        last_status = status_code or last_status
+        if status_code in {"FINISHED", "PUBLISHED"}:
+            return
+        if status_code in {"ERROR", "EXPIRED"}:
+            raise RuntimeError(f"Instagram media processing failed with status {status_code}.")
+        time.sleep(interval)
+    raise RuntimeError(f"Timed out waiting for Instagram media processing. Last status: {last_status}")
 
 
 def encode_multipart_formdata(
@@ -306,6 +433,32 @@ def http_post_json(
         ) from error
 
 
+def http_get_json(url: str, *, params: dict[str, str]) -> dict[str, Any]:
+    request_url = f"{url}?{urllib.parse.urlencode(params)}"
+    request = urllib.request.Request(
+        request_url,
+        headers={"User-Agent": "ImonEngine/1.0"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(body)
+            error_message = (
+                parsed.get("error", {}).get("message")
+                or parsed.get("message")
+                or body
+            )
+        except Exception:
+            error_message = body or error.reason
+        raise RuntimeError(
+            f"Meta Graph API request failed ({error.code}): {error_message}"
+        ) from error
+
+
 def build_facebook_post_url(page_id: str, graph_post_id: str, fallback_url: str) -> str:
     if "_" in graph_post_id:
         _, post_id = graph_post_id.split("_", 1)
@@ -355,7 +508,131 @@ def clear_and_insert_editor_text(page: CdpPage, text: str) -> None:
     page.send("Input.insertText", {"text": text})
 
 
-def post_to_facebook(
+def ensure_facebook_page_context(
+    page: CdpPage,
+    *,
+    business_id: str,
+    social_profiles: list[dict[str, Any]],
+) -> tuple[str, str]:
+    page_name = resolve_profile_identity(social_profiles, business_id, "facebook_page") or resolve_brand_name(
+        social_profiles, business_id
+    )
+    page_url = resolve_facebook_page_profile_url(social_profiles, business_id)
+    if not page_url:
+        raise RuntimeError(
+            "Could not resolve the Facebook Page URL. Add a facebook_page profileUrl or page id for this business."
+        )
+
+    page.navigate(page_url)
+    wait_until(
+        page,
+        f"(() => (document.body.innerText || '').includes({js_string(page_name)}))()",
+        timeout=30.0,
+    )
+
+    page_text = body_text(page)
+    if f"Switch into {page_name}'s Page" in page_text or "Switch profiles" in page_text:
+        if "Switch profiles" not in page_text:
+            if not click_selector_center(page, '[aria-label="Switch"][role="button"]', index=0):
+                raise RuntimeError("Could not open the Facebook Page switch prompt.")
+            wait_until(page, "(() => (document.body.innerText || '').includes('Switch profiles'))()", timeout=20.0)
+
+        if not click_selector_center(page, '[aria-label="Switch"][role="button"]', index=1):
+            raise RuntimeError("Could not switch into the Facebook Page context.")
+
+        wait_until(
+            page,
+            f"""(() => {{
+  const body = document.body.innerText || '';
+  return body.includes({js_string(page_name)}) &&
+    (body.includes({js_string("What's on your mind?")}) || /acting as|Manage Page/i.test(body));
+}})()""",
+            timeout=30.0,
+        )
+        time.sleep(2.0)
+
+    return page_name, page_url
+
+
+def post_to_facebook_page(
+    page: CdpPage,
+    *,
+    caption: str,
+    destination_url: str,
+    business_id: str,
+    social_profiles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    full_caption = append_destination_url(caption, destination_url)
+    page_name, page_url = ensure_facebook_page_context(
+        page,
+        business_id=business_id,
+        social_profiles=social_profiles,
+    )
+
+    if not click_exact_text(page, "What's on your mind?", real_click=True):
+        raise RuntimeError("Could not open the Facebook Page composer.")
+
+    wait_until(
+        page,
+        f"(() => !!document.querySelector('[contenteditable=true]') && (document.body.innerText || '').includes({js_string('Create post')}) && (document.body.innerText || '').includes({js_string(page_name)}))()",
+        timeout=20.0,
+    )
+
+    clear_and_insert_editor_text(page, full_caption)
+    wait_until(
+        page,
+        "(() => { const body = document.body.innerText || ''; return body.includes('Next') || body.includes('Post'); })()",
+        timeout=15.0,
+    )
+
+    composer_text = body_text(page)
+    if "Post settings" not in composer_text:
+        clicked_next = click_selector_center(page, '[aria-label="Next"][role="button"]', index=0)
+        if not clicked_next:
+            clicked_next = click_exact_text(page, "Next", real_click=True)
+
+        if clicked_next:
+            wait_until(
+                page,
+                "(() => { const body = document.body.innerText || ''; return body.includes('Post settings') || !!document.querySelector('[aria-label=\"Post\"][role=\"button\"]') || [...document.querySelectorAll('button,[role=button],a,div,span')].some((node) => ((node.innerText || node.getAttribute('aria-label') || '').trim()) === 'Post'); })()",
+                timeout=20.0,
+            )
+
+    wait_until(
+        page,
+        "(() => !!document.querySelector('[aria-label=\"Post\"][role=\"button\"]') || [...document.querySelectorAll('button,[role=button],a,div,span')].some((node) => ((node.innerText || node.getAttribute('aria-label') || '').trim()) === 'Post'))()",
+        timeout=20.0,
+    )
+
+    if not click_selector_center(page, '[aria-label="Post"][role="button"]', index=0):
+        if not click_exact_text(page, "Post", real_click=True):
+            raise RuntimeError("Could not find the Facebook Page Post action.")
+
+    wait_until(
+        page,
+        "(() => { const body = document.body.innerText || ''; return !body.includes('Post settings') && !body.includes('Create post'); })()",
+        timeout=45.0,
+    )
+
+    page.navigate(page_url)
+    summary_line = next((line.strip() for line in full_caption.splitlines() if line.strip()), page_name)
+    wait_until(
+        page,
+        f"(() => (document.body.innerText || '').includes({js_string(summary_line)}) && (document.body.innerText || '').includes({js_string(page_name)}))()",
+        timeout=45.0,
+    )
+    time.sleep(2.0)
+    return {
+        "status": "posted",
+        "channel": "facebook_page",
+        "postedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "pageUrl": page_url,
+        "bodySnippet": str(page.evaluate("(document.body.innerText || '').slice(0, 1200)")),
+        "delivery": "facebook_page_browser",
+    }
+
+
+def post_to_facebook_business_suite(
     page: CdpPage,
     *,
     caption: str,
@@ -376,7 +653,7 @@ def post_to_facebook(
         "/Just now|Now|Preview/i.test(document.body.innerText || ''))()",
         timeout=10.0,
     )
-    if not click_exact_text(page, "Publish"):
+    if not click_exact_text(page, "Publish", real_click=True):
         raise RuntimeError("Could not find the Meta Business Suite Publish action.")
     wait_until(
         page,
@@ -391,7 +668,33 @@ def post_to_facebook(
         "postedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "pageUrl": str(page.evaluate("location.href")),
         "bodySnippet": str(page.evaluate("(document.body.innerText || '').slice(0, 1200)")),
+        "delivery": "meta_business_suite_browser",
     }
+
+
+def post_to_facebook(
+    page: CdpPage,
+    *,
+    caption: str,
+    destination_url: str,
+    business_id: str,
+    social_profiles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if resolve_facebook_page_profile_url(social_profiles, business_id):
+        return post_to_facebook_page(
+            page,
+            caption=caption,
+            destination_url=destination_url,
+            business_id=business_id,
+            social_profiles=social_profiles,
+        )
+
+    return post_to_facebook_business_suite(
+        page,
+        caption=caption,
+        business_id=business_id,
+        social_profiles=social_profiles,
+    )
 
 
 def post_to_facebook_api(
@@ -455,6 +758,80 @@ def post_to_facebook_api(
         "pageId": page_id,
         "graphObjectId": graph_object_id,
         "graphPostId": graph_post_id,
+        "delivery": "meta_graph_api",
+    }
+
+
+def post_to_instagram_api(
+    *,
+    caption: str,
+    asset_path: str,
+    asset_url: str,
+    destination_url: str,
+    business_id: str,
+    social_profiles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    access_token = resolve_meta_instagram_access_token()
+    if not access_token:
+        raise RuntimeError(
+            "META_INSTAGRAM_ACCESS_TOKEN or META_PAGE_ACCESS_TOKEN is not configured. Add a token with instagram_content_publish before using Instagram automation."
+        )
+
+    graph_version = resolve_meta_graph_api_version()
+    instagram_account_id = resolve_instagram_business_account_id(
+        social_profiles,
+        business_id,
+        graph_version=graph_version,
+        access_token=access_token,
+    )
+    if not instagram_account_id:
+        raise RuntimeError(
+            "Could not resolve the Instagram business account id. Set META_INSTAGRAM_ACCOUNT_ID or connect the account to the configured Facebook Page."
+        )
+
+    public_asset_url = resolve_public_asset_url(asset_path, asset_url, destination_url)
+    if not public_asset_url:
+        raise RuntimeError(
+            "Instagram publishing requires a public image URL. Generate a teaser under runtime/agency-site or provide assetUrl in the queue item."
+        )
+
+    full_caption = append_destination_url(caption, destination_url)
+    creation = http_post_json(
+        f"https://graph.facebook.com/{graph_version}/{instagram_account_id}/media",
+        fields={
+            "access_token": access_token,
+            "image_url": public_asset_url,
+            "caption": full_caption,
+        },
+    )
+    creation_id = str(creation.get("id") or "").strip()
+    if not creation_id:
+        raise RuntimeError("Instagram media creation did not return a creation id.")
+
+    wait_for_instagram_media_ready(
+        creation_id,
+        access_token=access_token,
+        graph_version=graph_version,
+    )
+    publish = http_post_json(
+        f"https://graph.facebook.com/{graph_version}/{instagram_account_id}/media_publish",
+        fields={
+            "access_token": access_token,
+            "creation_id": creation_id,
+        },
+    )
+    media_id = str(publish.get("id") or "").strip()
+    profile_url = resolve_profile_url(social_profiles, business_id, "instagram_account")
+    posted_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return {
+        "status": "posted",
+        "channel": "instagram_account",
+        "postedAt": posted_at,
+        "pageUrl": profile_url or destination_url,
+        "instagramAccountId": instagram_account_id,
+        "creationId": creation_id,
+        "mediaId": media_id,
+        "assetUrl": public_asset_url,
         "delivery": "meta_graph_api",
     }
 
@@ -612,6 +989,18 @@ def main() -> None:
         print(json.dumps(result, indent=2))
         return
 
+    if channel == "instagram_account":
+        result = post_to_instagram_api(
+            caption=str(item.get("caption") or "").strip(),
+            asset_path=str(item.get("assetPath") or "").strip(),
+            asset_url=str(item.get("assetUrl") or "").strip(),
+            destination_url=str(item.get("destinationUrl") or "").strip(),
+            business_id=str(item.get("businessId") or ""),
+            social_profiles=social_profiles,
+        )
+        print(json.dumps(result, indent=2))
+        return
+
     if channel == "facebook_page":
         start_url = "https://business.facebook.com/"
     elif channel == "pinterest":
@@ -637,6 +1026,7 @@ def main() -> None:
             result = post_to_facebook(
                 page,
                 caption=str(item.get("caption") or "").strip(),
+                destination_url=str(item.get("destinationUrl") or "").strip(),
                 business_id=str(item.get("businessId") or ""),
                 social_profiles=social_profiles,
             )

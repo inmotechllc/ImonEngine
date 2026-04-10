@@ -5,7 +5,7 @@ import path from "node:path";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { loadConfig } from "./config.js";
 import { DEFAULT_OFFERS } from "./domain/defaults.js";
-import { AIClient } from "./openai/client.js";
+import { AIClient } from "./ai/client.js";
 import { FileStore } from "./storage/store.js";
 import { ImonEngineAgent } from "./agents/imon-engine.js";
 import { PodStudioService } from "./services/pod-studio.js";

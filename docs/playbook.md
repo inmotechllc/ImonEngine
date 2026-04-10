@@ -3,27 +3,84 @@
 ## Daily
 
 - Run `engine-sync` to refresh resource pressure and launch recommendations.
+- Run `northline-autonomy-run --notify-roadblocks [--business <id>]` to refresh the selected Northline dossier, refresh market feeds on cadence, process changed prospect feeds, promote hosted intake into proposal work, recompute the lane's operating mode and promotion criteria, and advance paid clients through build, QA, proof capture, and client handoff packaging.
+- Run `clipbaiters-collect --business clipbaiters-viral-moments` when ClipBaiters needs fresh roster-driven watchlists and video discovery across the currently active political and media YouTube lanes.
+- Run `clipbaiters-skim --business clipbaiters-viral-moments` after collection when the discovery set needs ranked skim summaries before a heavier draft pass across the currently active lanes.
+- Run `clipbaiters-radar --business clipbaiters-viral-moments --lane clipbaiters-political` when ClipBaiters needs a fresh review-gated editorial brief from the current discovery state.
+- Run `clipbaiters-autonomy-run --business clipbaiters-viral-moments --all-active-lanes --dry-run` after approved source-manifest JSON files land or when you want draft clip packages across the active lanes without executing live downloads or renders.
+- Run `clipbaiters-publish --business clipbaiters-viral-moments --all-active-lanes --dry-run` after draft packages exist or when you want the blocked upload batch, publish history, manual review queue, daily summary, and per-channel metrics refreshed without attempting a scheduled live Studio upload.
+- Run `clipbaiters-source-creators --business clipbaiters-viral-moments` when the streaming lane needs a refreshed creator lead roster.
+- Run `clipbaiters-draft-creator-outreach --business clipbaiters-viral-moments` after creator sourcing or offer changes so approval-gated outreach drafts stay current.
+- Run `clipbaiters-deals-report --business clipbaiters-viral-moments` after creator sourcing, outreach, or intake changes so deal stages and intake handoffs stay explicit.
+- Run `clipbaiters-intake --business clipbaiters-viral-moments` after a new creator-order manifest is dropped into the ClipBaiters intake folder.
+- Run `clipbaiters-monetization-report --business clipbaiters-viral-moments` after payment-link changes, new creator orders, or delivery updates so the revenue snapshot and approval queue stay current.
+- Review `runtime/ops/clipbaiters/clipbaiters-viral-moments/launch-checklist.md` after `engine-sync` or `org-sync` when the ClipBaiters lane posture, scheduled cadence, or office ownership changed.
 - After any Gumroad launch, run `publish-asset-pack` first, then `engine-sync`, before deciding what to stage next.
 - When a product bundle is built but not yet published, run `ready-asset-pack` so the queue reflects real production progress.
 - Review the ready queue in `businesses` before activating another business.
 - For the digital asset store, run `seed-asset-packs` until a starter queue exists, then work from `runtime/asset-store/<pack-id>/listing.md`.
 - Run `daily-run` against a new or refreshed public business list.
-- Review new approval tasks.
-- Review generated outreach drafts before first live send from a new inbox.
-- Record replies and update stages with `handle-reply`.
+- Run `northline-collect-prospects --force` when you want an immediate OSM/Overpass refresh outside the normal 24-hour collection cadence.
+- Keep the selected managed business's `northlineProfile` current before running alternative `--business` passes; that profile drives collector targeting, scoring, outreach, dossier copy, and any business-scoped payment-link overrides.
+- Use `northline-profile-update --business <id> --file <json>` when you want to adjust a business-scoped Northline profile without hand-editing `runtime/state/businesses.json`.
+- Run `northline-payment-check --business <id>` before sending live traffic or asking an operator to pay, especially when a non-default agency business overrides the Stripe links.
+- Drop refreshed Northline CSV or JSON source feeds into `runtime/prospect-sources/northline/` for the default business, or `runtime/prospect-sources/northline/<business-id>/` for alternate agency businesses, when you want to supplement the repo-generated market feeds before the next scheduled autonomy run.
+- Treat those Northline source feeds as Northline's own business-acquisition pipeline. Repo-generated feeds should stay at `pipeline=agency_client_acquisition`; any end-customer demand feeds for signed operators should use `pipeline=client_demand_generation` so they do not enter Northline's outbound sales queue.
+- Drop approved ClipBaiters creator briefs, official schedules, or manual source-manifest JSON files into `runtime/source-feeds/clipbaiters/clipbaiters-viral-moments/` before running the autonomy pass when the lane needs more than the seeded policy registry.
+- Drop manual ClipBaiters creator-order JSON manifests into `runtime/source-feeds/clipbaiters/clipbaiters-viral-moments/creator-orders/` before running the intake or monetization pass.
+- Review `runtime/ops/clipbaiters/clipbaiters-viral-moments/daily-brief.md` after each ClipBaiters radar pass and keep Political, Celebs, and any rights-sensitive stories behind manual review.
+- Review `runtime/ops/clipbaiters/clipbaiters-viral-moments/autonomy-run.md`, the lane-scoped `autonomy-run-<lane-id>.md` files, and the draft packages under `runtime/ops/clipbaiters/clipbaiters-viral-moments/draft-clips/` after each ClipBaiters autonomy dry run.
+- Review `runtime/ops/clipbaiters/clipbaiters-viral-moments/daily-summary.md`, `runtime/ops/clipbaiters/clipbaiters-viral-moments/review-queue.md`, and `runtime/ops/clipbaiters/clipbaiters-viral-moments/channel-metrics.md` after each ClipBaiters publish dry run so blocked active-lane clips, queue counts, channel readiness, and aggregate active-lane status stay explicit.
+- Review `runtime/state/clipbaiters/clipbaiters-viral-moments/publish-history.json` after any controlled upload attempt so the current lane-level publish record stays visible.
+- Review `runtime/ops/clipbaiters/clipbaiters-viral-moments/creator-deals.md` after creator sourcing or outreach runs so deal-stage drift does not hide in raw JSON.
+- Review `runtime/ops/clipbaiters/clipbaiters-viral-moments/monetization-report.md` after each ClipBaiters monetization run so missing payment links, paid delivery backlog, and creator-order revenue stay explicit.
+- Review `runtime/ops/northline-growth-system/autonomy-summary.json` for the default business, or the matching `runtime/ops/northline-growth-system/<business-id>/autonomy-summary.json` for alternate businesses, plus the new approval tasks after the Northline run. Check `snapshot.planOperatingMode` and the plan's `promotionCriteria` before deciding whether the lane is still in `controlled_launch` or has earned `autonomous` mode.
+- Run `northline-department-smoke [--business <id>]` when you want a live-safe Northline office check across governance, operations, growth, delivery, finance, analytics, and support. The command writes `runtime/ops/northline-growth-system/department-smoke.json` and `.md` for the default business, runs internal routing drills, and restores task plus org-audit state after the smoke so the lane stays clean; use `--skip-route-drills` for snapshot-only inspection.
+- One completed `northline-autonomy-run` now leaves the Northline plan and autonomy summary in sync. If you review promotion criteria or proof counts after a run, compare `runtime/ops/northline-growth-system/plan.json` and `runtime/ops/northline-growth-system/autonomy-summary.json` from that same pass instead of rerunning `northline-plan` just to catch up the dossier.
+- A targeted `northline-inbox-sync` or `northline-validation-run` can change approvals or proof state after the last full autonomy pass without rewriting `runtime/ops/northline-growth-system/autonomy-summary.json`. After targeted probes, trust the command output plus `runtime/state/approvals.json` until the next deliberate `northline-autonomy-run` rewrites the summary artifacts.
+- On the VPS, trust `/opt/imon-engine/runtime/state/` as the live truth for hosted Northline intake and validation activity unless you know the public site service was repointed. The workspace checkout under `/root/ImonEngine` can lag behind that deployed state even when the source code is newer.
+- For the default Northline business, do not treat the lane as proven until the dossier's `validation-proof` readiness item is `live`; that status comes from `runtime/state/northlineValidationConfirmations.json`.
+- Treat `plan.operatingMode.current` as the Northline lane status. `controlled_launch` means broad automation should stay constrained to the proof cohort until the missing promotion criteria are cleared. `autonomous` means the VPS cadence can keep advancing the lane while live payment authorization, disputed or ambiguous replies, public proof publication review, and host-specific publish troubleshooting remain manual.
+- Treat Northline retained revenue and retained-client metrics as external-only signals. `internal_validation`, `internal_manual`, and `legacy_unverified` records should stay out of revenue and close counts until an operator deliberately reclassifies them as `external_inbound` or `external_outbound`.
+- Treat the autonomy summary's billing and handoff queues as pilot-operator work only. Internal `/validation.html` artifacts stay available in state for the validation workflow, but they are excluded from the operator-facing billing-handoff and handoff-complete queue counts. The default lane's proof cohort now only counts client records whose explicit metadata resolves to `provenance=external_inbound|external_outbound` and `proofEligible=true`; `legacy_unverified`, `internal_manual`, and `internal_validation` records stay excluded until an operator deliberately reclassifies them.
+- Use controlled generated-brand clients only as internal workflow rehearsals. Record them as `provenance=internal_validation` or `internal_manual` and keep `proofEligible=false` unless an operator intentionally converts the record into a real external engagement; that lets intake, billing, delivery, QA, proof-bundle generation, and handoff packaging run end to end without those rehearsals counting as Northline proof.
+- Review `runtime/ops/northline-growth-system/prospect-collection-summary.json` for the default business, or the matching business-scoped summary path, when the collector runs or its area/trade configuration changes.
+- Review `runtime/ops/northline-growth-system/prospect-sourcing-summary.json` for the default business, or the matching business-scoped summary path, when a sourcing batch was added or changed.
+- Review generated outreach drafts only when a compliance task or outbound send-failure task opens. Approved Northline drafts now send automatically on the next autonomy pass and record send receipts in `runtime/state/outreach.json`.
+- Let `northline-autonomy-run --notify-roadblocks` sync Northline replies automatically once Phase 3 is live, or use `northline-inbox-sync` when you want the same inbox pull on demand. `handle-reply --lead <id> --message-file <path>` remains the manual fallback when a message body has to be captured outside inbox automation.
+- Treat ClipBaiters as review-gated scheduled operations. The lane now has office-view execution coverage, a generated launch checklist, roster collection, skimming, all-active-lane draft plus publish passes, creator-deals reporting, and a default VPS cadence, but it still is not broad live-upload or blind auto-publish until payment links exist, delivery review passes, channel readiness is live, and the rights policy stays approved.
 
 ## Delivery
 
 - Use `create-client` from an intake brief.
-- Build the site preview.
-- Run `qa`.
-- Deploy only after form routing is real and QA passes.
+- For a real manually-created Northline pilot, start from `examples/briefs/northline-pilot-template.json` so the record carries explicit external provenance and can count toward real revenue and proof once delivery is complete.
+- For a generated-brand rehearsal, run `npm run dev -- create-client --brief examples/briefs/northline-generated-brand-template.json --generated-brand` so the resulting client is forced to `provenance=internal_manual` with `proofEligible=false` and an explicit internal-only note.
+- Hosted Northline intakes queue a Northline autonomy pass immediately when `northline-site-serve` is live, and they still become proposal-stage clients automatically on the next scheduled or manual `northline-autonomy-run` if the hosted server was down.
+- Hosted leak-review and live-review requests now promise a one-business-day next step; if the site is live, check `runtime/notifications/northline-intake-latest.txt` and respond or triage within that window.
+- Treat the async leak review as the default first step; move an operator into a live review only when the page diagnosis is clearer on a call.
+- Keep the public pricing flow honest: the homepage should render the review-first ladder from structured tier ids, but by default only Lead Generation and Pilot Launch should surface. Growth System and the later upgrade panel stay hidden until real delivered proof exists, and cold traffic still goes into the leak review or live review before any checkout link is treated as the next step.
+- Keep the public trust surface honest: with zero real hosted signups, the homepage should keep the pre-pricing proof and working-method sections hidden entirely. Only bring those sections back after a real hosted external signup or public proof artifact exists, and only publish public proof cards once a real external delivery has produced the stored artifacts.
+- Use the homepage's qualified-buyer checkout block only after the review confirms fit. Pilot Launch is the first public checkout step; Growth System should stay later and proof-backed, and the later upgrade panel should surface only the configured upgrade checkout or coupon terms.
+- Use `/validation.html` for the internal low-risk $1 system check. Keep it available for controlled launch, but do not treat it as part of the normal public buyer journey. After the checkout lands, let the page's persisted status panel pick up the Stripe event and hosted result when the webhook secret is configured; keep the manual confirm button as the fallback so delivery validation can still run without shell access.
+- After the first real `/validation.html` checkout, rerun `northline-autonomy-run --notify-roadblocks` so the dossier and approval queue recompute against the recorded Stripe event and hosted result.
+- Generated-brand dry runs can use the same intake, checkout, delivery, QA, and handoff path before three real operators exist, but they remain rehearsal records until provenance and proof metadata are deliberately reclassified. Do not use those dry runs as public proof or as evidence that the real-client promotion gates are complete.
+- Once a sourced lead has an approved draft, let `northline-autonomy-run` attempt the send automatically through the configured Northline outbound channel. If delivery fails, inspect the latest receipt on that draft in `runtime/state/outreach.json`, repair the sender path, and rerun the autonomy pass or send it manually before completing the fallback approval task.
+- Inbox replies now land in `runtime/state/leadReplies.json` through the configured Northline inbox-sync path. Positive replies are routed into `responded` plus a booked-call or intake-follow-up route, neutral replies stay in `contacted`, and unsubscribe replies move to `lost` so future outreach can be suppressed.
+- Use `northline-billing-handoff --client <id> --status paid|retainer_active [--form-endpoint <url>]` when a Northline proposal becomes paid and the checkout did not carry `client_reference_id=client:<client-id>:paid|retainer_active`, or when the runner needs a manual billing override before build plus QA.
+- Treat `northline-payment-check` as a launch-readiness probe only; it does not replace confirming a real checkout, flipping the dossier's `validation-proof` item to live, or recording the billing handoff. The hosted validation page can ingest Stripe validation events when the webhook secret is configured, and tracked proposal payments can do the same when the checkout carries `client_reference_id=client:<client-id>:paid|retainer_active`.
+- If Stripe links and the branded inbox are already live, let the autonomy run close those stale approval tasks automatically; missing SMTP can remain a waiting hardening task during controlled launch.
+- The runner builds the preview and runs `qa` automatically once the billing handoff is recorded.
+- After QA passes, the runner refreshes a proof bundle with preview screenshots, testimonial and review-request drafts, and publication-ready proof copy, then writes a client handoff package under `runtime/reports/handoff-packages/<client-id>/` with a README the client or their developer can follow to publish on their own host.
+- If an older Northline client still carries a preview path from another host, rerunning `qa` or `northline-autonomy-run` now resolves the current `runtime/previews/<client-id>/` directory before proof refresh or handoff packaging.
+- Northline no longer treats managed hosting as the standard delivery endpoint. The default lane ends when the QA-passed preview, proof bundle, and handoff package are ready for the client's own host or development team.
 
 ## Monthly Retention
 
-- Run `retain --client <id>`.
+- `northline-autonomy-run` refreshes monthly retention reports automatically for `retainer_active` Northline clients.
+- Run `retain --client <id>` manually when you want an on-demand refresh outside the scheduled cadence.
 - Review update suggestions and review-response drafts.
-- Send one upsell candidate per active client.
+- For Lead Generation clients, use the structured `upgradeOffer` block in `runtime/reports/<client-id>-retention.json` and the matching handoff README section as the canonical Growth System upgrade path. Keep the checkout link, coupon label, and terms factual to the configured Northline profile.
+- Send one upsell candidate per active client, but treat the Lead Generation to Growth System path as a configured offer artifact rather than ad hoc copy.
 
 ## Expansion Path
 

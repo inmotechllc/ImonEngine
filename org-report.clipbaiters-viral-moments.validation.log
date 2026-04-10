@@ -1,0 +1,795 @@
+
+> auto-funding@0.1.0 dev
+> tsx src/index.ts org-report --business clipbaiters-viral-moments
+
+{
+  "blueprint": {
+    "id": "org-business-clipbaiters-viral-moments",
+    "scope": "business",
+    "engineId": "imon-engine",
+    "businessId": "clipbaiters-viral-moments",
+    "businessCategory": "faceless_social_brand",
+    "name": "ClipBaiters - Viral Moments",
+    "summary": "Business operating model for social-media-first brands with content studio, growth, analytics, and community ownership.",
+    "departmentIds": [
+      "org-business-clipbaiters-viral-moments-department-executive_management",
+      "org-business-clipbaiters-viral-moments-department-operations",
+      "org-business-clipbaiters-viral-moments-department-growth_marketing",
+      "org-business-clipbaiters-viral-moments-department-product_content",
+      "org-business-clipbaiters-viral-moments-department-finance",
+      "org-business-clipbaiters-viral-moments-department-analytics_research",
+      "org-business-clipbaiters-viral-moments-department-customer_support_qa",
+      "org-business-clipbaiters-viral-moments-department-content_studio",
+      "org-business-clipbaiters-viral-moments-department-community_qa"
+    ],
+    "positionIds": [
+      "org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-operations-manager",
+      "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager",
+      "org-business-clipbaiters-viral-moments-position-product-content-lead",
+      "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead",
+      "org-business-clipbaiters-viral-moments-position-finance-lead",
+      "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead",
+      "org-business-clipbaiters-viral-moments-position-content-studio-lead",
+      "org-business-clipbaiters-viral-moments-position-community-and-qa-lead"
+    ],
+    "approvalRouteIds": [
+      "org-business-clipbaiters-viral-moments-approval-low",
+      "org-business-clipbaiters-viral-moments-approval-medium",
+      "org-business-clipbaiters-viral-moments-approval-high"
+    ],
+    "memoryNamespaceIds": [
+      "org-business-clipbaiters-viral-moments-department-executive_management-memory",
+      "org-business-clipbaiters-viral-moments-department-operations-memory",
+      "org-business-clipbaiters-viral-moments-department-growth_marketing-memory",
+      "org-business-clipbaiters-viral-moments-department-product_content-memory",
+      "org-business-clipbaiters-viral-moments-department-finance-memory",
+      "org-business-clipbaiters-viral-moments-department-analytics_research-memory",
+      "org-business-clipbaiters-viral-moments-department-customer_support_qa-memory",
+      "org-business-clipbaiters-viral-moments-department-content_studio-memory",
+      "org-business-clipbaiters-viral-moments-department-community_qa-memory",
+      "org-business-clipbaiters-viral-moments-position-general-manager-brand-director-memory",
+      "org-business-clipbaiters-viral-moments-position-operations-manager-memory",
+      "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager-memory",
+      "org-business-clipbaiters-viral-moments-position-product-content-lead-memory",
+      "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead-memory",
+      "org-business-clipbaiters-viral-moments-position-finance-lead-memory",
+      "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead-memory",
+      "org-business-clipbaiters-viral-moments-position-content-studio-lead-memory",
+      "org-business-clipbaiters-viral-moments-position-community-and-qa-lead-memory"
+    ],
+    "permissionPolicyIds": [
+      "org-business-clipbaiters-viral-moments-position-general-manager-brand-director-permissions",
+      "org-business-clipbaiters-viral-moments-position-operations-manager-permissions",
+      "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager-permissions",
+      "org-business-clipbaiters-viral-moments-position-product-content-lead-permissions",
+      "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead-permissions",
+      "org-business-clipbaiters-viral-moments-position-finance-lead-permissions",
+      "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead-permissions",
+      "org-business-clipbaiters-viral-moments-position-content-studio-lead-permissions",
+      "org-business-clipbaiters-viral-moments-position-community-and-qa-lead-permissions"
+    ],
+    "workflowIds": [
+      "business-governance",
+      "clipbaiters-radar",
+      "clipbaiters-autonomy-run",
+      "clipbaiters-publish",
+      "clipbaiters-intake",
+      "clipbaiters-monetization-report"
+    ],
+    "reportingLineIds": [
+      "org-business-clipbaiters-viral-moments-position-operations-manager-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-product-content-lead-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-finance-lead-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-content-studio-lead-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-community-and-qa-lead-reports-to-org-business-clipbaiters-viral-moments-position-general-manager-brand-director"
+    ],
+    "budgetOwners": [
+      "org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-finance-lead"
+    ],
+    "kpiOwners": [
+      "org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+      "org-business-clipbaiters-viral-moments-position-operations-manager",
+      "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager",
+      "org-business-clipbaiters-viral-moments-position-product-content-lead",
+      "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead",
+      "org-business-clipbaiters-viral-moments-position-finance-lead",
+      "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead",
+      "org-business-clipbaiters-viral-moments-position-content-studio-lead",
+      "org-business-clipbaiters-viral-moments-position-community-and-qa-lead"
+    ],
+    "officeViews": {
+      "businessViewId": "office-business-clipbaiters-viral-moments",
+      "departmentViewIds": [
+        "office-department-org-business-clipbaiters-viral-moments-department-executive_management",
+        "office-department-org-business-clipbaiters-viral-moments-department-operations",
+        "office-department-org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "office-department-org-business-clipbaiters-viral-moments-department-product_content",
+        "office-department-org-business-clipbaiters-viral-moments-department-finance",
+        "office-department-org-business-clipbaiters-viral-moments-department-analytics_research",
+        "office-department-org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "office-department-org-business-clipbaiters-viral-moments-department-content_studio",
+        "office-department-org-business-clipbaiters-viral-moments-department-community_qa"
+      ]
+    },
+    "createdAt": "2026-04-07T16:13:23.655Z",
+    "updatedAt": "2026-04-07T16:13:23.655Z"
+  },
+  "businessOffice": {
+    "id": "office-business-clipbaiters-viral-moments",
+    "engineId": "imon-engine",
+    "businessId": "clipbaiters-viral-moments",
+    "generatedAt": "2026-04-07T16:13:23.714Z",
+    "title": "ClipBaiters - Viral Moments Business Office",
+    "summary": "Business operating model for social-media-first brands with content studio, growth, analytics, and community ownership.",
+    "templateProfile": "audience_brand",
+    "breadcrumbs": [
+      {
+        "id": "crumb-engine-imon-engine",
+        "scope": "engine",
+        "title": "ImonEngine",
+        "route": "/engine"
+      },
+      {
+        "id": "crumb-business-clipbaiters-viral-moments",
+        "scope": "business",
+        "title": "ClipBaiters - Viral Moments",
+        "route": "/business/clipbaiters-viral-moments"
+      }
+    ],
+    "departments": [
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-executive_management",
+        "title": "Executive / Management",
+        "subtitle": "executive_management",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 1",
+          "Blocked: 1"
+        ],
+        "alertCount": 4
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-operations",
+        "title": "Operations",
+        "subtitle": "operations",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-operations-manager",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 1",
+          "Blocked: 1"
+        ],
+        "alertCount": 4
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "title": "Marketing / Growth",
+        "subtitle": "growth_marketing",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 1",
+          "Blocked: 1"
+        ],
+        "alertCount": 4
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-product_content",
+        "title": "Product / Content",
+        "subtitle": "product_content",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-product-content-lead",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 0",
+          "Blocked: 0"
+        ],
+        "alertCount": 3
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-finance",
+        "title": "Finance",
+        "subtitle": "finance",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-finance-lead",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 1",
+          "Blocked: 1"
+        ],
+        "alertCount": 4
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-analytics_research",
+        "title": "Analytics / Research",
+        "subtitle": "analytics_research",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 1",
+          "Blocked: 1"
+        ],
+        "alertCount": 4
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "title": "Customer Support / QA",
+        "subtitle": "customer_support_qa",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 0",
+          "Blocked: 0"
+        ],
+        "alertCount": 3
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-content_studio",
+        "title": "Content Studio",
+        "subtitle": "content_studio",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-content-studio-lead",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 1",
+          "Blocked: 1"
+        ],
+        "alertCount": 4
+      },
+      {
+        "id": "office-panel-department-org-business-clipbaiters-viral-moments-department-community_qa",
+        "title": "Community / QA",
+        "subtitle": "community_qa",
+        "status": "attention-needed",
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-community-and-qa-lead",
+        "metrics": [
+          "Positions: 1",
+          "Execution: 0",
+          "Blocked: 0"
+        ],
+        "alertCount": 3
+      }
+    ],
+    "workers": [
+      {
+        "id": "worker-brand-office-clipbaiters-viral-moments",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "positionId": "org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+        "label": "Brand Orchestrator",
+        "title": "General Manager / Brand Director",
+        "workerType": "brand_orchestrator",
+        "route": "/business/clipbaiters-viral-moments",
+        "status": "blocked",
+        "summary": "Own the business outcome, approve medium-risk moves, and keep the lane aligned with portfolio policy.",
+        "metrics": [
+          "Departments: 9",
+          "Approvals: 1",
+          "Handoffs: 9"
+        ],
+        "toolTags": [
+          "business-registry",
+          "approvals",
+          "org-control-plane"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-executive_management",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-executive_management",
+        "positionId": "org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+        "label": "Department Orchestrator",
+        "title": "General Manager / Brand Director",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-executive_management",
+        "status": "blocked",
+        "summary": "Own the business outcome, approve medium-risk moves, and keep the lane aligned with portfolio policy.",
+        "metrics": [
+          "Execution: 1",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "business-registry",
+          "approvals",
+          "org-control-plane"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-operations",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-operations",
+        "positionId": "org-business-clipbaiters-viral-moments-position-operations-manager",
+        "label": "Department Orchestrator",
+        "title": "Operations Manager",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-operations",
+        "status": "blocked",
+        "summary": "Coordinate execution, queue discipline, and operating rhythm for the business.",
+        "metrics": [
+          "Execution: 1",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "scheduler",
+          "runtime-ops",
+          "org-control-plane",
+          "browser-automation"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "positionId": "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager",
+        "label": "Department Orchestrator",
+        "title": "Growth And Marketing Manager",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "status": "blocked",
+        "summary": "Own acquisition experiments, channel calendars, and organic distribution.",
+        "metrics": [
+          "Execution: 1",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "growth-queue",
+          "social-posting",
+          "meta-api",
+          "pinterest"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-product_content",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-product_content",
+        "positionId": "org-business-clipbaiters-viral-moments-position-product-content-lead",
+        "label": "Department Orchestrator",
+        "title": "Product / Content Lead",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-product_content",
+        "status": "blocked",
+        "summary": "Turn briefs into launchable outputs while keeping QA and style consistency intact.",
+        "metrics": [
+          "Execution: 0",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "asset-builders",
+          "qa",
+          "imagegen",
+          "content-generation"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-finance",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-finance",
+        "positionId": "org-business-clipbaiters-viral-moments-position-finance-lead",
+        "label": "Department Orchestrator",
+        "title": "Finance Lead",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-finance",
+        "status": "blocked",
+        "summary": "Protect verified revenue accounting and enforce reinvestment policy inside the business.",
+        "metrics": [
+          "Execution: 1",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "revenue-report",
+          "collective-fund-report",
+          "imports"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-analytics_research",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-analytics_research",
+        "positionId": "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead",
+        "label": "Department Orchestrator",
+        "title": "Analytics And Research Lead",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-analytics_research",
+        "status": "blocked",
+        "summary": "Translate output and performance data into next-step operating guidance.",
+        "metrics": [
+          "Execution: 1",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "reports",
+          "analytics",
+          "venture-studio"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "positionId": "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead",
+        "label": "Department Orchestrator",
+        "title": "Customer Support And QA Lead",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "status": "blocked",
+        "summary": "Review customer-facing quality and maintain support readiness for the lane.",
+        "metrics": [
+          "Execution: 0",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "support",
+          "qa",
+          "approvals"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-content_studio",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-content_studio",
+        "positionId": "org-business-clipbaiters-viral-moments-position-content-studio-lead",
+        "label": "Department Orchestrator",
+        "title": "Content Studio Lead",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-content_studio",
+        "status": "blocked",
+        "summary": "Run the content batch system for hooks, scripts, and reusable social assets.",
+        "metrics": [
+          "Execution: 1",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "content-generation",
+          "video",
+          "imagegen",
+          "scripts"
+        ]
+      },
+      {
+        "id": "worker-department-orchestrator-org-business-clipbaiters-viral-moments-department-community_qa",
+        "officeId": "office-business-clipbaiters-viral-moments",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-community_qa",
+        "positionId": "org-business-clipbaiters-viral-moments-position-community-and-qa-lead",
+        "label": "Department Orchestrator",
+        "title": "Community And QA Lead",
+        "workerType": "department_orchestrator",
+        "route": "/department/clipbaiters-viral-moments/org-business-clipbaiters-viral-moments-department-community_qa",
+        "status": "blocked",
+        "summary": "Protect audience trust, moderate quality, and review external interactions.",
+        "metrics": [
+          "Execution: 0",
+          "Approvals: 1",
+          "KPIs: 3"
+        ],
+        "toolTags": [
+          "support",
+          "social",
+          "approvals"
+        ]
+      }
+    ],
+    "handoffs": [
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-executive_management",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-executive_management",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-executive_management",
+        "title": "Hand off to Executive / Management",
+        "summary": "1 execution lane(s) are active inside Executive / Management.",
+        "workflowId": "business-governance",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live. ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface. ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ClipBaiters plan still has unresolved launch roadblocks."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-general-manager-brand-director",
+        "ownerLabel": "General Manager / Brand Director",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [
+          "execution-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-executive_management-business-governance"
+        ],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-operations",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-operations",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-operations",
+        "title": "Hand off to Operations",
+        "summary": "1 execution lane(s) are active inside Operations.",
+        "workflowId": "store-autopilot",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live. ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface. ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "3 creator offer(s) still require approval before use."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-operations-manager",
+        "ownerLabel": "Operations Manager",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [
+          "execution-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-operations-clipbaiters-intake"
+        ],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-growth_marketing",
+        "title": "Hand off to Marketing / Growth",
+        "summary": "1 execution lane(s) are active inside Marketing / Growth.",
+        "workflowId": "growth-publishing",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live. ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface. ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "3 publish item(s) are blocked or failed."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-growth-and-marketing-manager",
+        "ownerLabel": "Growth And Marketing Manager",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [
+          "execution-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-growth_marketing-clipbaiters-publish"
+        ],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-product_content",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-product_content",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-product_content",
+        "title": "Hand off to Product / Content",
+        "summary": "0 execution lane(s) are active inside Product / Content.",
+        "workflowId": "product-production",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-product-content-lead",
+        "ownerLabel": "Product / Content Lead",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-finance",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-finance",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-finance",
+        "title": "Hand off to Finance",
+        "summary": "1 execution lane(s) are active inside Finance.",
+        "workflowId": "finance-allocation-reporting",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live. ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface. ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "3 offer(s) remain approval-gated."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-finance-lead",
+        "ownerLabel": "Finance Lead",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [
+          "execution-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-finance-clipbaiters-monetization-report"
+        ],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-analytics_research",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-analytics_research",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-analytics_research",
+        "title": "Hand off to Analytics / Research",
+        "summary": "1 execution lane(s) are active inside Analytics / Research.",
+        "workflowId": "analytics-reporting",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live. ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface. ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "Radar planning is still blocked by unresolved ClipBaiters roadblocks."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-analytics-and-research-lead",
+        "ownerLabel": "Analytics And Research Lead",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [
+          "execution-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-analytics_research-clipbaiters-radar"
+        ],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-customer_support_qa",
+        "title": "Hand off to Customer Support / QA",
+        "summary": "0 execution lane(s) are active inside Customer Support / QA.",
+        "workflowId": "support-qa",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-customer-support-and-qa-lead",
+        "ownerLabel": "Customer Support And QA Lead",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-content_studio",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-content_studio",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-content_studio",
+        "title": "Hand off to Content Studio",
+        "summary": "1 execution lane(s) are active inside Content Studio.",
+        "workflowId": "content-production",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live. ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface. ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+          "ffmpeg is unavailable for the ClipBaiters worker: Install ffmpeg on the worker host before live clip rendering.",
+          "yt-dlp is unavailable for the ClipBaiters worker: Install yt-dlp on the worker host before approved-source downloads.",
+          "whisper is unavailable for the ClipBaiters worker: Install Whisper or configure another transcription backend before live transcripts."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-content-studio-lead",
+        "ownerLabel": "Content Studio Lead",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [
+          "execution-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-content_studio-clipbaiters-autonomy-run"
+        ],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      },
+      {
+        "id": "handoff-business-clipbaiters-viral-moments-org-business-clipbaiters-viral-moments-department-community_qa",
+        "scope": "business",
+        "businessId": "clipbaiters-viral-moments",
+        "departmentId": "org-business-clipbaiters-viral-moments-department-community_qa",
+        "sourceOfficeId": "office-business-clipbaiters-viral-moments",
+        "targetOfficeId": "office-department-org-business-clipbaiters-viral-moments-department-community_qa",
+        "title": "Hand off to Community / QA",
+        "summary": "0 execution lane(s) are active inside Community / QA.",
+        "workflowId": "community-ops",
+        "status": "blocked",
+        "roadblocks": [
+          "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+          "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+          "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out."
+        ],
+        "ownerPositionId": "org-business-clipbaiters-viral-moments-position-community-and-qa-lead",
+        "ownerLabel": "Community And QA Lead",
+        "approvalIds": [
+          "approval-clipbaiters-viral-moments"
+        ],
+        "taskEnvelopeIds": [],
+        "executionItemIds": [],
+        "createdAt": "2026-04-07T16:13:23.709Z",
+        "updatedAt": "2026-04-07T16:13:23.709Z"
+      }
+    ],
+    "approvalTasks": [
+      {
+        "id": "approval-clipbaiters-viral-moments",
+        "type": "compliance",
+        "actionNeeded": "Resolve launch blockers for ClipBaiters - Viral Moments",
+        "reason": "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live. ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface. ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+        "ownerInstructions": "Approve the source-rights and fair-use review policy before any live publishing Create or warm the first niche YouTube channels in the shared ImonEngine Chrome profile Review the first approved clip packages and creator-facing offers",
+        "relatedEntityType": "business",
+        "relatedEntityId": "clipbaiters-viral-moments",
+        "notifyChannel": "email",
+        "status": "open",
+        "createdAt": "2026-04-07T09:54:07.513Z",
+        "updatedAt": "2026-04-07T16:13:23.550Z"
+      }
+    ],
+    "roadblocks": [
+      "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+      "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+      "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out."
+    ],
+    "alerts": [
+      "ClipBaiters - Viral Moments still needs explicit owner signoff on the rights-cleared and creator-authorized source policy, plus the fair-use review checklist, before clips or creator service work can go live.",
+      "ClipBaiters - Viral Moments still has planned but not-yet-live niche YouTube channels, so the social split exists in state but not as a warmed public surface.",
+      "ClipBaiters - Viral Moments still keeps ClipBaitersMedia, ClipBaitersAnimated, ClipBaitersCelebs behind approval or research-only gates while the first editorial and monetization loops prove out.",
+      "Hand off to Executive / Management: blocked",
+      "Hand off to Operations: blocked",
+      "Hand off to Marketing / Growth: blocked",
+      "Hand off to Product / Content: blocked",
+      "Hand off to Finance: blocked",
+      "Hand off to Analytics / Research: blocked",
+      "Hand off to Customer Support / QA: blocked",
+      "Hand off to Content Studio: blocked",
+      "Hand off to Community / QA: blocked"
+    ]
+  }
+}

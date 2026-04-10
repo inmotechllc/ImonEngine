@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { AppConfig } from "../config.js";
 import type { ClientJob } from "../domain/contracts.js";
+import { resolveClientPreviewPath } from "../lib/client-preview.js";
 import { FileStore } from "../storage/store.js";
 import { AccountOpsAgent } from "./account-ops.js";
 
@@ -15,8 +16,27 @@ export class Deployer {
   ) {}
 
   async deploy(client: ClientJob): Promise<string> {
-    if (!client.deployment.previewPath) {
+    const previewPath = await resolveClientPreviewPath(this.config, client);
+    if (!previewPath) {
       throw new Error(`No preview path available for ${client.id}.`);
+    }
+
+    const resolvedClient =
+      previewPath === client.deployment.previewPath
+        ? client
+        : {
+            ...client,
+            deployment: {
+              ...client.deployment,
+              previewPath
+            }
+          };
+
+    if (resolvedClient !== client) {
+      await this.store.saveClient({
+        ...resolvedClient,
+        updatedAt: new Date().toISOString()
+      });
     }
 
     if (!this.config.cloudflare) {
@@ -31,7 +51,7 @@ export class Deployer {
         relatedEntityId: "cloudflare"
       });
       await this.accountOps.notifyApproval(task);
-      return client.deployment.previewPath;
+      return previewPath;
     }
 
     const { stdout } = await execFileAsync(
@@ -40,7 +60,7 @@ export class Deployer {
         "wrangler",
         "pages",
         "deploy",
-        client.deployment.previewPath,
+        previewPath,
         "--project-name",
         this.config.cloudflare.pagesProject,
         "--commit-dirty=true"
@@ -56,14 +76,14 @@ export class Deployer {
     );
 
     const urlMatch = stdout.match(/https:\/\/[^\s]+/);
-    const productionUrl = urlMatch?.[0] ?? client.deployment.previewPath;
+    const productionUrl = urlMatch?.[0] ?? previewPath;
 
     await this.store.saveClient({
-      ...client,
+      ...resolvedClient,
       siteStatus: "deployed",
       deployment: {
         platform: "cloudflare-pages",
-        previewPath: client.deployment.previewPath,
+        previewPath,
         productionUrl
       },
       updatedAt: new Date().toISOString()

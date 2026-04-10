@@ -1,6 +1,6 @@
 import type { LeadRecord } from "../domain/contracts.js";
-import { AIClient, ReplyClassificationSchema } from "../openai/client.js";
-import { replyClassificationPrompt } from "../openai/prompts.js";
+import { AIClient, ReplyClassificationSchema } from "../ai/client.js";
+import { replyClassificationPrompt } from "../ai/prompts.js";
 
 export class ReplyHandlerAgent {
   constructor(private readonly ai: AIClient) {}
@@ -10,11 +10,14 @@ export class ReplyHandlerAgent {
     recommendedStage: LeadRecord["stage"];
     nextAction: string;
     approvalRequired: boolean;
+    route: "none" | "booked_call" | "intake_follow_up" | "do_not_contact";
   }> {
     return (
       await this.ai.generateJson({
         schema: ReplyClassificationSchema,
         prompt: replyClassificationPrompt(message),
+        businessId: "auto-funding-agency",
+        capability: "reply-classification",
         mode: "fast",
         fallback: () => this.fallback(message)
       })
@@ -29,16 +32,28 @@ export class ReplyHandlerAgent {
         disposition: "unsubscribe" as const,
         recommendedStage: "lost" as const,
         nextAction: "Mark the lead as lost and suppress further outreach.",
-        approvalRequired: false
+        approvalRequired: false,
+        route: "do_not_contact" as const
       };
     }
 
-    if (/(call me|interested|send it|send me|let'?s talk|looks interesting)/.test(lower)) {
+    if (/(call me|let'?s talk|book|schedule|meeting|phone me|give me a call)/.test(lower)) {
       return {
         disposition: "positive" as const,
         recommendedStage: "responded" as const,
-        nextAction: "Send the preview or booking link and move the lead toward intake.",
-        approvalRequired: false
+        nextAction: "Send the booking link and move the lead toward a scheduled call.",
+        approvalRequired: false,
+        route: "booked_call" as const
+      };
+    }
+
+    if (/(interested|send it|send me|preview|pricing|quote|details|looks interesting|more info)/.test(lower)) {
+      return {
+        disposition: "positive" as const,
+        recommendedStage: "responded" as const,
+        nextAction: "Send the preview, pricing, or hosted intake link and move the lead toward intake.",
+        approvalRequired: false,
+        route: "intake_follow_up" as const
       };
     }
 
@@ -47,7 +62,8 @@ export class ReplyHandlerAgent {
         disposition: "objection" as const,
         recommendedStage: "responded" as const,
         nextAction: "Answer the objection with a concise, non-pushy follow-up.",
-        approvalRequired: false
+        approvalRequired: false,
+        route: /(price|budget)/.test(lower) ? ("intake_follow_up" as const) : ("none" as const)
       };
     }
 
@@ -55,7 +71,8 @@ export class ReplyHandlerAgent {
       disposition: "neutral" as const,
       recommendedStage: "contacted" as const,
       nextAction: "Log the reply and wait before the next touch.",
-      approvalRequired: false
+      approvalRequired: false,
+      route: "none" as const
     };
   }
 }

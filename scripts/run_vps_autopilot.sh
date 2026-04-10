@@ -18,12 +18,21 @@ mkdir -p "$LOG_DIR"
   fi
   npm run build
   npm run dev -- autopilot-run-once
+  npm run dev -- engine-sync
+  npm run dev -- northline-autonomy-run --business auto-funding-agency --notify-roadblocks
+  npm run dev -- clipbaiters-collect --business clipbaiters-viral-moments
+  npm run dev -- clipbaiters-skim --business clipbaiters-viral-moments
+  npm run dev -- clipbaiters-autonomy-run --business clipbaiters-viral-moments --all-active-lanes --dry-run
+  npm run dev -- clipbaiters-publish --business clipbaiters-viral-moments --all-active-lanes --dry-run
+  npm run dev -- clipbaiters-source-creators --business clipbaiters-viral-moments
+  npm run dev -- clipbaiters-draft-creator-outreach --business clipbaiters-viral-moments
+  npm run dev -- clipbaiters-deals-report --business clipbaiters-viral-moments
+  npm run dev -- clipbaiters-monetization-report --business clipbaiters-viral-moments
   if [ -d "$POD_REFERENCE_DIR" ]; then
-    npm run dev -- pod-plan --business imon-pod-store --reference-dir "$POD_REFERENCE_DIR" --notify-roadblocks
+    npm run dev -- pod-plan --business imon-pod-store --reference-dir "$POD_REFERENCE_DIR" --notify-roadblocks || printf '[%s] Pod plan refresh failed, but Northline and engine sync already ran.\n' "$(date -Iseconds)"
   else
     printf '[%s] Skipped Imonic POD plan because %s is not available yet.\n' "$(date -Iseconds)" "$POD_REFERENCE_DIR"
   fi
-  npm run dev -- engine-sync
   npm run dev -- social-profiles
   npm run dev -- vps-artifacts
   if systemctl list-unit-files imon-engine-control-room.service >/dev/null 2>&1; then

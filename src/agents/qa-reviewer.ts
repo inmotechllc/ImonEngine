@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { AppConfig } from "../config.js";
 import type { ClientJob, QaCheck, QaReport } from "../domain/contracts.js";
+import { resolveClientPreviewPath } from "../lib/client-preview.js";
 import { readTextFile, writeJsonFile } from "../lib/fs.js";
 import { FileStore } from "../storage/store.js";
 
@@ -11,7 +12,7 @@ export class QaReviewerAgent {
   ) {}
 
   async review(client: ClientJob): Promise<QaReport> {
-    const previewPath = client.deployment.previewPath;
+    const previewPath = await resolveClientPreviewPath(this.config, client);
     if (!previewPath) {
       throw new Error(`Client ${client.id} has no preview path.`);
     }
@@ -63,6 +64,10 @@ export class QaReviewerAgent {
       ...client,
       siteStatus: report.passed ? "ready" : "qa_failed",
       qaStatus: report.passed ? "passed" : "failed",
+      deployment: {
+        ...client.deployment,
+        previewPath
+      },
       updatedAt: new Date().toISOString()
     });
 

@@ -3,6 +3,27 @@ import type { ImonEngineSeed, ManagedBusinessSeed } from "./engine.js";
 
 export const DEFAULT_OFFERS: OfferConfig[] = [
   {
+    id: "lead-generation-offer",
+    name: "Lead Generation Offer",
+    audience: "Home services businesses that need a lower-friction first step before a broader conversion rebuild",
+    setupPrice: 349,
+    monthlyPrice: 149,
+    includedDeliverables: [
+      "One lead-generation landing page or leak-review page refresh",
+      "Lead capture cleanup for one primary job path",
+      "Hosted intake routing and missed-lead follow-up starter",
+      "Operator summary with the next conversion bottleneck called out"
+    ],
+    upsells: [
+      "Growth System upgrade",
+      "Additional landing page variants",
+      "Review request automation"
+    ],
+    priceFloor: 349,
+    slaHours: 48,
+    active: true
+  },
+  {
     id: "founding-offer",
     name: "Founding Offer",
     audience: "Home services businesses needing lead capture and follow-up",
@@ -50,121 +71,231 @@ export const DEFAULT_OFFERS: OfferConfig[] = [
 
 export const DEFAULT_AGENCY_PROFILE: AgencyProfile = {
   name: "Northline Growth Systems",
-  headline: "Northline installs fast proof pages, intake systems, and follow-up flows for home-service operators.",
+  headline: "Book more jobs without losing leads to weak pages and slow follow-up.",
   supportingCopy:
-    "We tighten the gap between click, reply, and booked job: clearer offer framing, stronger intake routing, missed-call recovery, follow-up assets, and monthly conversion cleanup without a bloated agency process.",
+    "Northline helps plumbers, HVAC teams, electricians, roofers, cleaners, and other small service businesses fix weak homepages, missed calls, quote-request drop-off, and after-hours follow-up so more leads turn into booked jobs.",
   audience:
-    "Built for plumbing, HVAC, electrical, roofing, and cleaning operators that already have demand but lose too many calls between click and dispatch.",
-  heroNote: "Pilot slots stay intentionally small so delivery stays fast, direct, and fully remote from teardown to launch.",
+    "For owner-led and small dispatch-led home-service businesses that already have calls, referrals, Google traffic, or ad clicks coming in but still lose too many leads before they book.",
+  heroNote:
+    "Start with the leak review. Northline checks the page, the call path, and the quote path, then points to the fastest next fix.",
   industries: ["Plumbing", "HVAC", "Electrical", "Roofing", "Cleaning"],
   differentiators: [
-    "Operator-first proof pages built to drive replies and booked calls, not brochure browsing.",
-    "Hosted intake, missed-call, and quote-form workflows are packaged into delivery instead of added later.",
-    "Monthly cleanup stays focused on booked jobs and friction points instead of vanity reporting."
+    "Northline starts with the exact leak costing booked jobs right now: the weak headline, the buried CTA, the missed call, or the quote request nobody followed up on.",
+    "The first pass fixes the page, the handoff, and the follow-up together so one broken step does not keep killing good demand.",
+    "You get one clear next step before anyone talks about a bigger build, extra pages, or a longer retainer."
   ],
   proofPoints: [
-    "72-hour preview SLA for first-page rebuilds",
-    "Hosted intake path and quote capture in the initial scope",
-    "Follow-up assets included from day one"
+    {
+      stat: "1 business day",
+      label: "Clear reply window",
+      detail:
+        "Northline replies with the first diagnosis, the first fix worth shipping, and the clearest next step instead of leaving the intake hanging."
+    },
+    {
+      stat: "3 checks",
+      label: "Page, CTA, follow-up",
+      detail:
+        "Northline reviews the first screen, the quote or call path, and the after-hours follow-up gap before recommending scope."
+    },
+    {
+      stat: "1 next step",
+      label: "Leak review, live review, or pilot",
+      detail:
+        "You hear whether the answer is an async review, a short live review, or the first paid build."
+    }
+  ],
+  trustSignals: [
+    {
+      label: "Working method",
+      title: "Northline shows what gets reviewed before it talks scope.",
+      body:
+        "The public trust surface explains the page, CTA, and follow-up issues Northline checks first so the buyer can judge the method without fake proof."
+    },
+    {
+      label: "Deliverable",
+      title: "The first reply is a practical next-step note, not placeholder proof.",
+      body:
+        "Northline answers with a short diagnosis, what to change first, and the clearest next move instead of padding the site with invented case studies or stats."
+    },
+    {
+      label: "Buyer fit",
+      title: "Built for small service teams that already have some demand.",
+      body:
+        "Northline is for plumbing, HVAC, electrical, roofing, and cleaning teams that already get calls, referrals, Google traffic, or ad clicks but lose too many leads before they book."
+    }
+  ],
+  proofArtifacts: [
+    {
+      label: "What gets reviewed",
+      title: "Northline checks the first place the lead stalls",
+      body: "The first pass reads the page like an operator trying to book the next job, not like a polished agency audit.",
+      items: [
+        "Trade, job type, and service area are clear in the first screen",
+        "CTA is obvious enough for a homeowner to call or request a quote fast",
+        "Missed-call and quote-request follow-up do not die after hours"
+      ]
+    },
+    {
+      label: "What comes back",
+      title: "You get a short usable next-step note",
+      body: "Northline replies with response clarity and the first fix worth shipping, not a long strategy deck.",
+      items: [
+        "Page and CTA diagnosis",
+        "Lead-routing or missed-call follow-up note",
+        "Recommended next step within one business day"
+      ]
+    },
+    {
+      label: "Who fits first",
+      title: "Best for teams with traffic but a weak close path",
+      body: "Northline is more useful when there is already some demand to recover.",
+      items: [
+        "Owner-led plumbing, HVAC, electrical, roofing, or cleaning teams",
+        "Existing Google, referral, or paid traffic already coming in",
+        "Missed calls, quote drop-off, or thin follow-up after hours"
+      ]
+    }
   ],
   serviceStack: [
     {
-      title: "Proof page rebuild",
+      title: "Homepage and CTA cleanup",
       description:
-        "Rework the first screen, service hierarchy, proof stack, and quote capture so existing traffic turns into replies and calls."
+        "Tighten the first screen, service framing, and call-to-action so homeowners quickly understand what you do and how to contact you."
     },
     {
-      title: "Hosted intake and missed-call recovery",
+      title: "Missed-call and quote follow-up cleanup",
       description:
-        "Install intake routing, text-back guidance, and dispatch handoff flows so leads stop dying after hours."
+        "Fix the handoff from page to phone to quote follow-up so leads stop dying after hours or after the first callback gets missed."
     },
     {
-      title: "Follow-up and trust loop",
+      title: "Follow-up that helps estimates get booked",
       description:
-        "Give the business a repeatable follow-up and review-request system that strengthens proof instead of leaving it ad hoc."
+        "Give dispatch or the owner simple review, reply, and follow-up assets so more open leads move toward booked work."
     },
     {
-      title: "Campaign landing pages",
+      title: "Extra landing pages after the main path works",
       description:
-        "Ship clean pages for Google Ads, Local Services Ads support, seasonal promos, and referral pushes once the core funnel is working."
+        "Add service, seasonal, or paid-traffic pages only after the main homepage and lead path are already converting."
     }
   ],
   process: [
     {
       step: "01",
-      title: "Audit the leak",
-      body: "Northline starts with a teardown of the homepage, CTA flow, mobile friction, and review surface."
+      title: "Find the first leak",
+      body: "Northline reviews the first screen, CTA order, phone route, and missed-lead gaps before it prices anything bigger."
     },
     {
       step: "02",
-      title: "Ship the preview",
-      body: "You get a fast first-pass preview with direct copy, clearer calls to action, and a tighter service offer."
+      title: "Ship the first fix",
+      body: "You get a faster first-pass page, one clear CTA, and a tighter intake path built around booked jobs."
     },
     {
       step: "03",
-      title: "Wire the follow-up",
-      body: "Forms, call-routing notes, missed-call text-back language, and review assets are packed into the launch instead of added later."
+      title: "Tighten follow-up",
+      body: "Follow-up assets, review asks, and buyer-facing trust cues are packed into launch instead of bolted on later."
     },
     {
       step: "04",
-      title: "Clean up monthly",
-      body: "Every month Northline reviews friction points, recommends the next test, and keeps the funnel from drifting back into brochure mode."
+      title: "Expand after the close path works",
+      body: "Once the main page converts cleanly, Northline adds service pages, seasonal offers, or ad-specific landing pages."
     }
   ],
   pricing: [
     {
+      id: "lead-generation",
+      label: "Lead Generation",
+      amount: "$349 setup + $149/mo",
+      details:
+        "For operators that want the lowest-friction paid step first: Northline tightens one lead page, one intake path, and the first follow-up leak before anyone commits to a broader build.",
+      idealFor:
+        "Best for teams that want a smaller first yes after the leak review before Northline recommends the larger pilot or any later retained scope.",
+      includes: [
+        "Leak review translated into one paid first-pass page fix",
+        "One primary CTA and intake-path cleanup",
+        "Hosted intake routing for the first offer path",
+        "Short follow-up note with the next leak called out"
+      ],
+      paymentLinkKey: "lead_generation",
+      cta: {
+        label: "Get leak review",
+        mode: "review",
+        href: "./intake.html"
+      },
+      upgradeOffer: {
+        label: "Upgrade to Growth System",
+        terms:
+          "If the first fix proves the fit, Northline applies the configured upgrade checkout or coupon terms before the broader Growth System starts.",
+        paymentLinkKey: "growth_upgrade"
+      }
+    },
+    {
+      id: "pilot-launch",
       label: "Pilot Launch",
       amount: "$749 setup + $199/mo",
       details:
-        "For the first five operators Northline brings on. Use this to replace a weak first page, stand up hosted intake, and tighten the follow-up basics.",
+        "For operators that already know the main leak and want Northline to fix the first page, CTA path, and dropped-lead problem as the main implementation instead of stretching into a broader build yet.",
       idealFor:
-        "Best for one-location operators that need a fast rebuild before they buy more traffic.",
+        "Best for one-location teams after Northline confirms the first leak, the first fix, and the pilot scope clearly enough to hold a slot.",
       includes: [
         "Homepage or landing-page rebuild",
-        "Call CTA and quote-form cleanup",
-        "Missed-call text-back playbook",
-        "Review request and response starter pack"
-      ]
+        "One primary CTA and quote-path cleanup",
+        "Hosted intake and missed-call recovery basics",
+        "Review ask and trust-signal starter pack",
+        "First-month friction review with next-step recommendations"
+      ],
+      paymentLinkKey: "founding",
+      cta: {
+        label: "See if the pilot fits",
+        mode: "review",
+        href: "./intake.html"
+      }
     },
     {
+      id: "growth-system",
       label: "Growth System",
       amount: "$1,250 setup + $299/mo",
       details:
-        "For teams that need a broader service stack, monthly optimization, and dedicated landing pages for active campaigns.",
+        "For teams that already have demand, a proven first fix, and a clear case for broader landing-page coverage, deeper trust assets, and monthly conversion cleanup.",
       idealFor:
-        "Best for operators already spending on demand generation or juggling multiple high-value services.",
+        "Best only after a pilot or first fix is live, the close path is working better, and Northline has real delivery proof behind the broader monthly ask.",
       includes: [
-        "Service-page stack",
+        "Service-page stack and campaign expansion",
         "Review and Google Business Profile support",
-        "Campaign landing pages",
-        "Monthly optimization queue"
-      ]
+        "Ongoing CTA, intake, and follow-up optimization",
+        "Monthly proof and conversion queue"
+      ],
+      paymentLinkKey: "standard",
+      cta: {
+        label: "Book growth review",
+        mode: "review",
+        href: "./book.html"
+      }
     }
   ],
   faqs: [
     {
+      question: "Should we start with the leak review or book a live review?",
+      answer:
+        "Start with the leak review if you want the fastest, lowest-friction next step. Book the live review if you want to talk through one urgent problem on a call. Northline points you to checkout only after the leak and first scope are clear."
+    },
+    {
       question: "Do you run ads from day one?",
       answer:
-        "No. Northline fixes the close path first, then adds paid traffic once the proof page, intake path, and follow-up loop are ready."
+        "No. Northline fixes the homepage, lead path, and follow-up first, then adds paid traffic once the close path is ready."
     },
     {
-      question: "How fast can launch happen?",
+      question: "How fast is the first review?",
       answer:
-        "Pilot rebuilds are designed around a 72-hour preview, then a short review cycle once access, routing details, and approvals are in place."
+        "Northline aims to send the first leak review within 72 hours once the basics are in."
     },
     {
-      question: "What do you need from the client?",
+      question: "What do you need from us?",
       answer:
-        "Domain access, brand assets if they exist, service priorities, contact routing, and approval on the final CTA and offer stack."
-    },
-    {
-      question: "Is this a full custom agency retainer?",
-      answer:
-        "No. Northline is productized on purpose so small operators get useful systems without a long consulting cycle."
+        "Your current website or page, the jobs you want more of, the area you serve, your contact details, and the main place leads get stuck now."
     }
   ],
   closingNote:
-    "Northline is built to start lean: proof page, intake, and outbound first, search next, paid social only after the conversion path is proven."
+    "Northline fixes the spots where booked jobs get lost first: the weak homepage, the missed call, the ignored quote request, and the slow follow-up after hours."
 };
 
 export const DEFAULT_IMON_ENGINE: ImonEngineSeed = {
@@ -361,6 +492,65 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
     ]
   },
   {
+    id: "clipbaiters-viral-moments",
+    name: "ClipBaiters - Viral Moments",
+    module: "clipbaiters-studio",
+    category: "faceless_social_brand",
+    launchPriority: 3.5,
+    stage: "scaffolded",
+    summary:
+      "YouTube-first clipping lane for approved viral moments, commentary-led edits, and creator-paid auto clipping services.",
+    rolloutReason:
+      "Direct creator clipping revenue can arrive earlier than broad audience monetization, but the lane needs explicit rights, review, and editorial guardrails before launch.",
+    revenueModel: "Creator clipping retainers, event packages, and later audience monetization",
+    platforms: ["YouTube", "YouTube Shorts", "YouTube Studio", "Optional Facebook Page"],
+    automationFocus: [
+      "Forecast upcoming viral events and approved source opportunities",
+      "Ingest approved source video and generate clip candidates",
+      "Draft captions, packaging, and transformed commentary angles",
+      "Track creator service revenue, clip performance, and policy risk"
+    ],
+    ownerActions: [
+      "Approve the source-rights and fair-use review policy before any live publishing",
+      "Create or warm the first niche YouTube channels in the shared ImonEngine Chrome profile",
+      "Review the first approved clip packages and creator-facing offers"
+    ],
+    launchBlockers: [
+      "The approved-source, rights, and editorial review policy must be signed off before this lane can publish clips or fulfill creator orders.",
+      "The first niche YouTube channels still need manual creation and warming in the shared ImonEngine browser profile.",
+      "The ingest, transcription, editing, and review pipeline is not implemented yet."
+    ],
+    approvalType: "compliance",
+    automationPotential: 8,
+    setupComplexity: 4,
+    complianceRisk: "high",
+    supportLoad: "medium",
+    humanSetupHours: 6,
+    schedule: {
+      cadence: "Daily radar and editorial windows",
+      timezone: "America/New_York",
+      maxRunsPerDay: 3,
+      preferredWindows: ["08:00-10:00", "13:00-15:00", "19:00-21:00"]
+    },
+    resourceBudget: {
+      maxCpuShare: 0.3,
+      maxMemoryGb: 6,
+      maxDiskGb: 75
+    },
+    metrics: {
+      targetMonthlyRevenue: 1800,
+      currentMonthlyRevenue: 0,
+      currentMonthlyCosts: 15,
+      dataValueScore: 9,
+      automationCoverage: 0.35,
+      activeWorkItems: 4
+    },
+    notes: [
+      "Start the YouTube-first rollout with ClipBaitersPolitical and ClipBaitersMedia while keeping ClipBaitersStreaming ready as the first direct monetization lane.",
+      "Treat niche separation as platform-level channel separation, and add per-lane off-platform identities only when those lane accounts actually exist."
+    ]
+  },
+  {
     id: "imon-micro-saas-factory",
     name: "QuietPivot Labs",
     module: "micro-saas-factory",
@@ -478,6 +668,19 @@ export const DEFAULT_MANAGED_BUSINESSES: ManagedBusinessSeed[] = [
     name: "Northline Growth Systems",
     module: "auto-funding-agency",
     category: "client_services_agency",
+    northlineProfile: {
+      collectionTrades: ["plumbing", "hvac", "electrical", "roofing", "cleaning"],
+      targetIndustries: [...DEFAULT_AGENCY_PROFILE.industries],
+      targetServices: [
+        "Proof page rebuild",
+        "Hosted intake and missed-call recovery",
+        "Follow-up and trust loop",
+        "Campaign landing pages"
+      ],
+      offerSummary:
+        "Booked-job-focused proof pages, one-route intake systems, and follow-up flows for home-service operators.",
+      agencyProfile: DEFAULT_AGENCY_PROFILE
+    },
     launchPriority: 6,
     stage: "paused",
     summary:

@@ -9,12 +9,14 @@ RUN apt-get update && \
       ca-certificates \
       curl \
       dbus-x11 \
+    ffmpeg \
       git \
       gnupg \
       jq \
       python3 \
       python3-pip \
       python3-venv \
+    yt-dlp \
       unzip \
       x11-utils \
       xauth \

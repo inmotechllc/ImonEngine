@@ -4,7 +4,13 @@ import { normalizeControlRoomSnapshot } from "./control-room-snapshot-compat.js"
 export class ControlRoomRemoteClient {
   private remoteSessionCookie?: string;
 
-  constructor(private readonly remoteBaseUrl: string) {}
+  constructor(private remoteBaseUrl: string) {
+    this.remoteBaseUrl = this.normalizeBaseUrl(remoteBaseUrl);
+  }
+
+  setRemoteBaseUrl(nextRemoteBaseUrl: string): void {
+    this.remoteBaseUrl = this.normalizeBaseUrl(nextRemoteBaseUrl);
+  }
 
   isAuthenticated(): boolean {
     return Boolean(this.remoteSessionCookie);
@@ -167,5 +173,9 @@ export class ControlRoomRemoteClient {
     }
 
     return (await response.json()) as T;
+  }
+
+  private normalizeBaseUrl(value: string): string {
+    return value.endsWith("/") ? value.slice(0, -1) : value;
   }
 }

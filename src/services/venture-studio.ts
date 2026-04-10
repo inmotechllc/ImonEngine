@@ -23,6 +23,7 @@ import { FileStore } from "../storage/store.js";
 import { buildBusinessOrgTemplate, summarizeOrgTemplate } from "./org-templates.js";
 
 const TEMPLATE_SOURCE_BUSINESS_ID = "imon-digital-asset-store";
+const CLIPBAITERS_BUSINESS_ID = "clipbaiters-viral-moments";
 const PRE_SLOWDOWN_BRAND_COUNT = 5;
 const TZ = "America/New_York";
 const EXCLUDED_BUSINESS_IDS = new Set(["auto-funding-agency"]);
@@ -162,6 +163,26 @@ const CATEGORY_NICHE_TEMPLATES: Partial<Record<BusinessCategory, NicheSeed[]>> =
     { id: "graphic-tees", name: "Graphic Tees", focus: "statement graphics and typographic apparel motifs" },
     { id: "childrens-designs", name: "Children's Designs", focus: "playful illustrations and kid-friendly pattern sets" }
   ]
+};
+
+const BUSINESS_PROFILE_OVERRIDES: Partial<Record<string, CategoryProfile>> = {
+  [CLIPBAITERS_BUSINESS_ID]: {
+    medium: "Rights-aware short-form clipping and creator-first viral moment packaging",
+    riskMode: "review_required",
+    stack: ["trend and event radar", "approved source intake", "transcription and clip editing", "browser automation"],
+    signups: ["ImonEngine Gmail alias", "manual YouTube channels", "optional umbrella Facebook page"],
+    growth: ["event forecasting", "creator clipping retainers", "commentary-led packaging", "policy-safe publishing"],
+    cadence: {
+      coreOutput: { label: "approved clip packages", minimum: 1, maximum: 5, period: "per day" },
+      feedPosts: { label: "published clips", minimum: 0, maximum: 3, period: "per day" },
+      storiesOrReels: { label: "short-form repackages", minimum: 0, maximum: 2, period: "per day" },
+      activeDays: { label: "active days", minimum: 5, maximum: 7, period: "per week" },
+      notes: [
+        "Do not auto-publish political or rights-sensitive clips without a human review gate.",
+        "Cadence is constrained by approved-source quality, not by a blind posting quota."
+      ]
+    }
+  }
 };
 
 const BUSINESS_NICHE_TEMPLATES: Partial<Record<string, NicheSeed[]>> = {
@@ -389,6 +410,10 @@ function nicheSeedsForBusiness(business: ManagedBusiness): NicheSeed[] {
   return BUSINESS_NICHE_TEMPLATES[business.id] ?? CATEGORY_NICHE_TEMPLATES[business.category] ?? [];
 }
 
+function profileForBusiness(business: ManagedBusiness): CategoryProfile {
+  return BUSINESS_PROFILE_OVERRIDES[business.id] ?? CATEGORY_PROFILES[business.category];
+}
+
 function socialArchitectureForBusiness(
   business: ManagedBusiness,
   baseEmail: string
@@ -402,6 +427,45 @@ function socialArchitectureForBusiness(
   const umbrellaBrandName = legacyStore ? "Imon" : business.name;
   const umbrellaAliasEmail = buildAlias(baseEmail, umbrellaBrandName);
   const umbrellaHandleStem = slugify(umbrellaBrandName).replace(/-/g, "");
+
+  if (business.id === CLIPBAITERS_BUSINESS_ID) {
+    return {
+      umbrellaBrandName,
+      umbrellaAliasEmail,
+      umbrellaHandleStem,
+      facebookStrategy: "avoid_by_default",
+      instagramStrategy: "deferred",
+      maxInstagramAccountsPerDevice: 0,
+      niches: [],
+      accountPlan: [
+        {
+          platform: "gmail_alias",
+          ownership: "minimal",
+          quantity: 1,
+          aliasPattern: umbrellaAliasEmail,
+          purpose: "Receive approval notices, source confirmations, and platform recovery mail for the umbrella brand.",
+          notes: ["All notifications still route into the primary ImonEngine inbox."]
+        },
+        {
+          platform: "youtube_channel",
+          ownership: "niche_lane",
+          quantity: 5,
+          aliasPattern: "Use the shared ImonEngine Chrome profile and manual channel separation; do not create extra niche alias emails.",
+          purpose: "Create the five niche YouTube channels that separate audiences without creating off-platform identity sprawl.",
+          notes: [
+            "Channel creation stays manual in the signed-in ImonEngine browser profile during the initial launch stages.",
+            "The niche roster lands in the dedicated ClipBaiters workflow, not as separate off-platform alias accounts."
+          ]
+        }
+      ],
+      notes: [
+        "ClipBaiters uses one umbrella alias for approvals and platform recovery, while niche separation happens on YouTube channels.",
+        "Defer Instagram and TikTok until the YouTube editing, review, and proof loops are stable.",
+        "Only add an umbrella Facebook Page later if distribution or ad reuse clearly justifies it."
+      ]
+    };
+  }
+
   const facebookStrategy: VentureFacebookStrategy = legacyStore
     ? "legacy_live"
     : scalableUmbrella.has(business.category)
@@ -594,7 +658,7 @@ export class VentureStudioService {
     const now = new Date();
     const mode = launchMode(createdBrandCount);
     const blueprints = businesses.filter((business) => business.id !== "auto-funding-agency").map((business) => {
-      const profile = CATEGORY_PROFILES[business.category];
+      const profile = profileForBusiness(business);
       const socialArchitecture = socialArchitectureForBusiness(business, baseEmail);
       const aliasEmail = socialArchitecture.umbrellaAliasEmail;
       const cadenceSeed = `${business.id}-${weekKey(now)}`;
@@ -629,14 +693,18 @@ export class VentureStudioService {
         signupTargets: uniqueStrings([
           ...profile.signups,
           ...(socialArchitecture.facebookStrategy === "umbrella_brand" ? ["umbrella Facebook page"] : []),
-          ...(socialArchitecture.instagramStrategy === "niche_accounts" ? ["niche Instagram accounts"] : ["brand Instagram account"])
+          ...(socialArchitecture.instagramStrategy === "niche_accounts"
+            ? ["niche Instagram accounts"]
+            : socialArchitecture.instagramStrategy === "single_brand"
+              ? ["brand Instagram account"]
+              : [])
         ]),
         startupPhases: phasesFor(business, aliasEmail),
         cadence,
         growthFocus: profile.growth,
         orgStructure: {
           blueprintId: `org-business-${business.id}`,
-          ...summarizeOrgTemplate(buildBusinessOrgTemplate(business.category))
+          ...summarizeOrgTemplate(buildBusinessOrgTemplate(business.category, business.id))
         },
         socialArchitecture,
         reinvestment: {
@@ -699,6 +767,7 @@ export class VentureStudioService {
         socialRules: [
           "Reserve Facebook Pages for umbrella brands, the parent system, and physical or otherwise scalable storefronts.",
           "When a business can support multiple niches, funnel them into one umbrella brand and give each niche its own plus-tag Instagram identity.",
+          "ClipBaiters is the current exception: it starts with manual niche YouTube channels and a single umbrella alias instead of off-platform niche alias clusters.",
           "Keep Instagram niche clusters to ten accounts or fewer per device or browser environment before moving to a fresh profile."
         ],
         cadenceRules: [

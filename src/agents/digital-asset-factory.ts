@@ -3,8 +3,8 @@ import type { AppConfig } from "../config.js";
 import type { AssetPackBrief, AssetPackRecord, DigitalAssetType } from "../domain/digital-assets.js";
 import { ensureDir, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
-import { AIClient, AssetPackBlueprintSchema } from "../openai/client.js";
-import { assetPackPrompt } from "../openai/prompts.js";
+import { AIClient, AssetPackBlueprintSchema } from "../ai/client.js";
+import { assetPackPrompt } from "../ai/prompts.js";
 import { FileStore } from "../storage/store.js";
 
 const STARTER_BRIEFS: AssetPackBrief[] = [
@@ -231,7 +231,9 @@ export class DigitalAssetFactoryAgent {
     const generated = await this.ai.generateJson({
       schema: AssetPackBlueprintSchema,
       prompt: assetPackPrompt(brief),
-      mode: "fast",
+      businessId: "imon-digital-asset-store",
+      capability: "asset-blueprint",
+      mode: "deep",
       fallback: () => fallbackBlueprint(brief)
     });
 

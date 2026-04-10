@@ -1,5 +1,7 @@
 {
   "businessId": "auto-funding-agency",
+  "provenance": "external_outbound",
+  "proofEligible": true,
   "clientName": "Example Service Co.",
   "niche": "Plumbing",
   "geo": "One metro or county",

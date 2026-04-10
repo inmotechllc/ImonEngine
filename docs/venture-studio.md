@@ -26,6 +26,8 @@ ImonEngine now has a portfolio-level venture studio layer on top of the first li
 - Use Facebook Pages only at the umbrella-brand level for scalable lanes, the parent system, and Shopify/POD businesses.
 - When a business supports multiple niches, route those niches through one umbrella Facebook Page and create separate niche Instagram accounts beneath it.
 - Niche Instagram accounts should use plus-tag aliases derived from the umbrella brand and lane name.
+- ClipBaiters - Viral Moments is the current exception: start with one umbrella alias, manual niche YouTube channels, and no separate off-platform niche aliases or Instagram obligations until the YouTube workflow is proven.
+- The `social-profiles` registry now reflects that exception directly: one shared alias, one optional umbrella `facebook_page`, and five planned `youtube_channel` lane records for ClipBaiters.
 - Keep Instagram niche clusters to ten accounts or fewer per device or browser profile before rotating to another environment.
 
 ## Broad Startup Phases
@@ -71,6 +73,7 @@ That structure is generated from the same control-plane templates used by the li
 - `npm run dev -- venture-studio`
 - `npm run dev -- venture-studio --business <id>`
 - `npm run dev -- social-profiles`
+- `npm run dev -- social-profiles --business clipbaiters-viral-moments`
 - `npm run dev -- micro-saas-plan --business imon-micro-saas-factory [--notify-roadblocks]`
 - `npm run dev -- autopilot-run-once`
 

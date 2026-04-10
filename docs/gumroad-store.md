@@ -87,7 +87,7 @@
 ## Growth And Revenue Controls
 
 - Refresh queue + promo assets: `npm run dev -- growth-queue`
-- Publish due Facebook or Pinterest posts from the live queue with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`
+- Publish due Facebook, Instagram, or Pinterest posts from the live queue with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`
 - Refresh the social registry: `npm run dev -- social-profiles`
 - Import Gumroad CSV sales: `npm run dev -- import-gumroad-sales --file <csv>`
 - Import Relay CSV transactions: `npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]`

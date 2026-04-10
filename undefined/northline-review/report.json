@@ -1,0 +1,460 @@
+{
+  "base": "http://127.0.0.1:4181",
+  "pages": [
+    {
+      "name": "home-desktop",
+      "url": "http://127.0.0.1:4181/",
+      "title": "Northline Growth Systems",
+      "metaDescription": "We tighten the gap between click, reply, and booked job: clearer offer framing, stronger intake routing, missed-call recovery, follow-up assets, and monthly conversion cleanup without a bloated agency process.",
+      "h1": "Northline installs fast proof pages, intake systems, and follow-up flows for home-service operators.",
+      "h2s": [
+        "Northline fixes the part between click and dispatch.",
+        "Northline keeps the first month simple.",
+        "Pilot first. Broader system once the close path is working.",
+        "Questions operators usually ask before they commit.",
+        "Northline starts with the leak you can already see."
+      ],
+      "h3s": [
+        "Proof page rebuild",
+        "Hosted intake and missed-call recovery",
+        "Follow-up and trust loop",
+        "Campaign landing pages",
+        "Audit the leak",
+        "Ship the preview",
+        "Wire the follow-up",
+        "Clean up monthly",
+        "$749 setup + $199/mo",
+        "$1,250 setup + $299/mo"
+      ],
+      "ctas": [
+        {
+          "text": "NorthlineGrowth Systems",
+          "href": "./index.html",
+          "className": "brand"
+        },
+        {
+          "text": "Services",
+          "href": "#services",
+          "className": null
+        },
+        {
+          "text": "Workflow",
+          "href": "#workflow",
+          "className": null
+        },
+        {
+          "text": "Pricing",
+          "href": "#pricing",
+          "className": null
+        },
+        {
+          "text": "Book",
+          "href": "./book.html",
+          "className": null
+        },
+        {
+          "text": "Intake",
+          "href": "./intake.html",
+          "className": null
+        },
+        {
+          "text": "Book Strategy Call",
+          "href": "/book.html",
+          "className": "button primary"
+        },
+        {
+          "text": "Reserve Pilot",
+          "href": "https://buy.stripe.com/bJeaEWfSQ90y35499h8EM00",
+          "className": "button secondary"
+        },
+        {
+          "text": "Send Operator Intake",
+          "href": "./intake.html",
+          "className": "button ghost"
+        },
+        {
+          "text": "Reserve Pilot",
+          "href": "https://buy.stripe.com/bJeaEWfSQ90y35499h8EM00",
+          "className": "button secondary"
+        },
+        {
+          "text": "Start Growth System",
+          "href": "https://buy.stripe.com/00weVcgWU6Sq0WW7198EM01",
+          "className": "button secondary"
+        },
+        {
+          "text": "Book Strategy Call",
+          "href": "/book.html",
+          "className": "button primary"
+        },
+        {
+          "text": "Send Intake Instead",
+          "href": "./intake.html",
+          "className": "button secondary"
+        },
+        {
+          "text": "Facebook",
+          "href": "https://www.facebook.com/profile.php?id=61577559887468",
+          "className": null
+        },
+        {
+          "text": "Instagram",
+          "href": "https://www.instagram.com/northlinegrowth",
+          "className": null
+        },
+        {
+          "text": "Book",
+          "href": "./book.html",
+          "className": null
+        },
+        {
+          "text": "Intake",
+          "href": "./intake.html",
+          "className": null
+        },
+        {
+          "text": "Privacy",
+          "href": "./privacy.html",
+          "className": null
+        },
+        {
+          "text": "Thank you",
+          "href": "./thank-you.html",
+          "className": null
+        }
+      ],
+      "paragraphs": [
+        "Northline Growth Systems",
+        "We tighten the gap between click, reply, and booked job: clearer offer framing, stronger intake routing, missed-call recovery, follow-up assets, and monthly conversion cleanup without a bloated agency process.",
+        "Pilot slots stay intentionally small so delivery stays fast, direct, and fully remote from teardown to launch.",
+        "Northline installs",
+        "Designed to move small operators quickly without turning into a bloated retainer.",
+        "Designed to move small operators quickly without turning into a bloated retainer.",
+        "Designed to move small operators quickly without turning into a bloated retainer.",
+        "Service stack",
+        "The offer stays narrow on purpose: clearer first page, faster intake routing, better missed-call recovery, and a stronger follow-up loop once the rebuild ships.",
+        "01",
+        "Rework the first screen, service hierarchy, proof stack, and quote capture so existing traffic turns into replies and calls.",
+        "02",
+        "Install intake routing, text-back guidance, and dispatch handoff flows so leads stop dying after hours.",
+        "03",
+        "Give the business a repeatable follow-up and review-request system that strengthens proof instead of leaving it ad hoc.",
+        "04",
+        "Ship clean pages for Google Ads, Local Services Ads support, seasonal promos, and referral pushes once the core funnel is working.",
+        "Workflow",
+        "Small operators do not need a long consulting project to tighten a weak funnel. The first pass should be fast, visible, and easy to approve.",
+        "01"
+      ],
+      "listItems": [
+        "Proof page rebuild",
+        "Hosted intake and missed-call recovery",
+        "Follow-up and trust loop",
+        "Campaign landing pages",
+        "Operator-first proof pages built to drive replies and booked calls, not brochure browsing.",
+        "Hosted intake, missed-call, and quote-form workflows are packaged into delivery instead of added later.",
+        "Monthly cleanup stays focused on booked jobs and friction points instead of vanity reporting.",
+        "Homepage or landing-page rebuild",
+        "Call CTA and quote-form cleanup",
+        "Missed-call text-back playbook",
+        "Review request and response starter pack",
+        "Service-page stack",
+        "Review and Google Business Profile support",
+        "Campaign landing pages",
+        "Monthly optimization queue"
+      ],
+      "overflow": false,
+      "bodyClass": null,
+      "sectionIds": [
+        "services",
+        "workflow",
+        "pricing"
+      ]
+    },
+    {
+      "name": "book-desktop",
+      "url": "http://127.0.0.1:4181/book.html",
+      "title": "Northline Growth Systems Booking",
+      "metaDescription": "Book a teardown call with Northline Growth Systems.",
+      "h1": "Book a teardown call if you want Northline to walk the leak live.",
+      "h2s": [],
+      "h3s": [],
+      "ctas": [
+        {
+          "text": "NorthlineGrowth Systems",
+          "href": "./index.html",
+          "className": "brand"
+        },
+        {
+          "text": "Home",
+          "href": "./index.html",
+          "className": null
+        },
+        {
+          "text": "Intake",
+          "href": "./intake.html",
+          "className": null
+        },
+        {
+          "text": "Privacy",
+          "href": "./privacy.html",
+          "className": null
+        },
+        {
+          "text": "Prefer async intake?",
+          "href": "./intake.html",
+          "className": "button secondary"
+        },
+        {
+          "text": "Request Call",
+          "href": null,
+          "className": "button primary"
+        }
+      ],
+      "paragraphs": [
+        "Booking",
+        "Use this when a direct call is the fastest path. If you would rather skip the call, the hosted intake still works.",
+        "Best fit",
+        "Call outcome"
+      ],
+      "listItems": [
+        "You already have traffic but the first page is not converting.",
+        "You want Northline to review one specific leak live.",
+        "You need a short decision call before a pilot starts.",
+        "One clear diagnosis of the leak worth fixing first",
+        "A yes or no decision on the pilot scope",
+        "A direct next step into Stripe or the hosted intake queue"
+      ],
+      "overflow": false,
+      "bodyClass": null,
+      "sectionIds": []
+    },
+    {
+      "name": "intake-desktop",
+      "url": "http://127.0.0.1:4181/intake.html",
+      "title": "Northline Growth Systems Intake",
+      "metaDescription": "Operator intake for Northline Growth Systems.",
+      "h1": "Send the basics so Northline can see where the funnel is leaking.",
+      "h2s": [],
+      "h3s": [],
+      "ctas": [
+        {
+          "text": "NorthlineGrowth Systems",
+          "href": "./index.html",
+          "className": "brand"
+        },
+        {
+          "text": "Home",
+          "href": "./index.html",
+          "className": null
+        },
+        {
+          "text": "Book",
+          "href": "./book.html",
+          "className": null
+        },
+        {
+          "text": "Privacy",
+          "href": "./privacy.html",
+          "className": null
+        },
+        {
+          "text": "Book a strategy call instead",
+          "href": "/book.html",
+          "className": "button secondary"
+        },
+        {
+          "text": "Submit Intake",
+          "href": null,
+          "className": "button primary"
+        }
+      ],
+      "paragraphs": [
+        "Operator intake",
+        "We tighten the gap between click, reply, and booked job: clearer offer framing, stronger intake routing, missed-call recovery, follow-up assets, and monthly conversion cleanup without a bloated agency process.",
+        "Submission mode",
+        "This form is connected to a live endpoint.",
+        "Send enough to move"
+      ],
+      "listItems": [
+        "The main job type you want to book more often",
+        "The cities or neighborhoods that matter first",
+        "Your current phone and form-routing setup",
+        "Any live ads, GBP profile, or review workflow",
+        "What owners or dispatch complain about most in the current site"
+      ],
+      "overflow": false,
+      "bodyClass": null,
+      "sectionIds": []
+    },
+    {
+      "name": "home-mobile",
+      "url": "http://127.0.0.1:4181/",
+      "title": "Northline Growth Systems",
+      "metaDescription": "We tighten the gap between click, reply, and booked job: clearer offer framing, stronger intake routing, missed-call recovery, follow-up assets, and monthly conversion cleanup without a bloated agency process.",
+      "h1": "Northline installs fast proof pages, intake systems, and follow-up flows for home-service operators.",
+      "h2s": [
+        "Northline fixes the part between click and dispatch.",
+        "Northline keeps the first month simple.",
+        "Pilot first. Broader system once the close path is working.",
+        "Questions operators usually ask before they commit.",
+        "Northline starts with the leak you can already see."
+      ],
+      "h3s": [
+        "Proof page rebuild",
+        "Hosted intake and missed-call recovery",
+        "Follow-up and trust loop",
+        "Campaign landing pages",
+        "Audit the leak",
+        "Ship the preview",
+        "Wire the follow-up",
+        "Clean up monthly",
+        "$749 setup + $199/mo",
+        "$1,250 setup + $299/mo"
+      ],
+      "ctas": [
+        {
+          "text": "NorthlineGrowth Systems",
+          "href": "./index.html",
+          "className": "brand"
+        },
+        {
+          "text": "Services",
+          "href": "#services",
+          "className": null
+        },
+        {
+          "text": "Workflow",
+          "href": "#workflow",
+          "className": null
+        },
+        {
+          "text": "Pricing",
+          "href": "#pricing",
+          "className": null
+        },
+        {
+          "text": "Book",
+          "href": "./book.html",
+          "className": null
+        },
+        {
+          "text": "Intake",
+          "href": "./intake.html",
+          "className": null
+        },
+        {
+          "text": "Book Strategy Call",
+          "href": "/book.html",
+          "className": "button primary"
+        },
+        {
+          "text": "Reserve Pilot",
+          "href": "https://buy.stripe.com/bJeaEWfSQ90y35499h8EM00",
+          "className": "button secondary"
+        },
+        {
+          "text": "Send Operator Intake",
+          "href": "./intake.html",
+          "className": "button ghost"
+        },
+        {
+          "text": "Reserve Pilot",
+          "href": "https://buy.stripe.com/bJeaEWfSQ90y35499h8EM00",
+          "className": "button secondary"
+        },
+        {
+          "text": "Start Growth System",
+          "href": "https://buy.stripe.com/00weVcgWU6Sq0WW7198EM01",
+          "className": "button secondary"
+        },
+        {
+          "text": "Book Strategy Call",
+          "href": "/book.html",
+          "className": "button primary"
+        },
+        {
+          "text": "Send Intake Instead",
+          "href": "./intake.html",
+          "className": "button secondary"
+        },
+        {
+          "text": "Facebook",
+          "href": "https://www.facebook.com/profile.php?id=61577559887468",
+          "className": null
+        },
+        {
+          "text": "Instagram",
+          "href": "https://www.instagram.com/northlinegrowth",
+          "className": null
+        },
+        {
+          "text": "Book",
+          "href": "./book.html",
+          "className": null
+        },
+        {
+          "text": "Intake",
+          "href": "./intake.html",
+          "className": null
+        },
+        {
+          "text": "Privacy",
+          "href": "./privacy.html",
+          "className": null
+        },
+        {
+          "text": "Thank you",
+          "href": "./thank-you.html",
+          "className": null
+        }
+      ],
+      "paragraphs": [
+        "Northline Growth Systems",
+        "We tighten the gap between click, reply, and booked job: clearer offer framing, stronger intake routing, missed-call recovery, follow-up assets, and monthly conversion cleanup without a bloated agency process.",
+        "Pilot slots stay intentionally small so delivery stays fast, direct, and fully remote from teardown to launch.",
+        "Northline installs",
+        "Designed to move small operators quickly without turning into a bloated retainer.",
+        "Designed to move small operators quickly without turning into a bloated retainer.",
+        "Designed to move small operators quickly without turning into a bloated retainer.",
+        "Service stack",
+        "The offer stays narrow on purpose: clearer first page, faster intake routing, better missed-call recovery, and a stronger follow-up loop once the rebuild ships.",
+        "01",
+        "Rework the first screen, service hierarchy, proof stack, and quote capture so existing traffic turns into replies and calls.",
+        "02",
+        "Install intake routing, text-back guidance, and dispatch handoff flows so leads stop dying after hours.",
+        "03",
+        "Give the business a repeatable follow-up and review-request system that strengthens proof instead of leaving it ad hoc.",
+        "04",
+        "Ship clean pages for Google Ads, Local Services Ads support, seasonal promos, and referral pushes once the core funnel is working.",
+        "Workflow",
+        "Small operators do not need a long consulting project to tighten a weak funnel. The first pass should be fast, visible, and easy to approve.",
+        "01"
+      ],
+      "listItems": [
+        "Proof page rebuild",
+        "Hosted intake and missed-call recovery",
+        "Follow-up and trust loop",
+        "Campaign landing pages",
+        "Operator-first proof pages built to drive replies and booked calls, not brochure browsing.",
+        "Hosted intake, missed-call, and quote-form workflows are packaged into delivery instead of added later.",
+        "Monthly cleanup stays focused on booked jobs and friction points instead of vanity reporting.",
+        "Homepage or landing-page rebuild",
+        "Call CTA and quote-form cleanup",
+        "Missed-call text-back playbook",
+        "Review request and response starter pack",
+        "Service-page stack",
+        "Review and Google Business Profile support",
+        "Campaign landing pages",
+        "Monthly optimization queue"
+      ],
+      "overflow": false,
+      "bodyClass": null,
+      "sectionIds": [
+        "services",
+        "workflow",
+        "pricing"
+      ]
+    }
+  ],
+  "broken": []
+}

@@ -24,15 +24,20 @@ import { FileStore } from "../storage/store.js";
 
 const DIGITAL_ASSET_STORE_ID = "imon-digital-asset-store";
 const DIGITAL_ASSET_BRAND_NAME = "Imon";
+const NORTHLINE_BUSINESS_ID = "auto-funding-agency";
+const CLIPBAITERS_BUSINESS_ID = "clipbaiters-viral-moments";
 const DEFAULT_CURRENCY = "USD";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const DEFAULT_META_BUSINESS_ASSET_ID = "1042144572314434";
+const DEFAULT_META_BUSINESS_URL = `https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=${DEFAULT_META_BUSINESS_ASSET_ID}`;
 const DEFAULT_BRAND_NAMES: Record<string, string> = {
   "imon-digital-asset-store": "Imon",
   "imon-niche-content-sites": "Northbeam Atlas",
   "imon-faceless-social-brand": "Velora Echo",
   "imon-micro-saas-factory": "QuietPivot",
   "imon-pod-store": "Imonic",
-  "auto-funding-agency": "Northline Growth Systems"
+  "auto-funding-agency": "Northline Growth Systems",
+  "clipbaiters-viral-moments": "ClipBaiters - Viral Moments"
 };
 
 const DEFAULT_BUSINESS_SEEDS = new Map(DEFAULT_MANAGED_BUSINESSES.map((seed) => [seed.id, seed]));
@@ -96,14 +101,43 @@ const BUSINESS_INSTAGRAM_LANES: Partial<Record<string, SocialLaneSeed[]>> = {
   "imon-pod-store": []
 };
 
+const CLIPBAITERS_YOUTUBE_LANES: SocialLaneSeed[] = [
+  {
+    id: "clipbaiters-political",
+    name: "ClipBaitersPolitical",
+    focus: "politics, government, elections, hearings, and official-news moments"
+  },
+  {
+    id: "clipbaiters-media",
+    name: "ClipBaitersMedia",
+    focus: "non-political news plus official film, television, and press surfaces that pass review"
+  },
+  {
+    id: "clipbaiters-animated",
+    name: "ClipBaitersAnimated",
+    focus: "animation and anime surfaces that stay rights-gated until an approved source policy exists"
+  },
+  {
+    id: "clipbaiters-celebs",
+    name: "ClipBaitersCelebs",
+    focus: "celebrity interviews, press junkets, and official public clips that pass review"
+  },
+  {
+    id: "clipbaiters-streaming",
+    name: "ClipBaitersStreaming",
+    focus: "creator-authorized streaming and content-creator clipping services"
+  }
+];
+
 const PLATFORM_SORT_ORDER: Record<SocialPlatform, number> = {
   gmail_alias: 0,
   gumroad: 1,
   meta_business: 2,
   facebook_page: 3,
-  instagram_account: 4,
-  pinterest: 5,
-  x: 6
+  youtube_channel: 4,
+  instagram_account: 5,
+  pinterest: 6,
+  x: 7
 };
 
 const GROWTH_CHANNEL_PRIORITY: Record<DigitalAssetType, GrowthChannel[]> = {
@@ -131,6 +165,100 @@ function nextGrowthQueueStart(reference = new Date()): Date {
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizePublicUrl(url?: string): string | undefined {
+  const trimmed = url?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed.replace(/^\/+/, "")}`;
+}
+
+function isPlaceholderUrl(value: string | undefined): boolean {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return true;
+  }
+  return /example\.(com|org|net)/i.test(trimmed);
+}
+
+function extractFacebookExternalId(profileUrl?: string): string | undefined {
+  const normalized = normalizePublicUrl(profileUrl);
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    const queryId = parsed.searchParams.get("id")?.trim();
+    if (queryId) {
+      return queryId;
+    }
+    const numericPath = parsed.pathname.match(/\/(\d+)(?:\/)?$/)?.[1];
+    return numericPath?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractYouTubeExternalId(profileUrl?: string): string | undefined {
+  const normalized = normalizePublicUrl(profileUrl);
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    return parsed.pathname.match(/\/channel\/([^/?#]+)/)?.[1]?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractYouTubeHandle(profileUrl?: string): string | undefined {
+  const normalized = normalizePublicUrl(profileUrl);
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    const handle = parsed.pathname.match(/\/(@[^/?#]+)/)?.[1];
+    if (handle) {
+      return handle.replace(/^@/, "").trim() || undefined;
+    }
+    const pathValue = parsed.pathname.replace(/^\/+|\/+$/g, "");
+    if (!pathValue || pathValue.startsWith("channel/")) {
+      return undefined;
+    }
+    return pathValue.split("/").at(-1)?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function clipbaitersChannelConfigForLane(
+  config: AppConfig["clipbaiters"],
+  laneId: string
+): { channelUrl?: string; channelId?: string } {
+  switch (laneId) {
+    case "clipbaiters-political":
+      return config.youtube.political;
+    case "clipbaiters-media":
+      return config.youtube.media;
+    case "clipbaiters-animated":
+      return config.youtube.animated;
+    case "clipbaiters-celebs":
+      return config.youtube.celebs;
+    case "clipbaiters-streaming":
+      return config.youtube.streaming;
+    default:
+      return {};
+  }
 }
 
 function parseCsv(content: string): CsvRow[] {
@@ -407,6 +535,11 @@ function mergeProfileNotes(
   profile: Omit<SocialProfileRecord, "createdAt" | "updatedAt">,
   existingProfile?: SocialProfileRecord
 ): string[] {
+  const transientLaneStatePrefixes = [
+    "This lane is in CLIPBAITERS_ACTIVE_LANES",
+    "This lane stays passive until"
+  ];
+
   if (profile.status === "planned") {
     return profile.notes ?? [];
   }
@@ -422,7 +555,12 @@ function mergeProfileNotes(
     existingProfile.laneName !== profile.laneName;
 
   if (!identityChanged) {
-    return dedupeNotes(profile.notes, existingProfile.notes);
+    return dedupeNotes(
+      profile.notes,
+      existingProfile.notes.filter(
+        (note) => !transientLaneStatePrefixes.some((prefix) => note.startsWith(prefix))
+      )
+    );
   }
 
   const staleTokens = [
@@ -433,7 +571,9 @@ function mergeProfileNotes(
   ].filter((value): value is string => Boolean(value));
 
   const preservedNotes = existingProfile.notes.filter(
-    (note) => !staleTokens.some((token) => note.includes(token))
+    (note) =>
+      !staleTokens.some((token) => note.includes(token)) &&
+      !transientLaneStatePrefixes.some((prefix) => note.startsWith(prefix))
   );
   return dedupeNotes(profile.notes, preservedNotes);
 }
@@ -502,6 +642,14 @@ export class StoreOpsService {
     const umbrellaBrandName = business.id === DIGITAL_ASSET_STORE_ID ? DIGITAL_ASSET_BRAND_NAME : brandName;
     const umbrellaAliasEmail = buildAlias(baseEmail, umbrellaBrandName);
     const umbrellaHandleStem = slugify(umbrellaBrandName).replace(/-/g, "");
+    const northlineFacebookUrl =
+      business.id === NORTHLINE_BUSINESS_ID && !isPlaceholderUrl(this.config.business.facebookUrl)
+        ? normalizePublicUrl(this.config.business.facebookUrl)
+        : undefined;
+    const northlineInstagramUrl =
+      business.id === NORTHLINE_BUSINESS_ID && !isPlaceholderUrl(this.config.business.instagramUrl)
+        ? normalizePublicUrl(this.config.business.instagramUrl)
+        : undefined;
 
     if (business.id === DIGITAL_ASSET_STORE_ID) {
       return {
@@ -545,8 +693,8 @@ export class StoreOpsService {
             emailAlias: umbrellaAliasEmail,
             platform: "meta_business",
             role: "umbrella_brand",
-            externalId: "1042144572314434",
-            profileUrl: "https://business.facebook.com/latest/home?nav_ref=bm_home_redirect&asset_id=1042144572314434",
+            externalId: DEFAULT_META_BUSINESS_ASSET_ID,
+            profileUrl: DEFAULT_META_BUSINESS_URL,
             status: "live",
             notes: ["Signed-in Meta Business Suite workspace."]
           },
@@ -601,6 +749,92 @@ export class StoreOpsService {
       };
     }
 
+    if (business.id === CLIPBAITERS_BUSINESS_ID) {
+      const clipbaitersAliasEmail = this.config.clipbaiters.sharedAliasEmail ?? umbrellaAliasEmail;
+      const clipbaitersFacebookPageUrl = normalizePublicUrl(this.config.clipbaiters.facebook.pageUrl);
+      const clipbaitersFacebookPageId =
+        this.config.clipbaiters.facebook.pageId ??
+        extractFacebookExternalId(clipbaitersFacebookPageUrl);
+      const hasClipbaitersFacebookBinding = Boolean(
+        clipbaitersFacebookPageUrl || clipbaitersFacebookPageId
+      );
+
+      return {
+        umbrellaBrandName,
+        umbrellaAliasEmail: clipbaitersAliasEmail,
+        umbrellaHandleStem,
+        instagramLimitPerDevice: 0,
+        defaults: [
+          {
+            id: `${business.id}-gmail-alias`,
+            businessId: business.id,
+            brandName,
+            emailAlias: clipbaitersAliasEmail,
+            platform: "gmail_alias",
+            role: "umbrella_brand",
+            handle: clipbaitersAliasEmail,
+            status: "live",
+            notes: [
+              "Alias routes into the primary ImonEngine Gmail inbox.",
+              "Use the shared alias for the current approvals, recovery, and YouTube notification path.",
+              "If lane-specific clipbaiters.com aliases are added later, stage them only when those lane accounts actually exist."
+            ]
+          },
+          {
+            id: `${business.id}-facebook-page`,
+            businessId: business.id,
+            brandName,
+            emailAlias: clipbaitersAliasEmail,
+            platform: "facebook_page",
+            role: "umbrella_brand",
+            handle: "ClipBaiters",
+            profileUrl: clipbaitersFacebookPageUrl,
+            externalId: clipbaitersFacebookPageId,
+            status: hasClipbaitersFacebookBinding ? "live" : "planned",
+            notes: [
+              hasClipbaitersFacebookBinding
+                ? `ClipBaiters already has an optional umbrella Facebook Page binding at ${clipbaitersFacebookPageUrl ?? clipbaitersFacebookPageId}.`
+                : `Create an optional umbrella Facebook Page for ${brandName} only if organic distribution or later ad reuse clearly justifies it.`,
+              "Keep Facebook deferred unless it clearly helps the current YouTube-first rollout, and do not create one Page per niche."
+            ]
+          },
+          ...CLIPBAITERS_YOUTUBE_LANES.map((lane) => {
+            const laneChannelConfig = clipbaitersChannelConfigForLane(this.config.clipbaiters, lane.id);
+            const channelUrl = normalizePublicUrl(laneChannelConfig.channelUrl);
+            const channelId = laneChannelConfig.channelId ?? extractYouTubeExternalId(channelUrl);
+            const hasChannelBinding = Boolean(channelUrl || channelId);
+            const laneIsActive = this.config.clipbaiters.activeLaneIds.includes(lane.id);
+            const profileStatus: SocialProfileRecord["status"] = hasChannelBinding ? "live" : "planned";
+            return {
+              id: `${business.id}-youtube-${lane.id}`,
+              businessId: business.id,
+              brandName,
+              emailAlias: clipbaitersAliasEmail,
+              platform: "youtube_channel" as const,
+              role: "niche_lane" as SocialProfileRole,
+              laneId: lane.id,
+              laneName: lane.name,
+              parentProfileId: `${business.id}-gmail-alias`,
+              handle: extractYouTubeHandle(channelUrl) ?? slugify(lane.name).replace(/-/g, ""),
+              profileUrl: channelUrl,
+              externalId: channelId,
+              status: profileStatus,
+              notes: [
+                hasChannelBinding
+                  ? `${lane.name} is already mapped to ${channelUrl ?? channelId} in the shared Chrome profile.`
+                  : `Create the ${lane.name} YouTube channel manually in the shared ImonEngine Chrome profile while keeping ${clipbaitersAliasEmail} as the recovery alias.`,
+                laneIsActive
+                  ? `This lane is in CLIPBAITERS_ACTIVE_LANES and should stay eligible for the autonomous schedule once review gates pass.`
+                  : `This lane stays passive until it is added to CLIPBAITERS_ACTIVE_LANES and the source policy is ready.`,
+                `Use this lane for ${lane.focus}.`,
+                "Keep Instagram and TikTok deferred for this lane until the YouTube workflow, review gates, and proof loop are stable."
+              ]
+            };
+          })
+        ]
+      };
+    }
+
     const defaults: Array<Omit<SocialProfileRecord, "createdAt" | "updatedAt">> = [
       {
         id: `${business.id}-gmail-alias`,
@@ -631,10 +865,16 @@ export class StoreOpsService {
           emailAlias: umbrellaAliasEmail,
           platform: "meta_business",
           role: "umbrella_brand",
-          status: "planned",
+          externalId: northlineFacebookUrl ? DEFAULT_META_BUSINESS_ASSET_ID : undefined,
+          profileUrl: northlineFacebookUrl ? DEFAULT_META_BUSINESS_URL : undefined,
+          status: northlineFacebookUrl ? "live" : "planned",
           notes: [
-            `Add ${brandName} to the parent Meta Business portfolio as an umbrella asset instead of creating a new personal account.`,
-            "Use this shared asset to support future Page, ad-account, and app-level permissions for the umbrella business."
+            northlineFacebookUrl
+              ? `${brandName} is attached to the shared signed-in Meta Business portfolio used for Facebook publishing and permissions.`
+              : `Add ${brandName} to the parent Meta Business portfolio as an umbrella asset instead of creating a new personal account.`,
+            northlineFacebookUrl
+              ? "Use this shared asset for the live Northline Facebook Page and any future ad-account or app-level permissions."
+              : "Use this shared asset to support future Page, ad-account, and app-level permissions for the umbrella business."
           ]
         },
         {
@@ -645,10 +885,16 @@ export class StoreOpsService {
           platform: "facebook_page",
           role: "umbrella_brand",
           handle: brandName,
-          status: "planned",
+          externalId: extractFacebookExternalId(northlineFacebookUrl),
+          profileUrl: northlineFacebookUrl,
+          status: northlineFacebookUrl ? "live" : "planned",
           notes: [
-            `Create a single umbrella Facebook Page named ${brandName} under the parent Meta account.`,
-            "Use this page sparingly and strategically for scalable offers, umbrella ad campaigns, or Shopify/POD lanes."
+            northlineFacebookUrl
+              ? `Northline already has a live Facebook Page for ${brandName}.`
+              : `Create a single umbrella Facebook Page named ${brandName} under the parent Meta account.`,
+            northlineFacebookUrl
+              ? "Use this page as the primary live proof and promotion surface for autonomous Facebook publishing."
+              : "Use this page sparingly and strategically for scalable offers, umbrella ad campaigns, or Shopify/POD lanes."
           ]
         }
       );
@@ -691,9 +937,12 @@ export class StoreOpsService {
         role: "umbrella_brand",
         parentProfileId: umbrellaRootProfileId,
         handle: umbrellaHandleStem,
-        status: "planned",
+        profileUrl: northlineInstagramUrl,
+        status: northlineInstagramUrl ? "live" : "planned",
         notes: [
-          `Create a primary Instagram account for ${brandName} using ${umbrellaAliasEmail}.`,
+          northlineInstagramUrl
+            ? `${brandName} already has a live primary Instagram account.`
+            : `Create a primary Instagram account for ${brandName} using ${umbrellaAliasEmail}.`,
           "Keep the account attached to the umbrella brand until there is a strong reason to split it into niche handles."
         ]
       });
@@ -758,15 +1007,21 @@ export class StoreOpsService {
     const saved: SocialProfileRecord[] = [];
     for (const profile of defaults) {
       const existingProfile = byId.get(profile.id);
+      const nextStatus =
+        existingProfile?.status === "blocked" && profile.status !== "live"
+          ? "blocked"
+          : existingProfile?.status === "live" || profile.status === "live"
+            ? "live"
+            : existingProfile?.status ?? profile.status;
       const next: SocialProfileRecord = {
         ...existingProfile,
         ...profile,
         createdAt: existingProfile?.createdAt ?? now,
         updatedAt: now,
-        status: existingProfile?.status ?? profile.status,
-        blocker: existingProfile?.blocker ?? profile.blocker,
-        profileUrl: existingProfile?.profileUrl ?? profile.profileUrl,
-        externalId: existingProfile?.externalId ?? profile.externalId,
+        status: nextStatus,
+        blocker: nextStatus === "blocked" ? existingProfile?.blocker ?? profile.blocker : undefined,
+        profileUrl: profile.profileUrl ?? existingProfile?.profileUrl,
+        externalId: profile.externalId ?? existingProfile?.externalId,
         notes: mergeProfileNotes(profile, existingProfile)
       };
       saved.push(next);
@@ -1013,7 +1268,13 @@ export class StoreOpsService {
       .sort((left, right) => assetChannelPriority(left.assetType) - assetChannelPriority(right.assetType));
     const existing = await this.store.getGrowthQueue();
     const existingById = new Map(existing.map((item) => [item.id, item]));
-    const keep = [...new Map(existing.filter((item) => item.status === "posted").map((item) => [item.id, item])).values()];
+    const keep = [
+      ...new Map(
+        existing
+          .filter((item) => item.businessId !== businessId || item.status === "posted")
+          .map((item) => [item.id, item])
+      ).values()
+    ];
     const queueDays = this.config.storeOps.growth.queueDays;
     const postsPerWeek = this.config.storeOps.growth.postsPerWeek;
     const start = nextGrowthQueueStart();
@@ -1089,6 +1350,7 @@ export class StoreOpsService {
             `- Pack: ${pack?.title ?? item.packId}`,
             `- Channel: ${item.channel}`,
             `- Asset: ${item.assetPath}`,
+            ...(item.assetUrl ? [`- Asset URL: ${item.assetUrl}`] : []),
             `- Link: ${item.destinationUrl}`,
             "",
             "```text",

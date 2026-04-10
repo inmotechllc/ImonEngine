@@ -51,7 +51,7 @@ const PROFILE_SPECS: OfficeTemplateProfileSpec[] = [
     ],
     approvalSections: ["brand governance", "audience risk", "public channel reviews"],
     handoffSections: ["editorial routing", "campaign routing", "audience ops handoffs"],
-    departmentWidgetSections: ["execution_lanes", "content_outputs", "kpis", "activity"],
+    departmentWidgetSections: ["execution_lanes", "content_outputs", "pipeline_health", "kpis", "activity"],
     workerLabels: {
       engine_orchestrator: "Imon Engine Orchestrator",
       brand_orchestrator: "Brand Orchestrator",

@@ -9,6 +9,7 @@
     "start": "node build/index.js",
     "test": "tsx --test src/workflows.test.ts",
     "test:control-room-ui": "tsx scripts/test-control-room-ui.ts",
+    "test:northline-site-ui": "tsx scripts/test-northline-site-ui.ts",
     "bootstrap": "tsx src/index.ts bootstrap",
     "daily": "tsx src/index.ts daily-run --input examples/prospects/home-services.csv",
     "demo:agency": "tsx src/index.ts build-agency-site",

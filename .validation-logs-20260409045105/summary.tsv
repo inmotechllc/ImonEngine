@@ -1,0 +1,2 @@
+index	status	duration_s	log	command
+1	0	0	/root/ImonEngine/.validation-logs-20260409045105/01.log	bash -n scripts/imon-engine-sync.sh

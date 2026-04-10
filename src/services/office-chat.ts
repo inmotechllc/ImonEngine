@@ -20,7 +20,7 @@ import type { BusinessCategory, ManagedBusinessSeed } from "../domain/engine.js"
 import { ImonEngineAgent } from "../agents/imon-engine.js";
 import { ensureDir, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
-import { AIClient } from "../openai/client.js";
+import { AIClient } from "../ai/client.js";
 import { FileStore } from "../storage/store.js";
 import { ControlRoomSnapshotService } from "./control-room-snapshot.js";
 import { OfficeDashboardService } from "./office-dashboard.js";
@@ -1308,8 +1308,11 @@ export class OfficeChatService {
       `Question: ${message}`,
       "Reply concisely in 2 short paragraphs max. If the request implies a risky mutation, recommend routing it instead of claiming it was executed."
     ].join("\n");
+    const aiBusinessId = resolved.business?.id ?? "imon-engine";
     const generated = await this.ai.generateText({
       prompt,
+      businessId: aiBusinessId,
+      capability: "office-chat",
       mode: "fast",
       fallback: () => fallback
     });
@@ -1534,6 +1537,8 @@ export class OfficeChatService {
     ].join("\n");
     const result = await this.ai.researchText({
       prompt,
+      businessId: business?.id ?? "imon-engine",
+      capability: "market-research",
       fallback
     });
     return result.text;

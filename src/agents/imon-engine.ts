@@ -1,7 +1,12 @@
 import path from "node:path";
 import type { AppConfig } from "../config.js";
+import type { ClipBaitersRightsReviewApproval } from "../domain/clipbaiters.js";
 import { DEFAULT_IMON_ENGINE, DEFAULT_MANAGED_BUSINESSES } from "../domain/defaults.js";
-import type { ApprovalTask } from "../domain/contracts.js";
+import {
+  clientCountsTowardExternalRevenue,
+  isAgencyClientAcquisitionLead,
+  type ApprovalTask
+} from "../domain/contracts.js";
 import type {
   EngineOverviewReport,
   ImonEngineState,
@@ -9,8 +14,14 @@ import type {
   ManagedBusinessSeed,
   VpsResourceSnapshot
 } from "../domain/engine.js";
+import { DEFAULT_NORTHLINE_BUSINESS_ID } from "../domain/northline.js";
 import type { OfficeViewSnapshot, TaskRoutingRequest } from "../domain/org.js";
+import { readJsonFile } from "../lib/fs.js";
 import { writeJsonFile, writeTextFile } from "../lib/fs.js";
+import {
+  countNorthlineScopedActiveWorkItems,
+  resolveNorthlineBusinessProfile
+} from "../services/northline-business-profile.js";
 import { FileStore } from "../storage/store.js";
 import { AccountOpsAgent } from "./account-ops.js";
 import { SystemMonitorService } from "../services/system-monitor.js";
@@ -44,6 +55,13 @@ const DEFERRED_STAGE_MIGRATIONS: Record<string, ManagedBusiness["stage"][]> = {
   "imon-niche-content-sites": ["ready"],
   "imon-faceless-social-brand": ["scaffolded"]
 };
+const CLIPBAITERS_BUSINESS_ID = "clipbaiters-viral-moments";
+const CLIPBAITERS_RIGHTS_APPROVAL_COMPLETE_REASON =
+  "ClipBaiters rights and fair-use approval is recorded. Remaining launch blockers stay in the launch checklist until they are resolved.";
+
+function isClipBaitersRightsApprovalBlocker(blocker: string): boolean {
+  return blocker.includes("rights-cleared and creator-authorized source policy") || blocker.includes("fair-use review checklist");
+}
 
 export class ImonEngineAgent {
   private readonly accountOps: AccountOpsAgent;
@@ -252,7 +270,16 @@ export class ImonEngineAgent {
         "set -euo pipefail",
         'APP_ROOT="${APP_ROOT:-/opt/imon-engine}"',
         'cd "$APP_ROOT"',
-        "npm run dev -- engine-sync"
+        "npm run dev -- engine-sync",
+        "npm run dev -- northline-autonomy-run --notify-roadblocks",
+        "npm run dev -- clipbaiters-collect --business clipbaiters-viral-moments",
+        "npm run dev -- clipbaiters-skim --business clipbaiters-viral-moments",
+        "npm run dev -- clipbaiters-autonomy-run --business clipbaiters-viral-moments --all-active-lanes --dry-run",
+        "npm run dev -- clipbaiters-publish --business clipbaiters-viral-moments --all-active-lanes --dry-run",
+        "npm run dev -- clipbaiters-source-creators --business clipbaiters-viral-moments",
+        "npm run dev -- clipbaiters-draft-creator-outreach --business clipbaiters-viral-moments",
+        "npm run dev -- clipbaiters-deals-report --business clipbaiters-viral-moments",
+        "npm run dev -- clipbaiters-monetization-report --business clipbaiters-viral-moments"
       ].join("\n")
     );
 
@@ -261,6 +288,7 @@ export class ImonEngineAgent {
       [
         "SHELL=/bin/bash",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "# Refresh ImonEngine portfolio state, the Northline autonomy lane, and ClipBaiters review-gated automation.",
         `*/30 * * * * root cd /opt/imon-engine && /usr/bin/env bash ${path.posix.join(
           "scripts",
           "imon-engine-sync.sh"
@@ -391,10 +419,25 @@ export class ImonEngineAgent {
         note.includes("launch dossier lives under runtime/ops/micro-saas-businesses/")
     );
     const ownerActions = current.ownerActions.length > 0 ? current.ownerActions : template.ownerActions;
+    const northlineProfile =
+      template.northlineProfile || current.northlineProfile
+        ? {
+            ...template.northlineProfile,
+            ...current.northlineProfile,
+            agencyProfile:
+              template.northlineProfile?.agencyProfile || current.northlineProfile?.agencyProfile
+                ? {
+                    ...template.northlineProfile?.agencyProfile,
+                    ...current.northlineProfile?.agencyProfile
+                  }
+                : undefined
+          }
+        : undefined;
 
     return {
       ...template,
       orgBlueprintId: `org-business-${template.id}`,
+      northlineProfile,
       stage: this.seedStage(template, current),
       launchBlockers:
         current.stage === "active"
@@ -442,15 +485,17 @@ export class ImonEngineAgent {
       this.store.getAssetPacks(),
       this.store.getSalesTransactions()
     ]);
-    const agencyMrr = clients
-      .filter((client) => client.billingStatus === "retainer_active")
+    const agencyRetainers = clients.filter(
+      (client) =>
+        (client.businessId ?? DEFAULT_NORTHLINE_BUSINESS_ID) === DEFAULT_NORTHLINE_BUSINESS_ID &&
+        client.billingStatus === "retainer_active" &&
+        clientCountsTowardExternalRevenue(client)
+    );
+    const agencyMrr = agencyRetainers
       .reduce((sum, client) => {
         const offer = offers.find((candidate) => candidate.id === client.offerId);
         return sum + (offer?.monthlyPrice ?? 0);
       }, 0);
-    const agencyWorkItems =
-      leads.filter((lead) => ["qualified", "drafted", "contacted", "responded"].includes(lead.stage))
-        .length + clients.filter((client) => client.qaStatus !== "passed").length;
 
     const refreshed: ManagedBusiness[] = [];
 
@@ -490,6 +535,18 @@ export class ImonEngineAgent {
           : trustedLedger
               .filter((entry) => entry.type === "cost")
               .reduce((sum, entry) => sum + entry.amount, 0);
+      const northlineBusinessProfile =
+        business.id === "auto-funding-agency"
+          ? resolveNorthlineBusinessProfile(this.config, business)
+          : undefined;
+      const agencyWorkItems = northlineBusinessProfile
+        ? countNorthlineScopedActiveWorkItems(
+            business.id,
+            northlineBusinessProfile,
+            leads,
+            clients
+          )
+        : 0;
 
       const next =
         business.id === "auto-funding-agency"
@@ -532,17 +589,19 @@ export class ImonEngineAgent {
 
     for (const business of businesses) {
       const existing = existingApprovals.find(
-        (approval) =>
-          approval.relatedEntityType === "business" &&
-          approval.relatedEntityId === business.id
+        (approval) => approval.id === `approval-${business.id}`
       );
+      const approvalRequirement = await this.businessApprovalRequirement(business);
 
-      if (business.launchBlockers.length === 0) {
+      if (!approvalRequirement) {
         if (existing && existing.status !== "completed") {
           await this.store.saveApproval({
             ...existing,
             status: "completed",
-            reason: `No launch blockers are currently detected for ${business.name}.`,
+            reason:
+              business.id === CLIPBAITERS_BUSINESS_ID && business.launchBlockers.length > 0
+                ? CLIPBAITERS_RIGHTS_APPROVAL_COMPLETE_REASON
+                : `No launch blockers are currently detected for ${business.name}.`,
             ownerInstructions: "No immediate owner action is required right now.",
             updatedAt: nowIso()
           });
@@ -555,8 +614,8 @@ export class ImonEngineAgent {
           id: `approval-${business.id}`,
           type: business.approvalType,
           actionNeeded: `Resolve launch blockers for ${business.name}`,
-          reason: business.launchBlockers.join(" "),
-          ownerInstructions: business.ownerActions.join(" "),
+          reason: approvalRequirement.reason,
+          ownerInstructions: approvalRequirement.ownerInstructions,
           relatedEntityType: "business",
           relatedEntityId: business.id
         })
@@ -564,6 +623,38 @@ export class ImonEngineAgent {
     }
 
     return tasks;
+  }
+
+  private async businessApprovalRequirement(
+    business: ManagedBusiness
+  ): Promise<{ reason: string; ownerInstructions: string } | null> {
+    if (business.launchBlockers.length === 0) {
+      return null;
+    }
+
+    if (business.id === CLIPBAITERS_BUSINESS_ID) {
+      const rightsApproval = await readJsonFile<ClipBaitersRightsReviewApproval | null>(
+        path.join(this.config.stateDir, "clipbaiters", business.id, "rights-review-approval.json"),
+        null
+      );
+      const pendingRightsBlockers = business.launchBlockers.filter(isClipBaitersRightsApprovalBlocker);
+      if (rightsApproval && pendingRightsBlockers.length === 0) {
+        return null;
+      }
+      if (pendingRightsBlockers.length > 0) {
+        return {
+          reason: pendingRightsBlockers.join(" "),
+          ownerInstructions:
+            `Review the ClipBaiters rights statement, then run npm run dev -- clipbaiters-approve-policy --business ${business.id} ` +
+            "[--approved-by <name-or-email>] to record the signoff and close this approval task."
+        };
+      }
+    }
+
+    return {
+      reason: business.launchBlockers.join(" "),
+      ownerInstructions: business.ownerActions.join(" ")
+    };
   }
 
   private updateEngineState(

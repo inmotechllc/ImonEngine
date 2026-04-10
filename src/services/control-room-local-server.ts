@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 import { URL } from "node:url";
-import type { AddressInfo } from "node:net";
+import { createConnection, type AddressInfo } from "node:net";
 import type { AppConfig } from "../config.js";
 import { ControlRoomRenderer } from "./control-room-renderer.js";
 import { ControlRoomRemoteClient } from "./control-room-remote-client.js";
@@ -30,6 +30,7 @@ type LocalRouteMatch =
   | { type: "command-activate-business" }
   | { type: "command-pause-business" }
   | { type: "command-route-task" }
+  | { type: "command-resolve-approval" }
   | { type: "missing" };
 
 function html(res: ServerResponse, statusCode: number, body: string): void {
@@ -82,6 +83,7 @@ function routePath(pathname: string): LocalRouteMatch {
   if (pathname === "/api/control-room/commands/activate-business") return { type: "command-activate-business" };
   if (pathname === "/api/control-room/commands/pause-business") return { type: "command-pause-business" };
   if (pathname === "/api/control-room/commands/route-task") return { type: "command-route-task" };
+  if (pathname === "/api/control-room/commands/resolve-approval") return { type: "command-resolve-approval" };
 
   const businessMatch = pathname.match(/^\/business\/([^/]+)$/);
   if (businessMatch?.[1]) {
@@ -162,13 +164,13 @@ export class ControlRoomLocalServer {
 
   private tunnelProcess?: ChildProcessWithoutNullStreams;
 
+  private lastRemoteError?: string;
+
   constructor(private readonly config: AppConfig) {
     this.remoteClient = new ControlRoomRemoteClient(config.controlRoom.local.remoteUrl);
   }
 
   async listen(): Promise<{ host: string; port: number }> {
-    await this.ensureTunnel();
-
     if (this.server) {
       const address = this.server.address() as AddressInfo;
       return { host: address.address, port: address.port };
@@ -192,6 +194,7 @@ export class ControlRoomLocalServer {
     });
 
     const address = this.server.address() as AddressInfo;
+    void this.ensureRemoteReady().catch(() => undefined);
     return { host: address.address, port: address.port };
   }
 
@@ -227,15 +230,17 @@ export class ControlRoomLocalServer {
         const rawBody = await readRequestBody(req);
         const params = new URLSearchParams(rawBody);
         try {
+          await this.ensureRemoteReady();
           await this.remoteClient.login(params.get("password") ?? "", params.get("next") ?? "/");
           redirect(res, this.safeRedirectPath(params.get("next") ?? "/"));
         } catch (error) {
+          const message = this.describeRemoteError(error);
           html(
             res,
-            401,
+            this.isRemoteAuthFailure(error) ? 401 : 503,
             this.renderer.renderLoginPage({
               engineName: this.config.engine.name,
-              message: error instanceof Error ? error.message : "Login failed.",
+              message,
               nextPath: params.get("next") ?? "/",
               intro:
                 "This local operator app signs into the VPS control room and keeps all execution on the server."
@@ -245,11 +250,18 @@ export class ControlRoomLocalServer {
         return;
       }
 
+      try {
+        await this.ensureRemoteReady();
+      } catch {
+        // Keep the login page available even when the VPS tunnel or remote endpoint is failing.
+      }
+
       html(
         res,
         200,
         this.renderer.renderLoginPage({
           engineName: this.config.engine.name,
+          message: this.lastRemoteError,
           nextPath: url.searchParams.get("next") ?? "/",
           intro:
             "This local operator app signs into the VPS control room and keeps all execution on the server."
@@ -270,6 +282,7 @@ export class ControlRoomLocalServer {
     }
 
     try {
+      await this.ensureRemoteReady();
       switch (route.type) {
         case "home":
         case "engine":
@@ -411,6 +424,18 @@ export class ControlRoomLocalServer {
           );
           return;
         }
+        case "command-resolve-approval": {
+          const body = await readJsonBody<Record<string, unknown>>(req);
+          json(
+            res,
+            200,
+            await this.remoteClient.postCommand(
+              "/api/control-room/commands/resolve-approval",
+              body
+            )
+          );
+          return;
+        }
         default:
           json(res, 404, { status: "missing" });
       }
@@ -424,14 +449,46 @@ export class ControlRoomLocalServer {
     }
   }
 
+  private async ensureRemoteReady(): Promise<void> {
+    try {
+      await this.ensureTunnel();
+      this.lastRemoteError = undefined;
+    } catch (error) {
+      const message = this.describeRemoteError(error);
+      this.lastRemoteError = message;
+      throw new Error(message);
+    }
+  }
+
   private async ensureTunnel(): Promise<void> {
-    if (!this.config.controlRoom.local.tunnelEnabled || this.tunnelProcess) {
+    if (!this.config.controlRoom.local.tunnelEnabled) {
       return;
     }
 
     const remoteUrl = new URL(this.config.controlRoom.local.remoteUrl);
     if (remoteUrl.hostname !== "127.0.0.1" && remoteUrl.hostname !== "localhost") {
       return;
+    }
+
+    const directHostedBaseUrl = `http://127.0.0.1:${this.config.controlRoom.port}`;
+    if (
+      remoteUrl.port === String(this.config.controlRoom.local.tunnelLocalPort) &&
+      (await this.isReachable("127.0.0.1", this.config.controlRoom.port))
+    ) {
+      this.remoteClient.setRemoteBaseUrl(directHostedBaseUrl);
+      return;
+    }
+
+    if (this.tunnelProcess) {
+      const tunnelAlive = await this.isReachable(
+        this.config.controlRoom.local.bindHost,
+        this.config.controlRoom.local.tunnelLocalPort
+      );
+      if (tunnelAlive) {
+        return;
+      }
+
+      this.tunnelProcess = undefined;
     }
 
     const scriptPath = path.join(this.config.projectRoot, "scripts", "control_room_tunnel.py");
@@ -450,31 +507,81 @@ export class ControlRoomLocalServer {
     });
 
     await new Promise<void>((resolve, reject) => {
+      let stdoutText = "";
+      let stderrText = "";
       const timeout = setTimeout(() => resolve(), 3000);
       const cleanup = () => {
         clearTimeout(timeout);
         this.tunnelProcess?.stdout.off("data", onStdout);
         this.tunnelProcess?.stderr.off("data", onStderr);
+        this.tunnelProcess?.off("error", onError);
         this.tunnelProcess?.off("exit", onExit);
       };
       const onStdout = (chunk: Buffer) => {
         const text = chunk.toString("utf8");
+        stdoutText += text;
         if (text.includes('"status": "ready"')) {
           cleanup();
           resolve();
         }
       };
       const onStderr = (chunk: Buffer) => {
+        stderrText += chunk.toString("utf8");
+      };
+      const onError = (error: Error) => {
         cleanup();
-        reject(new Error(chunk.toString("utf8")));
+        reject(error);
       };
       const onExit = (code: number | null) => {
         cleanup();
-        reject(new Error(`control_room_tunnel.py exited with code ${code ?? -1}.`));
+        const message = stderrText.trim() || stdoutText.trim();
+        reject(
+          new Error(
+            message || `control_room_tunnel.py exited with code ${code ?? -1}.`
+          )
+        );
       };
       this.tunnelProcess?.stdout.on("data", onStdout);
       this.tunnelProcess?.stderr.on("data", onStderr);
+      this.tunnelProcess?.on("error", onError);
       this.tunnelProcess?.on("exit", onExit);
+    });
+  }
+
+  private describeRemoteError(error: unknown): string {
+    const message = error instanceof Error ? error.message : "Unknown local control-room error.";
+    if (message.includes("did not accept the provided password")) {
+      return message;
+    }
+    if (message.includes("Missing VPS host or password")) {
+      return "The local operator app could not open the VPS tunnel because IMON_ENGINE_VPS_HOST or IMON_ENGINE_VPS_PASSWORD is missing on this machine.";
+    }
+    if (message.includes("paramiko is not installed")) {
+      return "The local operator app could not open the VPS tunnel because the Python dependency paramiko is not installed.";
+    }
+    if (message.includes("ECONNREFUSED") || message.includes("fetch failed")) {
+      return "The local operator app could not reach the hosted control room through the configured remote URL or SSH tunnel.";
+    }
+    return message;
+  }
+
+  private isRemoteAuthFailure(error: unknown): boolean {
+    return error instanceof Error && error.message.includes("did not accept the provided password");
+  }
+
+  private async isReachable(host: string, port: number): Promise<boolean> {
+    return await new Promise<boolean>((resolve) => {
+      const socket = createConnection({ host, port });
+      const finish = (reachable: boolean) => {
+        socket.removeAllListeners();
+        socket.destroy();
+        resolve(reachable);
+      };
+
+      socket.setTimeout(1500);
+      socket.once("connect", () => finish(true));
+      socket.once("timeout", () => finish(false));
+      socket.once("error", () => finish(false));
     });
   }
 

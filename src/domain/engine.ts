@@ -1,4 +1,5 @@
 import type { ApprovalType } from "./contracts.js";
+import type { NorthlineBusinessProfileConfig } from "./northline.js";
 
 export type BusinessCategory =
   | "digital_asset_store"
@@ -48,6 +49,7 @@ export interface ManagedBusiness {
   name: string;
   module: string;
   category: BusinessCategory;
+  northlineProfile?: NorthlineBusinessProfileConfig;
   orgBlueprintId?: string;
   launchPriority: number;
   stage: BusinessLaunchStage;

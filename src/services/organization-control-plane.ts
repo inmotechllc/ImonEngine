@@ -1,8 +1,40 @@
 import path from "node:path";
 import type { AppConfig } from "../config.js";
-import type { ApprovalTask } from "../domain/contracts.js";
+import {
+  type ClipBaitersAutomationPlan,
+  type ClipBaitersAutonomySnapshot,
+  type ClipBaitersChannelMetricsState,
+  type ClipBaitersCreatorLeadState,
+  type ClipBaitersCreatorOfferState,
+  type ClipBaitersCreatorOrderState,
+  type ClipBaitersCreatorOutreachState,
+  type ClipBaitersEventRadarState,
+  type ClipBaitersPublishHistoryState,
+  type ClipBaitersPostingScheduleState,
+  type ClipBaitersPublishingQueueState,
+  type ClipBaitersRevenueSnapshotState,
+  type ClipBaitersSkimSummaryState,
+  type ClipBaitersSourceWatchlistState,
+  type ClipBaitersStoryCandidateState,
+  type ClipBaitersUploadBatchState,
+  type ClipBaitersVideoDiscoveryState
+} from "../domain/clipbaiters.js";
+import {
+  resolveClientProofEligible,
+  type ApprovalTask,
+  type ClientJob,
+  type LeadRecord,
+  type OutreachDraft,
+  type ProofBundle,
+  type RetentionReport
+} from "../domain/contracts.js";
 import type { AssetPackRecord } from "../domain/digital-assets.js";
 import type { BusinessCategory, ImonEngineState, ManagedBusiness } from "../domain/engine.js";
+import {
+  DEFAULT_NORTHLINE_BUSINESS_ID,
+  type NorthlineAutomationPlan
+} from "../domain/northline.js";
+import type { NorthlineAutonomySnapshot } from "../domain/northline-autonomy.js";
 import type {
   ApprovalActionClass,
   ApprovalRoute,
@@ -33,9 +65,14 @@ import type {
   OrgAuditRecord
 } from "../domain/org.js";
 import type { GrowthWorkItem, RevenueAllocationSnapshot } from "../domain/store-ops.js";
-import { ensureDir, writeJsonFile, writeTextFile } from "../lib/fs.js";
+import { ensureDir, readJsonFile, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
 import { FileStore } from "../storage/store.js";
+import {
+  northlineBusinessOpsDir,
+  northlineLeadMatchesBusinessScope,
+  resolveNorthlineBusinessProfile
+} from "./northline-business-profile.js";
 import {
   getOfficeTemplateProfileSpec,
   officeTemplateProfileForCategory
@@ -47,6 +84,13 @@ import {
   type OrgTemplateSpec
 } from "./org-templates.js";
 
+const CLIPBAITERS_BUSINESS_ID = "clipbaiters-viral-moments";
+const CLIPBAITERS_PRIMARY_LANE_ID = "clipbaiters-political";
+
+function isClipBaitersBusinessId(businessId: string): boolean {
+  return businessId === CLIPBAITERS_BUSINESS_ID;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -57,6 +101,27 @@ function uniqueStrings<T extends string>(values: T[]): T[] {
 
 function namespacePath(parts: string[]): string {
   return parts.filter(Boolean).join("/");
+}
+
+function latestTimestamp(values: Array<string | undefined>): string | undefined {
+  return values
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => right.localeCompare(left))[0];
+}
+
+function northlineClientBelongsToBusiness(client: ClientJob, businessId: string): boolean {
+  return (
+    client.businessId === businessId ||
+    (!client.businessId && businessId === DEFAULT_NORTHLINE_BUSINESS_ID)
+  );
+}
+
+function northlineLeadBelongsToBusiness(
+  lead: LeadRecord,
+  businessId: string,
+  profile: Pick<ReturnType<typeof resolveNorthlineBusinessProfile>, "collectionAreas" | "primaryServiceArea">
+): boolean {
+  return northlineLeadMatchesBusinessScope(lead, businessId, profile);
 }
 
 type BlueprintBundle = {
@@ -75,6 +140,108 @@ type BusinessOfficeContext = {
   business: ManagedBusiness;
   bundle: BlueprintBundle;
   templateProfile: OfficeTemplateProfile;
+};
+
+type NorthlineAutonomySummaryArtifact = {
+  plan?: NorthlineAutomationPlan;
+  snapshot?: NorthlineAutonomySnapshot;
+  reportPath?: string;
+};
+
+type NorthlineValidationConfirmationRecord = {
+  lastStripeCompletedAt?: string;
+  lastResult?: {
+    businessId?: string;
+    status?: string;
+  };
+};
+
+type NorthlineValidationConfirmationStore = {
+  confirmations?: NorthlineValidationConfirmationRecord[];
+};
+
+type NorthlineBusinessExecutionContext = {
+  planPath: string;
+  autonomySummaryPath: string;
+  plan?: NorthlineAutomationPlan;
+  autonomySnapshot?: NorthlineAutonomySnapshot;
+  reportPath?: string;
+  leads: LeadRecord[];
+  outreachDrafts: OutreachDraft[];
+  clients: ClientJob[];
+  proofBundles: ProofBundle[];
+  retentionReports: RetentionReport[];
+  validationSuccessCount: number;
+};
+
+type ClipBaitersBusinessExecutionContext = {
+  planPath: string;
+  planMarkdownPath: string;
+  roadblockEmailPath: string;
+  roadblockNotificationPath: string;
+  launchChecklistPath: string;
+  dailyBriefPath: string;
+  dailySummaryPath: string;
+  sourceWatchlistsPath: string;
+  videoDiscoveryPath: string;
+  skimSummariesPath: string;
+  eventRadarPath: string;
+  storyCandidatesPath: string;
+  autonomySummaryPath: string;
+  clipCandidatesPath: string;
+  clipJobsPath: string;
+  draftClipsDirectory: string;
+  publishingQueuePath: string;
+  postingSchedulePath: string;
+  publishHistoryPath: string;
+  uploadBatchesPath: string;
+  reviewQueuePath: string;
+  channelMetricsPath: string;
+  channelMetricsMarkdownPath: string;
+  creatorLeadsPath: string;
+  creatorOutreachPath: string;
+  creatorOffersPath: string;
+  creatorOrdersPath: string;
+  intakeDirectory: string;
+  intakeReadmePath: string;
+  revenueSnapshotsPath: string;
+  creatorDealsReportPath: string;
+  monetizationReportPath: string;
+  plan?: ClipBaitersAutomationPlan;
+  watchlistState?: ClipBaitersSourceWatchlistState;
+  discoveryState?: ClipBaitersVideoDiscoveryState;
+  skimState?: ClipBaitersSkimSummaryState;
+  radarState?: ClipBaitersEventRadarState;
+  storyState?: ClipBaitersStoryCandidateState;
+  autonomySnapshot?: ClipBaitersAutonomySnapshot;
+  publishingQueueState?: ClipBaitersPublishingQueueState;
+  postingScheduleState?: ClipBaitersPostingScheduleState;
+  publishHistoryState?: ClipBaitersPublishHistoryState;
+  uploadBatches?: ClipBaitersUploadBatchState;
+  channelMetrics?: ClipBaitersChannelMetricsState;
+  roadblockNotificationState?: {
+    signature?: string;
+    notifiedAt?: string;
+  };
+  creatorLeadState?: ClipBaitersCreatorLeadState;
+  creatorOutreachState?: ClipBaitersCreatorOutreachState;
+  offersState?: ClipBaitersCreatorOfferState;
+  ordersState?: ClipBaitersCreatorOrderState;
+  revenueState?: ClipBaitersRevenueSnapshotState;
+};
+
+type BusinessExecutionContext = {
+  northline?: NorthlineBusinessExecutionContext;
+  clipbaiters?: ClipBaitersBusinessExecutionContext;
+};
+
+type WorkflowExecutionInsights = {
+  taskCount: number;
+  reviewCount: number;
+  blockers: string[];
+  artifacts: string[];
+  metrics: string[];
+  updatedAt: string;
 };
 
 function isDeferredBusiness(business: ManagedBusiness): boolean {
@@ -114,15 +281,40 @@ export class OrganizationControlPlaneService {
     engine: ImonEngineState,
     businesses: ManagedBusiness[]
   ): Promise<OrganizationSyncResult> {
-    const [approvals, taskEnvelopes, auditRecords, assetPacks, growthQueue, allocationSnapshots] =
+    const [
+      approvals,
+      taskEnvelopes,
+      auditRecords,
+      assetPacks,
+      growthQueue,
+      allocationSnapshots,
+      leads,
+      clients,
+      outreachDrafts,
+      proofBundles,
+      retentionReports
+    ] =
       await Promise.all([
         this.store.getApprovals(),
         this.store.getTaskEnvelopes(),
         this.store.getOrgAuditRecords(),
         this.store.getAssetPacks(),
         this.store.getGrowthQueue(),
-        this.store.getAllocationSnapshots()
+        this.store.getAllocationSnapshots(),
+        this.store.getLeads(),
+        this.store.getClients(),
+        this.store.getOutreachDrafts(),
+        this.store.getProofBundles(),
+        this.store.getRetentionReports()
       ]);
+    const businessExecutionContext = await this.buildBusinessExecutionContext({
+      businesses,
+      leads,
+      clients,
+      outreachDrafts,
+      proofBundles,
+      retentionReports
+    });
     const engineBundle = this.instantiateBlueprint({
       scope: "engine",
       engine,
@@ -137,7 +329,7 @@ export class OrganizationControlPlaneService {
         business,
         name: business.name,
         summary: business.summary,
-        template: buildBusinessOrgTemplate(business.category)
+        template: buildBusinessOrgTemplate(business.category, business.id)
       })
     );
 
@@ -186,7 +378,8 @@ export class OrganizationControlPlaneService {
       auditRecords,
       assetPacks,
       growthQueue,
-      allocationSnapshots
+      allocationSnapshots,
+      businessExecutionContext
     });
     await this.store.replaceDepartmentExecutionItems(departmentExecutionItems);
 
@@ -218,7 +411,8 @@ export class OrganizationControlPlaneService {
       approvals,
       engineBundle,
       businessBundles,
-      officeSnapshot
+      officeSnapshot,
+      businessExecutionContext
     });
 
     await this.store.saveOrgAuditRecord({
@@ -1115,6 +1309,7 @@ export class OrganizationControlPlaneService {
     assetPacks: AssetPackRecord[];
     growthQueue: GrowthWorkItem[];
     allocationSnapshots: RevenueAllocationSnapshot[];
+    businessExecutionContext: Map<string, BusinessExecutionContext>;
   }): DepartmentExecutionItem[] {
     const items: DepartmentExecutionItem[] = [];
     const openApprovals = args.approvals.filter((approval) => approval.status !== "completed");
@@ -1139,6 +1334,7 @@ export class OrganizationControlPlaneService {
         const workflowOwners = bundle.workflowOwnership.filter(
           (record) => record.departmentId === department.id
         );
+        const businessContext = args.businessExecutionContext.get(business.id);
 
         for (const workflowOwner of workflowOwners) {
           const relatedTasks = departmentTasks.filter(
@@ -1147,9 +1343,20 @@ export class OrganizationControlPlaneService {
           const businessApprovals = openApprovals.filter(
             (approval) => approval.relatedEntityId === business.id
           );
+          const insights = this.workflowExecutionInsights({
+            business,
+            workflowOwner,
+            relatedTasks,
+            businessApprovals,
+            assetPacks: args.assetPacks,
+            growthQueue: args.growthQueue,
+            allocationSnapshots: args.allocationSnapshots,
+            context: businessContext
+          });
           const blockers = uniqueStrings([
             ...business.launchBlockers,
-            ...businessApprovals.map((approval) => approval.reason)
+            ...businessApprovals.map((approval) => approval.reason),
+            ...insights.blockers
           ]);
           items.push({
             id: `execution-${business.id}-${department.id}-${workflowOwner.workflowId}`,
@@ -1162,27 +1369,18 @@ export class OrganizationControlPlaneService {
               business,
               blockers,
               approvalCount: businessApprovals.length,
-              taskCount: relatedTasks.length
+              taskCount: insights.taskCount,
+              reviewCount: insights.reviewCount
             }),
             assignedWorkerId: `worker-task-agent-${department.id}-${workflowOwner.workflowId}`,
             assignedWorkerLabel: workflowOwner.positionName,
             blockers,
-            artifacts: this.executionArtifactsForWorkflow({
-              business,
-              workflowOwner,
-              assetPacks: args.assetPacks,
-              growthQueue: args.growthQueue,
-              allocationSnapshots: args.allocationSnapshots
-            }),
-            metrics: [
-              `Tasks: ${relatedTasks.length}`,
-              `Approvals: ${businessApprovals.length}`,
-              `Model tier: ${workflowOwner.allowedModelTier}`
-            ],
+            artifacts: insights.artifacts,
+            metrics: insights.metrics,
             approvalIds: businessApprovals.map((approval) => approval.id),
             auditRecordIds: departmentAudits.slice(0, 4).map((record) => record.id),
-            createdAt: workflowOwner.updatedAt,
-            updatedAt: workflowOwner.updatedAt
+            createdAt: insights.updatedAt,
+            updatedAt: insights.updatedAt
           });
         }
 
@@ -1229,6 +1427,1053 @@ export class OrganizationControlPlaneService {
     }
 
     return items;
+  }
+
+  private async buildBusinessExecutionContext(args: {
+    businesses: ManagedBusiness[];
+    leads: LeadRecord[];
+    clients: ClientJob[];
+    outreachDrafts: OutreachDraft[];
+    proofBundles: ProofBundle[];
+    retentionReports: RetentionReport[];
+  }): Promise<Map<string, BusinessExecutionContext>> {
+    const validationStore = await readJsonFile<NorthlineValidationConfirmationStore>(
+      path.join(this.config.stateDir, "northlineValidationConfirmations.json"),
+      { confirmations: [] }
+    );
+
+    const entries = await Promise.all(
+      args.businesses.map(async (business): Promise<[string, BusinessExecutionContext]> => {
+        if (isClipBaitersBusinessId(business.id)) {
+          const stateDir = path.join(this.config.stateDir, "clipbaiters", business.id);
+          const opsDir = path.join(this.config.opsDir, "clipbaiters", business.id);
+          const feedDir = path.join(
+            this.config.outputDir,
+            "source-feeds",
+            "clipbaiters",
+            business.id
+          );
+          const creatorOrdersDir = path.join(feedDir, "creator-orders");
+
+          const planPath = path.join(opsDir, "plan.json");
+          const planMarkdownPath = path.join(opsDir, "plan.md");
+          const roadblockEmailPath = path.join(opsDir, "roadblock-email.md");
+          const roadblockNotificationPath = path.join(opsDir, "roadblock-notification.json");
+          const launchChecklistPath = path.join(opsDir, "launch-checklist.md");
+          const dailyBriefPath = path.join(opsDir, "daily-brief.md");
+          const dailySummaryPath = path.join(opsDir, "daily-summary.md");
+          const sourceWatchlistsPath = path.join(stateDir, "source-watchlists.json");
+          const videoDiscoveryPath = path.join(stateDir, "video-discovery.json");
+          const skimSummariesPath = path.join(stateDir, "skim-summaries.json");
+          const eventRadarPath = path.join(stateDir, "event-radar.json");
+          const storyCandidatesPath = path.join(stateDir, "story-candidates.json");
+          const autonomySummaryPath = path.join(opsDir, "autonomy-run.json");
+          const clipCandidatesPath = path.join(stateDir, "clip-candidates.json");
+          const clipJobsPath = path.join(stateDir, "clip-jobs.json");
+          const draftClipsDirectory = path.join(opsDir, "draft-clips");
+          const publishingQueuePath = path.join(stateDir, "publishing-queue.json");
+          const postingSchedulePath = path.join(stateDir, "posting-schedule.json");
+          const publishHistoryPath = path.join(stateDir, "publish-history.json");
+          const uploadBatchesPath = path.join(opsDir, "upload-batches.json");
+          const reviewQueuePath = path.join(opsDir, "review-queue.md");
+          const channelMetricsPath = path.join(stateDir, "channel-metrics.json");
+          const channelMetricsMarkdownPath = path.join(opsDir, "channel-metrics.md");
+          const creatorLeadsPath = path.join(stateDir, "creator-leads.json");
+          const creatorOutreachPath = path.join(stateDir, "creator-outreach.json");
+          const creatorOffersPath = path.join(stateDir, "creator-offers.json");
+          const creatorOrdersPath = path.join(stateDir, "creator-orders.json");
+          const intakeReadmePath = path.join(creatorOrdersDir, "README.md");
+          const revenueSnapshotsPath = path.join(stateDir, "revenue-snapshots.json");
+          const creatorDealsReportPath = path.join(opsDir, "creator-deals.md");
+          const monetizationReportPath = path.join(opsDir, "monetization-report.md");
+
+          const [
+            plan,
+            watchlistState,
+            discoveryState,
+            skimState,
+            radarState,
+            storyState,
+            autonomySnapshot,
+            publishingQueueState,
+            postingScheduleState,
+            publishHistoryState,
+            uploadBatches,
+            channelMetrics,
+            roadblockNotificationState,
+            creatorLeadState,
+            creatorOutreachState,
+            offersState,
+            ordersState,
+            revenueState
+          ] = await Promise.all([
+            readJsonFile<ClipBaitersAutomationPlan | null>(planPath, null),
+            readJsonFile<ClipBaitersSourceWatchlistState | null>(sourceWatchlistsPath, null),
+            readJsonFile<ClipBaitersVideoDiscoveryState | null>(videoDiscoveryPath, null),
+            readJsonFile<ClipBaitersSkimSummaryState | null>(skimSummariesPath, null),
+            readJsonFile<ClipBaitersEventRadarState | null>(eventRadarPath, null),
+            readJsonFile<ClipBaitersStoryCandidateState | null>(storyCandidatesPath, null),
+            readJsonFile<ClipBaitersAutonomySnapshot | null>(autonomySummaryPath, null),
+            readJsonFile<ClipBaitersPublishingQueueState | null>(publishingQueuePath, null),
+            readJsonFile<ClipBaitersPostingScheduleState | null>(postingSchedulePath, null),
+            readJsonFile<ClipBaitersPublishHistoryState | null>(publishHistoryPath, null),
+            readJsonFile<ClipBaitersUploadBatchState | null>(uploadBatchesPath, null),
+            readJsonFile<ClipBaitersChannelMetricsState | null>(channelMetricsPath, null),
+            readJsonFile<{ signature?: string; notifiedAt?: string } | null>(roadblockNotificationPath, null),
+            readJsonFile<ClipBaitersCreatorLeadState | null>(creatorLeadsPath, null),
+            readJsonFile<ClipBaitersCreatorOutreachState | null>(creatorOutreachPath, null),
+            readJsonFile<ClipBaitersCreatorOfferState | null>(creatorOffersPath, null),
+            readJsonFile<ClipBaitersCreatorOrderState | null>(creatorOrdersPath, null),
+            readJsonFile<ClipBaitersRevenueSnapshotState | null>(revenueSnapshotsPath, null)
+          ]);
+
+          return [
+            business.id,
+            {
+              clipbaiters: {
+                planPath,
+                roadblockEmailPath,
+                roadblockNotificationPath,
+                dailySummaryPath,
+                sourceWatchlistsPath,
+                videoDiscoveryPath,
+                skimSummariesPath,
+                planMarkdownPath,
+                launchChecklistPath,
+                dailyBriefPath,
+                eventRadarPath,
+                storyCandidatesPath,
+                autonomySummaryPath,
+                clipCandidatesPath,
+                publishHistoryPath,
+                clipJobsPath,
+                draftClipsDirectory,
+                publishingQueuePath,
+                postingSchedulePath,
+                uploadBatchesPath,
+                creatorLeadsPath,
+                creatorOutreachPath,
+                reviewQueuePath,
+                channelMetricsPath,
+                channelMetricsMarkdownPath,
+                creatorOffersPath,
+                creatorOrdersPath,
+                creatorDealsReportPath,
+                intakeDirectory: creatorOrdersDir,
+                intakeReadmePath,
+                watchlistState: watchlistState ?? undefined,
+                discoveryState: discoveryState ?? undefined,
+                skimState: skimState ?? undefined,
+                revenueSnapshotsPath,
+                monetizationReportPath,
+                plan: plan ?? undefined,
+                radarState: radarState ?? undefined,
+                publishHistoryState: publishHistoryState ?? undefined,
+                storyState: storyState ?? undefined,
+                autonomySnapshot: autonomySnapshot ?? undefined,
+                creatorLeadState: creatorLeadState ?? undefined,
+                creatorOutreachState: creatorOutreachState ?? undefined,
+                publishingQueueState: publishingQueueState ?? undefined,
+                postingScheduleState: postingScheduleState ?? undefined,
+                uploadBatches: uploadBatches ?? undefined,
+                channelMetrics: channelMetrics ?? undefined,
+                roadblockNotificationState: roadblockNotificationState ?? undefined,
+                offersState: offersState ?? undefined,
+                ordersState: ordersState ?? undefined,
+                revenueState: revenueState ?? undefined
+              }
+            }
+          ];
+        }
+
+        if (business.category !== "client_services_agency") {
+          return [business.id, {}];
+        }
+
+        const clients = args.clients.filter((client) =>
+          northlineClientBelongsToBusiness(client, business.id)
+        );
+        const clientIds = new Set(clients.map((client) => client.id));
+        const profile = resolveNorthlineBusinessProfile(this.config, business);
+        const leads = args.leads.filter((lead) =>
+          northlineLeadBelongsToBusiness(lead, business.id, profile)
+        );
+        const leadIds = new Set(leads.map((lead) => lead.id));
+        const planPath = path.join(northlineBusinessOpsDir(this.config, business.id), "plan.json");
+        const autonomySummaryPath = path.join(
+          northlineBusinessOpsDir(this.config, business.id),
+          "autonomy-summary.json"
+        );
+        const [plan, autonomySummary] = await Promise.all([
+          readJsonFile<NorthlineAutomationPlan | null>(planPath, null),
+          readJsonFile<NorthlineAutonomySummaryArtifact | null>(autonomySummaryPath, null)
+        ]);
+
+        return [
+          business.id,
+          {
+            northline: {
+              planPath,
+              autonomySummaryPath,
+              plan: plan ?? undefined,
+              autonomySnapshot: autonomySummary?.snapshot,
+              reportPath: autonomySummary?.reportPath,
+              leads,
+              outreachDrafts: args.outreachDrafts.filter((draft) => leadIds.has(draft.leadId)),
+              clients,
+              proofBundles: args.proofBundles.filter(
+                (bundle) =>
+                  bundle.businessId === business.id ||
+                  (!bundle.businessId && clientIds.has(bundle.clientId))
+              ),
+              retentionReports: args.retentionReports.filter((report) =>
+                clientIds.has(report.clientId)
+              ),
+              validationSuccessCount: this.northlineValidationSuccessCount(
+                validationStore,
+                business.id
+              )
+            }
+          }
+        ];
+      })
+    );
+
+    return new Map(entries);
+  }
+
+  private northlineValidationSuccessCount(
+    store: NorthlineValidationConfirmationStore,
+    businessId: string
+  ): number {
+    return (store.confirmations ?? []).filter((record) => {
+      if (!record.lastStripeCompletedAt || record.lastResult?.status !== "success") {
+        return false;
+      }
+
+      return (record.lastResult.businessId ?? DEFAULT_NORTHLINE_BUSINESS_ID) === businessId;
+    }).length;
+  }
+
+  private workflowExecutionInsights(args: {
+    business: ManagedBusiness;
+    workflowOwner: WorkflowOwnershipRecord;
+    relatedTasks: TaskEnvelope[];
+    businessApprovals: ApprovalTask[];
+    assetPacks: AssetPackRecord[];
+    growthQueue: GrowthWorkItem[];
+    allocationSnapshots: RevenueAllocationSnapshot[];
+    context?: BusinessExecutionContext;
+  }): WorkflowExecutionInsights {
+    const relatedTaskCount = args.relatedTasks.length;
+    const clipbaitersInsights = args.context?.clipbaiters
+      ? this.clipbaitersWorkflowInsights({
+          business: args.business,
+          workflowOwner: args.workflowOwner,
+          context: args.context.clipbaiters
+        })
+      : undefined;
+    const northlineInsights = !clipbaitersInsights && args.context?.northline
+      ? this.northlineWorkflowInsights({
+          business: args.business,
+          workflowOwner: args.workflowOwner,
+          context: args.context.northline,
+          growthQueue: args.growthQueue,
+          allocationSnapshots: args.allocationSnapshots
+        })
+      : undefined;
+    const domainInsights = clipbaitersInsights ?? northlineInsights;
+    const totalTaskCount = relatedTaskCount + (domainInsights?.taskCount ?? 0);
+    const artifacts = domainInsights
+      ? uniqueStrings([
+          ...domainInsights.artifacts,
+          ...this.executionArtifactsForWorkflow({
+            business: args.business,
+            workflowOwner: args.workflowOwner,
+            assetPacks: args.assetPacks,
+            growthQueue: args.growthQueue,
+            allocationSnapshots: args.allocationSnapshots
+          })
+        ])
+      : this.executionArtifactsForWorkflow({
+          business: args.business,
+          workflowOwner: args.workflowOwner,
+          assetPacks: args.assetPacks,
+          growthQueue: args.growthQueue,
+          allocationSnapshots: args.allocationSnapshots
+        });
+    const metrics = domainInsights
+      ? uniqueStrings([
+          `Work items: ${totalTaskCount}`,
+          ...(relatedTaskCount > 0 ? [`Task envelopes: ${relatedTaskCount}`] : []),
+          ...domainInsights.metrics,
+          `Approvals: ${args.businessApprovals.length}`,
+          `Model tier: ${args.workflowOwner.allowedModelTier}`
+        ])
+      : [
+          `Tasks: ${relatedTaskCount}`,
+          `Approvals: ${args.businessApprovals.length}`,
+          `Model tier: ${args.workflowOwner.allowedModelTier}`
+        ];
+
+    return {
+      taskCount: totalTaskCount,
+      reviewCount: domainInsights?.reviewCount ?? 0,
+      blockers: domainInsights?.blockers ?? [],
+      artifacts,
+      metrics,
+      updatedAt: domainInsights?.updatedAt ?? args.workflowOwner.updatedAt
+    };
+  }
+
+  private clipbaitersWorkflowInsights(args: {
+    business: ManagedBusiness;
+    workflowOwner: WorkflowOwnershipRecord;
+    context: ClipBaitersBusinessExecutionContext;
+  }): Omit<WorkflowExecutionInsights, "artifacts"> & { artifacts: string[] } | undefined {
+    const plan = args.context.plan;
+    const primaryEditorialLaneId = plan?.primaryEditorialLaneId ?? CLIPBAITERS_PRIMARY_LANE_ID;
+    const primaryRevenueLaneId = plan?.primaryRevenueLaneId ?? primaryEditorialLaneId;
+    const editorialLane = plan?.laneRegistry.lanes.find(
+      (lane) => lane.id === primaryEditorialLaneId
+    );
+    const revenueLane = plan?.laneRegistry.lanes.find(
+      (lane) => lane.id === primaryRevenueLaneId
+    );
+    const editorialSources =
+      plan?.sourceRegistry.sources.filter((source) => source.laneId === primaryEditorialLaneId) ?? [];
+    const activeEditorialSources = editorialSources.filter(
+      (source) => source.status === "active"
+    ).length;
+    const gatedEditorialSources = editorialSources.filter(
+      (source) => source.status !== "active"
+    ).length;
+    const watchlistCount =
+      args.context.watchlistState?.watchlists.filter((watchlist) => watchlist.laneId === primaryEditorialLaneId).length ?? 0;
+    const discoveryCount =
+      args.context.discoveryState?.videos.filter((video) => video.laneId === primaryEditorialLaneId).length ?? 0;
+    const skimCount =
+      args.context.skimState?.summaries.filter((summary) => summary.laneId === primaryEditorialLaneId).length ?? 0;
+    const radarLane = args.context.radarState?.lanes.find(
+      (lane) => lane.laneId === primaryEditorialLaneId
+    );
+    const storyLane = args.context.storyState?.lanes.find(
+      (lane) => lane.laneId === primaryEditorialLaneId
+    );
+    const radarCandidateCount = radarLane?.candidateCount ?? 0;
+    const radarReviewCount =
+      radarLane?.candidates.filter(
+        (candidate) => candidate.reviewRequired || candidate.status === "review_required"
+      ).length ?? 0;
+    const storyCount = storyLane?.stories.length ?? 0;
+    const storyReviewCount =
+      storyLane?.stories.filter((story) => story.reviewRequired).length ?? 0;
+    const blockedStoryCount =
+      storyLane?.stories.filter((story) => story.status === "blocked").length ?? 0;
+    const autonomy = args.context.autonomySnapshot;
+    const autonomyManualGateCount = autonomy?.manualGates.length ?? 0;
+    const missingTooling = autonomy?.tooling.filter((tool) => !tool.available) ?? [];
+    const activeLaneIds = new Set(plan?.laneRegistry.activeLaneIds ?? []);
+    const youtubeProfiles = (plan?.socialPresence ?? []).filter(
+      (profile) => profile.platform === "youtube_channel"
+    );
+    const activeYoutubeProfiles = youtubeProfiles.filter(
+      (profile) => Boolean(profile.laneId && activeLaneIds.has(profile.laneId))
+    );
+    const liveActiveYoutubeProfileCount = activeYoutubeProfiles.filter(
+      (profile) => profile.status === "live"
+    ).length;
+    const pendingActiveYoutubeProfileCount = activeYoutubeProfiles.filter(
+      (profile) => profile.status !== "live"
+    ).length;
+    const deferredYoutubeProfileCount = youtubeProfiles.filter(
+      (profile) => !profile.laneId || !activeLaneIds.has(profile.laneId)
+    ).length;
+    const publishingItems = args.context.publishingQueueState?.items ?? [];
+    const queueItemCount = publishingItems.length;
+    const publishAwaitingReviewCount = publishingItems.filter(
+      (item) => item.status === "awaiting_review"
+    ).length;
+    const publishApprovedCount = publishingItems.filter((item) =>
+      ["approved", "publishing", "live"].includes(item.status)
+    ).length;
+    const publishLiveCount = publishingItems.filter((item) => item.status === "live").length;
+    const publishFailureCount = publishingItems.filter(
+      (item) => item.status === "failed" || item.status === "blocked"
+    ).length;
+    const publishMissingChannelCount = publishingItems.filter(
+      (item) => item.channelStatus === "missing"
+    ).length;
+    const publishReviewRequiredCount = publishingItems.filter(
+      (item) => item.reviewRequired || item.status === "awaiting_review"
+    ).length;
+    const publishHistoryEntries = args.context.publishHistoryState?.entries ?? [];
+    const publishHistoryLiveCount = publishHistoryEntries.filter(
+      (entry) => entry.status === "live"
+    ).length;
+    const publishHistoryFailureCount = publishHistoryEntries.filter(
+      (entry) => entry.status === "failed"
+    ).length;
+    const uploadBatches = args.context.uploadBatches?.batches ?? [];
+    const uploadBatchCount = uploadBatches.length;
+    const batchReviewRequiredCount = uploadBatches.filter(
+      (batch) => batch.status === "review_required" || batch.reviewRequiredCount > 0
+    ).length;
+    const channelProfiles = args.context.channelMetrics?.profiles ?? [];
+    const liveProfileCount = channelProfiles.filter((profile) => profile.liveCount > 0).length;
+    const nextScheduledWindow = channelProfiles
+      .map((profile) => profile.nextScheduledFor)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0];
+    const scheduledQueueCount = channelProfiles.reduce(
+      (sum, profile) => sum + profile.scheduledCount,
+      0
+    );
+    const renderReadyQueueCount = channelProfiles.reduce(
+      (sum, profile) => sum + profile.renderReadyCount,
+      0
+    );
+    const totalPolicyEvents = channelProfiles.reduce(
+      (sum, profile) => sum + profile.policyEventCount,
+      0
+    );
+    const postingSchedule = args.context.postingScheduleState;
+    const plannedPostingCount = postingSchedule?.allocations.filter(
+      (allocation) => allocation.status === "planned"
+    ).length ?? 0;
+    const roadblockNotifiedAt = args.context.roadblockNotificationState?.notifiedAt;
+    const renderBacklogCount = Math.max(
+      (autonomy?.clipJobCount ?? 0) - (autonomy?.renderedClipCount ?? 0),
+      0
+    );
+    const offers = args.context.offersState?.offers ?? [];
+    const creatorLeads = args.context.creatorLeadState?.leads ?? [];
+    const creatorOutreachDrafts = args.context.creatorOutreachState?.drafts ?? [];
+    const creatorProspectCount = creatorLeads.filter((lead) => lead.status === "prospect").length;
+    const creatorActiveCount = creatorLeads.filter((lead) => lead.status === "active").length;
+    const creatorPaidCount = creatorLeads.filter((lead) => lead.status === "paid").length;
+    const readyToSendOutreachCount = creatorOutreachDrafts.filter(
+      (draft) => draft.status === "ready_to_send"
+    ).length;
+    const paymentLinkReadyCount = offers.filter(
+      (offer) => offer.status === "payment_link_ready"
+    ).length;
+    const offerApprovalCount = offers.filter(
+      (offer) => offer.status === "approval_required"
+    ).length;
+    const orders = args.context.ordersState?.orders ?? [];
+    const pendingPaymentCount = orders.filter(
+      (order) => order.paymentStatus === "pending"
+    ).length;
+    const deliveryBacklogCount = orders.filter((order) =>
+      ["paid", "in_delivery"].includes(order.status)
+    ).length;
+    const blockedOrderCount = orders.filter((order) => order.status === "blocked").length;
+    const paidOrderCount = orders.filter((order) => order.paymentStatus === "paid").length;
+    const deliveredOrderCount = orders.filter((order) => order.status === "delivered").length;
+    const latestRevenueSnapshot = [...(args.context.revenueState?.snapshots ?? [])].sort(
+      (left, right) => right.generatedAt.localeCompare(left.generatedAt)
+    )[0];
+    const stripeConfigured = Boolean(
+      this.config.clipbaiters.finance.stripe.accountId ||
+        this.config.clipbaiters.finance.stripe.publishableKey ||
+        this.config.clipbaiters.finance.stripe.secretKey
+    );
+    const relayConfigured = Boolean(
+      this.config.clipbaiters.finance.relay.checkingLabel ||
+        this.config.clipbaiters.finance.relay.checkingLast4
+    );
+    const updatedAt =
+      latestTimestamp([
+        plan?.generatedAt,
+        args.context.radarState?.generatedAt,
+        args.context.storyState?.generatedAt,
+        args.context.watchlistState?.generatedAt,
+        args.context.discoveryState?.generatedAt,
+        args.context.skimState?.generatedAt,
+        autonomy?.generatedAt,
+        args.context.publishingQueueState?.generatedAt,
+        args.context.postingScheduleState?.generatedAt,
+        args.context.publishHistoryState?.generatedAt,
+        args.context.uploadBatches?.generatedAt,
+        args.context.channelMetrics?.generatedAt,
+        roadblockNotifiedAt,
+        args.context.creatorLeadState?.generatedAt,
+        args.context.creatorOutreachState?.generatedAt,
+        args.context.offersState?.generatedAt,
+        args.context.ordersState?.generatedAt,
+        args.context.revenueState?.generatedAt,
+        latestRevenueSnapshot?.generatedAt,
+        ...offers.map((offer) => offer.updatedAt),
+        ...orders.map((order) => order.updatedAt)
+      ]) ?? args.workflowOwner.updatedAt;
+    const planRoadblocks = plan?.roadblocks ?? [];
+    const planBlocked = plan?.status === "blocked";
+    const launchGovernanceBlockers = uniqueStrings([
+      ...(planBlocked ? ["ClipBaiters plan still has unresolved launch roadblocks."] : []),
+      ...planRoadblocks.map((roadblock) => roadblock.summary),
+      ...(editorialLane && editorialLane.rolloutStatus !== "active"
+        ? [`${editorialLane.name} lane is ${editorialLane.rolloutStatus}.`]
+        : [])
+    ]);
+
+    switch (args.workflowOwner.workflowId) {
+      case "business-governance":
+        return {
+          taskCount:
+            planRoadblocks.length +
+            (plan?.nextAutomationSteps.length ?? 0) +
+            autonomyManualGateCount +
+            publishReviewRequiredCount,
+          reviewCount: autonomyManualGateCount + publishReviewRequiredCount,
+          blockers: launchGovernanceBlockers,
+          artifacts: [
+            `Plan status: ${plan?.status ?? "not-generated"}`,
+            `Launch checklist: ${this.relativeArtifactPath(args.context.launchChecklistPath)}`,
+            `Daily summary: ${this.relativeArtifactPath(args.context.dailySummaryPath)}`,
+            `Daily brief: ${this.relativeArtifactPath(args.context.dailyBriefPath)}`,
+            `Plan artifact: ${this.relativeArtifactPath(args.context.planMarkdownPath)}`,
+            `Roadblock email: ${this.relativeArtifactPath(args.context.roadblockEmailPath)}`,
+            `Posting schedule: ${this.relativeArtifactPath(args.context.postingSchedulePath)}`,
+            `Creator deals: ${this.relativeArtifactPath(args.context.creatorDealsReportPath)}`
+          ],
+          metrics: [
+            `Roadblocks: ${planRoadblocks.length}`,
+            `Next automation steps: ${plan?.nextAutomationSteps.length ?? 0}`,
+            `Pending review gates: ${autonomyManualGateCount + publishReviewRequiredCount}`,
+            `Active lanes: ${plan?.laneRegistry.activeLaneIds.length ?? 0}`,
+            `Roadblock notified: ${roadblockNotifiedAt ?? "not-yet-sent"}`,
+            `Next posting window: ${nextScheduledWindow ?? "not-scheduled"}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-collect":
+        return {
+          taskCount: watchlistCount + discoveryCount,
+          reviewCount: 0,
+          blockers: uniqueStrings([
+            ...(watchlistCount === 0 ? ["No editorial watchlists are available for the primary ClipBaiters lane."] : []),
+            ...(discoveryCount === 0 ? ["No discovery items are available for the primary ClipBaiters lane."] : [])
+          ]),
+          artifacts: [
+            `Source watchlists: ${this.relativeArtifactPath(args.context.sourceWatchlistsPath)}`,
+            `Video discovery: ${this.relativeArtifactPath(args.context.videoDiscoveryPath)}`,
+            `Daily brief: ${this.relativeArtifactPath(args.context.dailyBriefPath)}`
+          ],
+          metrics: [
+            `Watchlists: ${watchlistCount}`,
+            `Discovery items: ${discoveryCount}`,
+            `Active sources: ${activeEditorialSources}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-skim":
+        return {
+          taskCount: discoveryCount + skimCount,
+          reviewCount: 0,
+          blockers: uniqueStrings([
+            ...(discoveryCount === 0 ? ["No discovery items are available to skim."] : []),
+            ...(skimCount === 0 ? ["No skim summaries have been produced for the primary ClipBaiters lane."] : [])
+          ]),
+          artifacts: [
+            `Video discovery: ${this.relativeArtifactPath(args.context.videoDiscoveryPath)}`,
+            `Skim summaries: ${this.relativeArtifactPath(args.context.skimSummariesPath)}`,
+            `Daily brief: ${this.relativeArtifactPath(args.context.dailyBriefPath)}`
+          ],
+          metrics: [
+            `Discovery items: ${discoveryCount}`,
+            `Skim summaries: ${skimCount}`,
+            `Review required: ${radarReviewCount + storyReviewCount}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-radar":
+        return {
+          taskCount: watchlistCount + discoveryCount + skimCount + radarCandidateCount + storyCount,
+          reviewCount: radarReviewCount + storyReviewCount,
+          blockers: uniqueStrings([
+            ...(planBlocked
+              ? ["Radar planning is still blocked by unresolved ClipBaiters roadblocks."]
+              : []),
+            ...(watchlistCount === 0
+              ? ["Source watchlists have not been refreshed yet."]
+              : []),
+            ...(skimCount === 0
+              ? ["Skim summaries are missing for the primary editorial lane."]
+              : []),
+            ...(gatedEditorialSources > 0
+              ? [`${gatedEditorialSources} editorial source(s) remain gated or manual-only.`]
+              : []),
+            ...(blockedStoryCount > 0
+              ? [`${blockedStoryCount} story candidate(s) are blocked pending editorial follow-up.`]
+              : [])
+          ]),
+          artifacts: [
+            `Primary editorial lane: ${editorialLane?.name ?? primaryEditorialLaneId}`,
+            `Source watchlists: ${this.relativeArtifactPath(args.context.sourceWatchlistsPath)}`,
+            `Video discovery: ${this.relativeArtifactPath(args.context.videoDiscoveryPath)}`,
+            `Skim summaries: ${this.relativeArtifactPath(args.context.skimSummariesPath)}`,
+            `Daily brief: ${this.relativeArtifactPath(args.context.dailyBriefPath)}`,
+            `Radar snapshot: ${this.relativeArtifactPath(args.context.eventRadarPath)}`,
+            `Story candidates: ${this.relativeArtifactPath(args.context.storyCandidatesPath)}`
+          ],
+          metrics: [
+            `Watchlists: ${watchlistCount}`,
+            `Discovery items: ${discoveryCount}`,
+            `Skim summaries: ${skimCount}`,
+            `Candidates: ${radarCandidateCount}`,
+            `Stories: ${storyCount}`,
+            `Review required: ${radarReviewCount + storyReviewCount}`,
+            `Active sources: ${activeEditorialSources}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-autonomy-run":
+        return {
+          taskCount:
+            (autonomy?.sourceManifestCount ?? 0) +
+            (autonomy?.candidateCount ?? 0) +
+            (autonomy?.clipJobCount ?? 0) +
+            autonomyManualGateCount,
+          reviewCount: autonomyManualGateCount,
+          blockers: uniqueStrings([
+            ...(autonomy?.status === "blocked"
+              ? [autonomy.nextStep || "Clip draft automation is currently blocked."]
+              : []),
+            ...missingTooling.map(
+              (tool) => `${tool.tool} is unavailable for the ClipBaiters worker: ${tool.note}`
+            )
+          ]),
+          artifacts: [
+            `Autonomy summary: ${this.relativeArtifactPath(args.context.autonomySummaryPath)}`,
+            `Clip candidates: ${this.relativeArtifactPath(args.context.clipCandidatesPath)}`,
+            `Clip jobs: ${this.relativeArtifactPath(args.context.clipJobsPath)}`,
+            `Draft clips: ${this.relativeArtifactPath(args.context.draftClipsDirectory)}`
+          ],
+          metrics: [
+            `Source manifests: ${autonomy?.sourceManifestCount ?? 0}`,
+            `Candidates: ${autonomy?.candidateCount ?? 0}`,
+            `Clip jobs: ${autonomy?.clipJobCount ?? 0}`,
+            `Rendered clips: ${autonomy?.renderedClipCount ?? 0}`,
+            `Render backlog: ${renderBacklogCount}`,
+            `Manual gates: ${autonomyManualGateCount}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-publish":
+        return {
+          taskCount: queueItemCount + uploadBatchCount,
+          reviewCount: publishReviewRequiredCount + batchReviewRequiredCount,
+          blockers: uniqueStrings([
+            ...(publishMissingChannelCount > 0
+              ? [`${publishMissingChannelCount} queued clip(s) still lack a mapped channel profile.`]
+              : []),
+            ...(publishFailureCount > 0
+              ? [`${publishFailureCount} publish item(s) are blocked or failed.`]
+              : [])
+          ]),
+          artifacts: [
+            `Review queue: ${this.relativeArtifactPath(args.context.reviewQueuePath)}`,
+            `Publishing queue: ${this.relativeArtifactPath(args.context.publishingQueuePath)}`,
+            `Posting schedule: ${this.relativeArtifactPath(args.context.postingSchedulePath)}`,
+            `Upload batches: ${this.relativeArtifactPath(args.context.uploadBatchesPath)}`,
+            `Channel metrics: ${this.relativeArtifactPath(args.context.channelMetricsMarkdownPath)}`,
+            `Publish history: ${this.relativeArtifactPath(args.context.publishHistoryPath)}`,
+            `Daily summary: ${this.relativeArtifactPath(args.context.dailySummaryPath)}`
+          ],
+          metrics: [
+            `Queued items: ${queueItemCount}`,
+            `Scheduled items: ${scheduledQueueCount}`,
+            `Approved or live: ${publishApprovedCount}`,
+            `Review required: ${publishReviewRequiredCount}`,
+            `Render ready: ${renderReadyQueueCount}`,
+            `Live channel profiles: ${liveProfileCount}`,
+            `Next posting window: ${nextScheduledWindow ?? "not-scheduled"}`,
+            `Planned windows: ${plannedPostingCount}`,
+            `Policy events: ${totalPolicyEvents}`,
+            `Live uploads: ${publishHistoryLiveCount}`,
+            `Upload failures: ${publishHistoryFailureCount}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-youtube-channel-ops":
+        return {
+          taskCount: activeYoutubeProfiles.length + pendingActiveYoutubeProfileCount,
+          reviewCount: pendingActiveYoutubeProfileCount,
+          blockers: uniqueStrings([
+            ...(activeYoutubeProfiles.length === 0
+              ? ["No active YouTube lane bindings are configured yet."]
+              : []),
+            ...(pendingActiveYoutubeProfileCount > 0
+              ? [`${pendingActiveYoutubeProfileCount} active YouTube channel(s) are still planned or blocked.`]
+              : [])
+          ]),
+          artifacts: [
+            `Launch checklist: ${this.relativeArtifactPath(args.context.launchChecklistPath)}`,
+            `Plan artifact: ${this.relativeArtifactPath(args.context.planMarkdownPath)}`,
+            `Social profiles: ${this.relativeArtifactPath(path.join(this.config.opsDir, "social-profiles.md"))}`,
+            `Daily summary: ${this.relativeArtifactPath(args.context.dailySummaryPath)}`
+          ],
+          metrics: [
+            `Active YouTube lanes: ${activeYoutubeProfiles.length}`,
+            `Live active channels: ${liveActiveYoutubeProfileCount}`,
+            `Pending active channels: ${pendingActiveYoutubeProfileCount}`,
+            `Deferred YouTube channels: ${deferredYoutubeProfileCount}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-source-creators":
+        return {
+          taskCount: creatorLeads.length,
+          reviewCount: creatorLeads.filter((lead) => ["paused", "closed_lost"].includes(lead.status)).length,
+          blockers: uniqueStrings([
+            ...(creatorLeads.length === 0 ? ["No creator leads are available for the ClipBaiters streaming lane."] : []),
+            ...(creatorProspectCount === 0 ? ["No prospect-stage creator leads remain in the sourcing queue."] : [])
+          ]),
+          artifacts: [
+            `Creator leads: ${this.relativeArtifactPath(args.context.creatorLeadsPath)}`,
+            `Creator deals report: ${this.relativeArtifactPath(args.context.creatorDealsReportPath)}`
+          ],
+          metrics: [
+            `Leads: ${creatorLeads.length}`,
+            `Prospects: ${creatorProspectCount}`,
+            `Active creators: ${creatorActiveCount}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-draft-creator-outreach":
+        return {
+          taskCount: creatorOutreachDrafts.length,
+          reviewCount: creatorOutreachDrafts.filter((draft) => draft.status === "manual_send_required").length,
+          blockers: uniqueStrings([
+            ...(creatorOutreachDrafts.length === 0 ? ["No creator outreach drafts are available yet."] : []),
+            ...(readyToSendOutreachCount === 0 ? ["No creator outreach drafts are ready to send through the shared path."] : [])
+          ]),
+          artifacts: [
+            `Creator leads: ${this.relativeArtifactPath(args.context.creatorLeadsPath)}`,
+            `Creator outreach: ${this.relativeArtifactPath(args.context.creatorOutreachPath)}`,
+            `Creator deals report: ${this.relativeArtifactPath(args.context.creatorDealsReportPath)}`
+          ],
+          metrics: [
+            `Drafts: ${creatorOutreachDrafts.length}`,
+            `Ready to send: ${readyToSendOutreachCount}`,
+            `Manual send required: ${creatorOutreachDrafts.filter((draft) => draft.status === "manual_send_required").length}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-deals-report":
+        return {
+          taskCount: creatorLeads.length + creatorOutreachDrafts.length + orders.length,
+          reviewCount: blockedOrderCount + creatorOutreachDrafts.filter((draft) => draft.status === "manual_send_required").length,
+          blockers: uniqueStrings([
+            ...(creatorLeads.length === 0 ? ["The creator deals pipeline has not been sourced yet."] : []),
+            ...(blockedOrderCount > 0 ? [`${blockedOrderCount} creator order(s) are still blocked.`] : []),
+            ...(creatorOutreachDrafts.filter((draft) => draft.status === "manual_send_required").length > 0
+              ? ["Some creator outreach drafts still require a manual send path."]
+              : [])
+          ]),
+          artifacts: [
+            `Creator deals report: ${this.relativeArtifactPath(args.context.creatorDealsReportPath)}`,
+            `Creator leads: ${this.relativeArtifactPath(args.context.creatorLeadsPath)}`,
+            `Creator outreach: ${this.relativeArtifactPath(args.context.creatorOutreachPath)}`,
+            `Creator orders: ${this.relativeArtifactPath(args.context.creatorOrdersPath)}`
+          ],
+          metrics: [
+            `Leads: ${creatorLeads.length}`,
+            `Outreach drafts: ${creatorOutreachDrafts.length}`,
+            `Paid creators: ${creatorPaidCount}`,
+            `Active creators: ${creatorActiveCount}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-intake":
+        return {
+          taskCount: offers.length + orders.length + pendingPaymentCount,
+          reviewCount: offerApprovalCount + blockedOrderCount,
+          blockers: uniqueStrings([
+            ...(blockedOrderCount > 0
+              ? [`${blockedOrderCount} creator order(s) are blocked pending delivery follow-up.`]
+              : []),
+            ...(offerApprovalCount > 0
+              ? [`${offerApprovalCount} creator offer(s) still require approval before use.`]
+              : [])
+          ]),
+          artifacts: [
+            `Creator intake guide: ${this.relativeArtifactPath(args.context.intakeReadmePath)}`,
+            `Creator offers: ${this.relativeArtifactPath(args.context.creatorOffersPath)}`,
+            `Creator orders: ${this.relativeArtifactPath(args.context.creatorOrdersPath)}`,
+            `Intake directory: ${this.relativeArtifactPath(args.context.intakeDirectory)}`
+          ],
+          metrics: [
+            `Offers ready: ${paymentLinkReadyCount}`,
+            `Orders: ${orders.length}`,
+            `Pending payment: ${pendingPaymentCount}`,
+            `Delivery backlog: ${deliveryBacklogCount}`
+          ],
+          updatedAt
+        };
+      case "clipbaiters-monetization-report":
+        return {
+          taskCount: offers.length + orders.length + (args.context.revenueState?.snapshots.length ?? 0),
+          reviewCount: offerApprovalCount + blockedOrderCount,
+          blockers: uniqueStrings([
+            ...(offerApprovalCount > 0
+              ? [`${offerApprovalCount} offer(s) remain approval-gated.`]
+              : []),
+            ...(pendingPaymentCount > 0
+              ? [`${pendingPaymentCount} order(s) still need payment collection.`]
+              : []),
+            ...(blockedOrderCount > 0
+              ? [`${blockedOrderCount} order(s) are blocked and not ready for revenue recognition.`]
+              : [])
+          ]),
+          artifacts: [
+            `Monetization report: ${this.relativeArtifactPath(args.context.monetizationReportPath)}`,
+            `Revenue snapshots: ${this.relativeArtifactPath(args.context.revenueSnapshotsPath)}`,
+            `Creator offers: ${this.relativeArtifactPath(args.context.creatorOffersPath)}`,
+            `Creator orders: ${this.relativeArtifactPath(args.context.creatorOrdersPath)}`
+          ],
+          metrics: [
+            `Revenue lane: ${revenueLane?.name ?? primaryRevenueLaneId}`,
+            `Paid orders: ${paidOrderCount}`,
+            `Delivered orders: ${deliveredOrderCount}`,
+            `Booked revenue: $${(latestRevenueSnapshot?.bookedRevenueUsd ?? 0).toFixed(2)}`,
+            `Shared Stripe noted: ${stripeConfigured ? "yes" : "no"}`,
+            `Relay cashout route noted: ${relayConfigured ? "yes" : "no"}`
+          ],
+          updatedAt
+        };
+      default:
+        return undefined;
+    }
+  }
+
+  private northlineWorkflowInsights(args: {
+    business: ManagedBusiness;
+    workflowOwner: WorkflowOwnershipRecord;
+    context: NorthlineBusinessExecutionContext;
+    growthQueue: GrowthWorkItem[];
+    allocationSnapshots: RevenueAllocationSnapshot[];
+  }): Omit<WorkflowExecutionInsights, "artifacts"> & { artifacts: string[] } | undefined {
+    const queueItems = args.growthQueue.filter((item) => item.businessId === args.business.id);
+    const channels = uniqueStrings(queueItems.map((item) => item.channel));
+    const plannedQueueCount = queueItems.filter((item) => item.status === "planned").length;
+    const manualGateCount =
+      args.context.autonomySnapshot?.manualGates.filter((gate) => gate.status !== "completed")
+        .length ?? 0;
+    const intakeCount =
+      args.context.autonomySnapshot?.newIntakes.filter((item) => item.status !== "duplicate")
+        .length ?? 0;
+    const outboundPendingCount =
+      args.context.autonomySnapshot?.outboundQueue.filter(
+        (item) =>
+          item.status === "awaiting_compliance" || item.status === "awaiting_manual_send"
+      ).length ?? 0;
+    const replyFollowUpCount =
+      args.context.autonomySnapshot?.replyQueue.filter(
+        (item) => item.status === "logged" || item.status === "intake_follow_up" || item.status === "error"
+      ).length ?? 0;
+    const deliveryQueue = args.context.autonomySnapshot?.deliveryQueue ?? [];
+    const qaFailureCount =
+      deliveryQueue.filter((item) => item.status === "qa_failed").length ||
+      args.context.clients.filter(
+        (client) => client.qaStatus === "failed" || client.siteStatus === "qa_failed"
+      ).length;
+    const activeDeliveryCount =
+      deliveryQueue.length > 0
+        ? deliveryQueue.filter((item) => item.status !== "stable").length
+        : args.context.clients.filter(
+            (client) =>
+              client.billingStatus !== "paused" &&
+              (client.assets.handoffPackage === undefined || client.qaStatus !== "passed")
+          ).length;
+    const handoffPackageCount = args.context.clients.filter(
+      (client) => client.assets.handoffPackage !== undefined
+    ).length;
+    const paidClientCount = args.context.clients.filter(
+      (client) => client.billingStatus === "paid" || client.billingStatus === "retainer_active"
+    ).length;
+    const retainerClientCount = args.context.clients.filter(
+      (client) => client.billingStatus === "retainer_active"
+    ).length;
+    const proposalCount = args.context.clients.filter(
+      (client) =>
+        client.billingStatus === "proposal" || client.billingStatus === "deposit_pending"
+    ).length;
+    const proofEligibleClientCount = args.context.clients.filter((client) =>
+      resolveClientProofEligible(client)
+    ).length;
+    const stableClientCount =
+      deliveryQueue.filter((item) => item.status === "stable").length ||
+      args.context.clients.filter(
+        (client) => client.assets.handoffPackage !== undefined && client.qaStatus === "passed"
+      ).length;
+    const proofReadyCount =
+      args.context.plan?.proofAssets.filter((asset) => asset.status === "ready").length ??
+      args.context.proofBundles.filter((bundle) => bundle.screenshots.length > 0).length;
+    const proofAssetCount =
+      args.context.plan?.proofAssets.length ?? args.context.proofBundles.length;
+    const readinessLiveCount =
+      args.context.plan?.readiness.filter((item) => item.status === "live").length ?? 0;
+    const readinessCount = args.context.plan?.readiness.length ?? 0;
+    const promotionMetCount =
+      args.context.plan?.operatingMode.promotionCriteria.filter(
+        (criterion) => criterion.status === "met"
+      ).length ?? 0;
+    const promotionCount = args.context.plan?.operatingMode.promotionCriteria.length ?? 0;
+    const roadblockCount = args.context.plan?.roadblocks.length ?? args.business.launchBlockers.length;
+    const latestAllocation = [...args.allocationSnapshots]
+      .filter((snapshot) => snapshot.businessId === args.business.id)
+      .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))[0];
+    const updatedAt =
+      latestTimestamp([
+        args.context.autonomySnapshot?.generatedAt,
+        args.context.plan?.generatedAt,
+        latestAllocation?.generatedAt,
+        ...args.context.clients.map((client) => client.updatedAt),
+        ...args.context.proofBundles.map((bundle) => bundle.createdAt),
+        ...args.context.retentionReports.map((report) => report.createdAt)
+      ]) ?? args.workflowOwner.updatedAt;
+
+    switch (args.workflowOwner.workflowId) {
+      case "business-governance":
+        return {
+          taskCount:
+            Math.max(roadblockCount, 0) +
+            Math.max(promotionCount - promotionMetCount, 0) +
+            manualGateCount,
+          reviewCount: manualGateCount,
+          blockers: [],
+          artifacts: [
+            `Operating mode: ${args.context.plan?.operatingMode.current ?? "not-generated"}`,
+            `Readiness live: ${readinessLiveCount}/${readinessCount}`,
+            `Promotion criteria met: ${promotionMetCount}/${promotionCount}`,
+            `Plan artifact: ${this.relativeArtifactPath(args.context.planPath)}`
+          ],
+          metrics: [
+            `Roadblocks: ${roadblockCount}`,
+            `Validation confirmations: ${args.context.validationSuccessCount}`,
+            `Proof-eligible clients: ${proofEligibleClientCount}`
+          ],
+          updatedAt
+        };
+      case "business-ops":
+        return {
+          taskCount: intakeCount + manualGateCount + replyFollowUpCount + activeDeliveryCount,
+          reviewCount: manualGateCount,
+          blockers: [],
+          artifacts: [
+            `Autonomy status: ${args.context.autonomySnapshot?.status ?? "not-run"}`,
+            `Lead pipeline: ${args.context.leads.length} lead(s), ${args.context.outreachDrafts.length} draft(s), ${args.context.clients.length} client(s)`,
+            `Autonomy summary: ${this.relativeArtifactPath(args.context.autonomySummaryPath)}`
+          ],
+          metrics: [
+            `Manual gates: ${manualGateCount}`,
+            `Reply follow-ups: ${replyFollowUpCount}`,
+            `Delivery active: ${activeDeliveryCount}`
+          ],
+          updatedAt
+        };
+      case "growth-publishing":
+        return {
+          taskCount: plannedQueueCount + outboundPendingCount + args.context.outreachDrafts.length,
+          reviewCount: outboundPendingCount,
+          blockers: [],
+          artifacts: [
+            `Promotion queue: ${plannedQueueCount} planned item(s)`,
+            `Outbound queue: ${outboundPendingCount} item(s) awaiting send review`,
+            `Channels: ${channels.join(", ") || "none"}`
+          ],
+          metrics: [
+            `Leads: ${args.context.leads.length}`,
+            `Drafts: ${args.context.outreachDrafts.length}`,
+            `Pending send: ${outboundPendingCount}`
+          ],
+          updatedAt
+        };
+      case "analytics-reporting":
+        return {
+          taskCount: args.context.proofBundles.length + args.context.retentionReports.length + 1,
+          reviewCount: 0,
+          blockers: [],
+          artifacts: [
+            `Plan status: ${args.context.plan?.status ?? "not-generated"}`,
+            `Proof assets ready: ${proofReadyCount}/${proofAssetCount}`,
+            ...(args.context.reportPath
+              ? [`Autonomy run report: ${this.relativeArtifactPath(args.context.reportPath)}`]
+              : [])
+          ],
+          metrics: [
+            `Clients: ${args.context.clients.length}`,
+            `Proof bundles: ${args.context.proofBundles.length}`,
+            `Retention reports: ${args.context.retentionReports.length}`
+          ],
+          updatedAt
+        };
+      case "product-production":
+        return {
+          taskCount: activeDeliveryCount + handoffPackageCount + args.context.proofBundles.length,
+          reviewCount: 0,
+          blockers:
+            qaFailureCount > 0
+              ? [`QA blockers remain on ${qaFailureCount} client delivery item(s).`]
+              : [],
+          artifacts: [
+            `Clients in delivery: ${activeDeliveryCount}`,
+            `Handoff packages: ${handoffPackageCount}`,
+            `Proof bundles: ${args.context.proofBundles.length}`
+          ],
+          metrics: [
+            `Paid clients: ${paidClientCount}`,
+            `QA failed: ${qaFailureCount}`,
+            `Retention reports: ${args.context.retentionReports.length}`
+          ],
+          updatedAt
+        };
+      case "finance-allocation-reporting":
+        return {
+          taskCount: paidClientCount + proposalCount + args.context.validationSuccessCount,
+          reviewCount: proposalCount > 0 ? 1 : 0,
+          blockers: [],
+          artifacts: [
+            `Paid clients: ${paidClientCount}`,
+            `Retainers: ${retainerClientCount}`,
+            `Validation confirmations: ${args.context.validationSuccessCount}`
+          ],
+          metrics: [
+            `Billing pending: ${proposalCount}`,
+            `Paid: ${paidClientCount}`,
+            `Retainers: ${retainerClientCount}`
+          ],
+          updatedAt
+        };
+      case "support-qa":
+        return {
+          taskCount: qaFailureCount + replyFollowUpCount + args.context.retentionReports.length,
+          reviewCount: replyFollowUpCount,
+          blockers:
+            qaFailureCount > 0
+              ? [`${qaFailureCount} client delivery item(s) still have QA blockers.`]
+              : [],
+          artifacts: [
+            `QA backlog: ${qaFailureCount}`,
+            `Reply follow-ups: ${replyFollowUpCount}`,
+            `Retention reports: ${args.context.retentionReports.length}`
+          ],
+          metrics: [
+            `Stable clients: ${stableClientCount}`,
+            `Review asks: ${args.context.proofBundles.length}`,
+            `Handoff packages: ${handoffPackageCount}`
+          ],
+          updatedAt
+        };
+      default:
+        return undefined;
+    }
+  }
+
+  private relativeArtifactPath(filePath: string): string {
+    return path.relative(this.config.projectRoot, filePath) || filePath;
   }
 
   private buildOfficeHandoffs(args: {
@@ -1638,11 +2883,12 @@ export class OrganizationControlPlaneService {
     blockers: string[];
     approvalCount: number;
     taskCount: number;
+    reviewCount?: number;
   }): DepartmentExecutionItem["status"] {
     if (args.blockers.length > 0) {
       return "blocked";
     }
-    if (args.approvalCount > 0) {
+    if (args.approvalCount > 0 || (args.reviewCount ?? 0) > 0) {
       return "review";
     }
     if (args.taskCount > 0 || args.business.stage === "active") {
@@ -1895,6 +3141,7 @@ export class OrganizationControlPlaneService {
     engineBundle: BlueprintBundle;
     businessBundles: BlueprintBundle[];
     officeSnapshot: OfficeViewSnapshot;
+    businessExecutionContext: Map<string, BusinessExecutionContext>;
   }): Promise<{
     controlPlaneJsonPath: string;
     controlPlaneMarkdownPath: string;
@@ -1926,23 +3173,43 @@ export class OrganizationControlPlaneService {
     await writeTextFile(officeViewsMarkdownPath, this.toOfficeViewsMarkdown(args.officeSnapshot));
 
     await Promise.all(
-      [args.engineBundle, ...args.businessBundles].flatMap((bundle) => [
-        writeJsonFile(path.join(this.blueprintDir, `${bundle.blueprint.id}.json`), {
-          blueprint: bundle.blueprint,
-          departments: bundle.departments,
-          positions: bundle.positions,
-          assignments: bundle.assignments,
-          reportingLines: bundle.reportingLines,
-          permissionPolicies: bundle.permissionPolicies,
-          memoryPolicies: bundle.memoryPolicies,
-          approvalRoutes: bundle.approvalRoutes,
-          workflowOwnership: bundle.workflowOwnership
-        }),
-        writeTextFile(
-          path.join(this.blueprintDir, `${bundle.blueprint.id}.md`),
-          this.toBlueprintMarkdown(bundle)
-        )
-      ])
+      [
+        ...[args.engineBundle, ...args.businessBundles].flatMap((bundle) => [
+          writeJsonFile(path.join(this.blueprintDir, `${bundle.blueprint.id}.json`), {
+            blueprint: bundle.blueprint,
+            departments: bundle.departments,
+            positions: bundle.positions,
+            assignments: bundle.assignments,
+            reportingLines: bundle.reportingLines,
+            permissionPolicies: bundle.permissionPolicies,
+            memoryPolicies: bundle.memoryPolicies,
+            approvalRoutes: bundle.approvalRoutes,
+            workflowOwnership: bundle.workflowOwnership
+          }),
+          writeTextFile(
+            path.join(this.blueprintDir, `${bundle.blueprint.id}.md`),
+            this.toBlueprintMarkdown(bundle)
+          )
+        ]),
+        ...args.businesses.flatMap((business) => {
+          const clipbaitersContext = args.businessExecutionContext.get(business.id)?.clipbaiters;
+          if (!clipbaitersContext) {
+            return [];
+          }
+
+          return [
+            ensureDir(path.dirname(clipbaitersContext.launchChecklistPath)).then(() =>
+              writeTextFile(
+                clipbaitersContext.launchChecklistPath,
+                this.toClipBaitersLaunchChecklist({
+                  business,
+                  context: clipbaitersContext
+                })
+              )
+            )
+          ];
+        })
+      ]
     );
 
     return {
@@ -1952,6 +3219,187 @@ export class OrganizationControlPlaneService {
       officeViewsMarkdownPath,
       blueprintDirPath: this.blueprintDir
     };
+  }
+
+  private toClipBaitersLaunchChecklist(args: {
+    business: ManagedBusiness;
+    context: ClipBaitersBusinessExecutionContext;
+  }): string {
+    const plan = args.context.plan;
+    const editorialLaneId = plan?.primaryEditorialLaneId ?? CLIPBAITERS_PRIMARY_LANE_ID;
+    const revenueLaneId = plan?.primaryRevenueLaneId ?? editorialLaneId;
+    const editorialLane = plan?.laneRegistry.lanes.find((lane) => lane.id === editorialLaneId);
+    const revenueLane = plan?.laneRegistry.lanes.find((lane) => lane.id === revenueLaneId);
+    const watchlistCount =
+      args.context.watchlistState?.watchlists.filter((watchlist) => watchlist.laneId === editorialLaneId).length ?? 0;
+    const discoveryCount =
+      args.context.discoveryState?.videos.filter((video) => video.laneId === editorialLaneId).length ?? 0;
+    const skimCount =
+      args.context.skimState?.summaries.filter((summary) => summary.laneId === editorialLaneId).length ?? 0;
+    const radarLane = args.context.radarState?.lanes.find((lane) => lane.laneId === editorialLaneId);
+    const storyLane = args.context.storyState?.lanes.find((lane) => lane.laneId === editorialLaneId);
+    const autonomy = args.context.autonomySnapshot;
+    const queueItems = args.context.publishingQueueState?.items ?? [];
+    const postingSchedule = args.context.postingScheduleState;
+    const publishHistoryEntries = args.context.publishHistoryState?.entries ?? [];
+    const reviewQueueCount = queueItems.filter(
+      (item) => item.reviewRequired || item.status === "awaiting_review"
+    ).length;
+    const missingToolingCount = autonomy?.tooling.filter((tool) => !tool.available).length ?? 0;
+    const blockedQueueCount = queueItems.filter(
+      (item) => item.status === "blocked" || item.status === "failed"
+    ).length;
+    const renderReadyCount = queueItems.filter((item) => item.renderReady).length;
+    const scheduledQueueCount = queueItems.filter((item) => Boolean(item.scheduledWindowLabel)).length;
+    const nextScheduledWindow = queueItems
+      .filter((item) => Boolean(item.scheduledWindowLabel) && item.status !== "live")
+      .map((item) => item.scheduledFor)
+      .sort()
+      .at(0);
+    const roadblockNotifiedAt = args.context.roadblockNotificationState?.notifiedAt;
+    const creatorLeadCount = args.context.creatorLeadState?.leads.length ?? 0;
+    const creatorOutreachCount = args.context.creatorOutreachState?.drafts.length ?? 0;
+    const offers = args.context.offersState?.offers ?? [];
+    const paymentLinkReadyCount = offers.filter(
+      (offer) => offer.status === "payment_link_ready"
+    ).length;
+    const orders = args.context.ordersState?.orders ?? [];
+    const pendingPaymentCount = orders.filter(
+      (order) => order.paymentStatus === "pending"
+    ).length;
+    const latestRevenueSnapshot = [...(args.context.revenueState?.snapshots ?? [])].sort(
+      (left, right) => right.generatedAt.localeCompare(left.generatedAt)
+    )[0];
+    const activeLaneIds = new Set(plan?.laneRegistry.activeLaneIds ?? []);
+    const activeYoutubeProfiles = (plan?.socialPresence ?? []).filter(
+      (profile) =>
+        profile.platform === "youtube_channel" &&
+        Boolean(profile.laneId && activeLaneIds.has(profile.laneId))
+    );
+    const liveActiveYoutubeProfileCount = activeYoutubeProfiles.filter(
+      (profile) => profile.status === "live"
+    ).length;
+    const pendingActiveYoutubeProfileCount = activeYoutubeProfiles.filter(
+      (profile) => profile.status !== "live"
+    ).length;
+    const stripeConfigured = Boolean(
+      this.config.clipbaiters.finance.stripe.accountId ||
+        this.config.clipbaiters.finance.stripe.publishableKey ||
+        this.config.clipbaiters.finance.stripe.secretKey
+    );
+    const relayConfigured = Boolean(
+      this.config.clipbaiters.finance.relay.checkingLabel ||
+        this.config.clipbaiters.finance.relay.checkingLast4
+    );
+    const openBlockers = uniqueStrings([
+      ...(plan?.roadblocks.map((roadblock) => roadblock.summary) ?? []),
+      ...(plan?.status === "blocked"
+        ? ["The plan is still blocked and needs owner action before the lane can be treated as operational."]
+        : []),
+      ...(plan?.roadblocks.length && !roadblockNotifiedAt
+        ? ["Roadblock notification has not been sent for the current blocking set."]
+        : []),
+      ...(reviewQueueCount > 0
+        ? [
+            `${reviewQueueCount} publish queue item(s) still require manual review before any upload can go live.`
+          ]
+        : []),
+      ...(blockedQueueCount > 0
+        ? [`${blockedQueueCount} publish queue item(s) are blocked or failed.`]
+        : []),
+      ...(scheduledQueueCount === 0 && queueItems.length > 0
+        ? ["No randomized posting windows are allocated for the current publish queue."]
+        : []),
+      ...(renderReadyCount === 0 && queueItems.length > 0
+        ? ["No rendered clips are ready for the current publish queue."]
+        : []),
+      ...(autonomy?.status === "blocked"
+        ? [autonomy.nextStep || "Autonomy is blocked and needs tooling or source fixes."]
+        : []),
+      ...(missingToolingCount > 0
+        ? [`${missingToolingCount} worker tooling dependency(ies) are unavailable.`]
+        : []),
+      ...(pendingPaymentCount > 0
+        ? [`${pendingPaymentCount} creator order(s) are still pending payment collection.`]
+        : [])
+    ]);
+
+    const readinessChecks = [
+      `${plan && plan.status !== "blocked" ? "[x]" : "[ ]"} Automation plan, lane registry, and source registry are in place`,
+      `${plan?.roadblocks.length === 0 || roadblockNotifiedAt ? "[x]" : "[ ]"} Roadblock notification state is current for the latest plan`,
+      `${watchlistCount > 0 && discoveryCount > 0 && skimCount > 0 ? "[x]" : "[ ]"} Collect and skim artifacts are present for ${editorialLane?.name ?? editorialLaneId}`,
+      `${radarLane && storyLane ? "[x]" : "[ ]"} Radar and story artifacts are available for ${editorialLane?.name ?? editorialLaneId}`,
+      `${pendingActiveYoutubeProfileCount === 0 && activeYoutubeProfiles.length > 0 ? "[x]" : "[ ]"} Active YouTube lane bindings are live for the current rollout set`,
+      `${autonomy && autonomy.status !== "blocked" && missingToolingCount === 0 ? "[x]" : "[ ]"} Worker tooling is ready for rendered autonomy clipping`,
+      `${renderReadyCount > 0 ? "[x]" : "[ ]"} Rendered clips exist for the current publish queue`,
+      `${scheduledQueueCount > 0 ? "[x]" : "[ ]"} Randomized peak posting windows are allocated in the schedule artifact`,
+      `${reviewQueueCount === 0 && blockedQueueCount === 0 ? "[x]" : "[ ]"} Review queue is clear enough for approved uploads without bypassing manual gates`,
+      `${creatorLeadCount > 0 || creatorOutreachCount > 0 ? "[x]" : "[ ]"} Creator deals pipeline has lead or outreach coverage for ${revenueLane?.name ?? revenueLaneId}`,
+      `${offers.length > 0 && args.context.revenueState?.snapshots.length ? "[x]" : "[ ]"} Direct monetization artifacts are present for ${revenueLane?.name ?? revenueLaneId}`,
+      `[x] Isolated worker command is pinned to scripts/business-worker-start.sh ${args.business.id} "${args.business.name}"`
+    ];
+
+    const lines = [
+      "# ClipBaiters Launch Checklist",
+      "",
+      `- Generated: ${nowIso()}`,
+      `- Business: ${args.business.name}`,
+      `- Editorial lane: ${editorialLane?.name ?? editorialLaneId}`,
+      `- Revenue lane: ${revenueLane?.name ?? revenueLaneId}`,
+      `- Active YouTube rollout: ${activeYoutubeProfiles.map((profile) => profile.laneName ?? profile.laneId ?? profile.profileId).join(", ") || "None configured"}`,
+      "- Review posture: Scheduled publishing stays dry-run until manual review clears rights-sensitive items.",
+      "",
+      "## Readiness",
+      ...readinessChecks,
+      "",
+      "## Current state",
+      `- Source watchlists: ${watchlistCount}`,
+      `- Discovery items: ${discoveryCount}`,
+      `- Skim summaries: ${skimCount}`,
+      `- Radar candidates: ${radarLane?.candidateCount ?? 0}`,
+      `- Story candidates: ${storyLane?.stories.length ?? 0}`,
+      `- Draft clip jobs: ${autonomy?.clipJobCount ?? 0}`,
+      `- Rendered clip jobs: ${autonomy?.renderedClipCount ?? 0}`,
+      `- Publish queue review items: ${reviewQueueCount}`,
+      `- Scheduled queue items: ${scheduledQueueCount}`,
+      `- Next posting window: ${nextScheduledWindow ?? "Not allocated"}`,
+      `- Roadblock notification sent: ${roadblockNotifiedAt ?? "Not yet sent"}`,
+      `- Live upload history entries: ${publishHistoryEntries.filter((entry) => entry.status === "live").length}`,
+      `- Creator leads: ${creatorLeadCount}`,
+      `- Creator outreach drafts: ${creatorOutreachCount}`,
+      `- Payment links ready: ${paymentLinkReadyCount}`,
+      `- Active YouTube channels live: ${liveActiveYoutubeProfileCount}/${activeYoutubeProfiles.length}`,
+      `- Shared Stripe recorded: ${stripeConfigured ? "yes" : "no"}`,
+      `- Relay cashout route recorded: ${relayConfigured ? "yes" : "no"}`,
+      `- Latest booked revenue: $${(latestRevenueSnapshot?.bookedRevenueUsd ?? 0).toFixed(2)}`,
+      "",
+      "## Scheduled cadence",
+      `- npm run dev -- clipbaiters-plan --business ${args.business.id} --notify-roadblocks`,
+      `- npm run dev -- clipbaiters-collect --business ${args.business.id}`,
+      `- npm run dev -- clipbaiters-skim --business ${args.business.id}`,
+      `- npm run dev -- clipbaiters-autonomy-run --business ${args.business.id} --all-active-lanes${args.business.stage === "scaffolded" ? " --dry-run" : ""}`,
+      `- npm run dev -- clipbaiters-publish --business ${args.business.id} --all-active-lanes${renderReadyCount > 0 && blockedQueueCount === 0 ? "" : " --dry-run"}`,
+      `- npm run dev -- clipbaiters-source-creators --business ${args.business.id}`,
+      `- npm run dev -- clipbaiters-draft-creator-outreach --business ${args.business.id}`,
+      `- npm run dev -- clipbaiters-deals-report --business ${args.business.id}`,
+      `- npm run dev -- clipbaiters-monetization-report --business ${args.business.id}`,
+      "",
+      "## Key artifacts",
+      `- Plan: ${this.relativeArtifactPath(args.context.planMarkdownPath)}`,
+      `- Roadblock email: ${this.relativeArtifactPath(args.context.roadblockEmailPath)}`,
+      `- Daily brief: ${this.relativeArtifactPath(args.context.dailyBriefPath)}`,
+      `- Daily summary: ${this.relativeArtifactPath(args.context.dailySummaryPath)}`,
+      `- Autonomy summary: ${this.relativeArtifactPath(args.context.autonomySummaryPath)}`,
+      `- Posting schedule: ${this.relativeArtifactPath(args.context.postingSchedulePath)}`,
+      `- Review queue: ${this.relativeArtifactPath(args.context.reviewQueuePath)}`,
+      `- Creator deals report: ${this.relativeArtifactPath(args.context.creatorDealsReportPath)}`,
+      `- Monetization report: ${this.relativeArtifactPath(args.context.monetizationReportPath)}`,
+      "",
+      "## Open blockers",
+      ...(openBlockers.length > 0 ? openBlockers.map((blocker) => `- ${blocker}`) : ["- None currently flagged by the control plane."])
+    ];
+
+    return `${lines.join("\n")}\n`;
   }
 
   private toControlPlaneMarkdown(args: {

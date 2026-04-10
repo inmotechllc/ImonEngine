@@ -417,6 +417,10 @@ function profilePurpose(profile: SocialProfileRecord): string {
       return "Hold the umbrella Meta asset, page access, and future ad-account permissions.";
     case "facebook_page":
       return "Publish founder notes, proof posts, and future retargeting or lead-ad traffic.";
+    case "youtube_channel":
+      return profile.role === "niche_lane"
+        ? `Reserve a video-first surface for ${profile.laneName ?? "the assigned niche"} without creating extra off-platform identity sprawl.`
+        : "Reserve an umbrella video distribution surface for launch clips or proof assets.";
     case "instagram_account":
       return profile.role === "niche_lane"
         ? `Publish lane-specific proof and hooks for ${profile.laneName ?? "the assigned niche"}.`
@@ -441,6 +445,11 @@ function profileNextSteps(profile: SocialProfileRecord): string[] {
       return [
         `Create the umbrella Facebook Page for ${profile.brandName} using ${profile.emailAlias}.`,
         "Use the Page for proof posts, organic distribution, and the future Meta ad account."
+      ];
+    case "youtube_channel":
+      return [
+        `Create the YouTube channel ${profile.handle ?? profile.laneName ?? profile.brandName} inside the shared signed-in browser profile and keep ${profile.emailAlias} as the recovery alias.`,
+        "Use one channel per lane and keep short-form publishing or automation deferred until the review workflow is ready."
       ];
     case "instagram_account":
       return [
@@ -581,7 +590,12 @@ export class MicroSaasStudioService {
     products: MicroSaasProductBrief[],
     launchStartsAt: string
   ): MicroSaasLaunchTask[] {
-    const primary = products.find((product) => product.stage === "primary_mvp") ?? products[0];
+    const fallbackProduct = products[0];
+    if (!fallbackProduct) {
+      return [];
+    }
+
+    const primary = products.find((product) => product.stage === "primary_mvp") ?? fallbackProduct;
     const creatorOps = products.find((product) => product.laneId === "creator-ops") ?? products[1] ?? primary;
     const workflowAgents = products.find((product) => product.laneId === "workflow-agents") ?? products[2] ?? primary;
     const launchDate = new Date(launchStartsAt);
@@ -906,7 +920,12 @@ export class MicroSaasStudioService {
     businessId: string,
     products: MicroSaasProductBrief[]
   ): MicroSaasAdExperiment[] {
-    const primary = products.find((product) => product.stage === "primary_mvp") ?? products[0];
+    const fallbackProduct = products[0];
+    if (!fallbackProduct) {
+      return [];
+    }
+
+    const primary = products.find((product) => product.stage === "primary_mvp") ?? fallbackProduct;
     const creatorOps = products.find((product) => product.laneId === "creator-ops") ?? primary;
     const metaReady =
       hasMetaAdsConfiguration() &&

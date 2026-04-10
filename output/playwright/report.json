@@ -1,0 +1,220 @@
+{
+  "base": "http://127.0.0.1:44635",
+  "pages": [
+    {
+      "name": "home-desktop",
+      "url": "http://127.0.0.1:44635/",
+      "viewport": {
+        "width": 1440,
+        "height": 1200
+      },
+      "title": "Northline Growth Systems",
+      "metaDescription": "Northline helps plumbers, HVAC teams, electricians, roofers, cleaners, and other small service businesses fix weak homepages, missed calls, quote-request drop-off, and after-hours follow-up so more leads turn into booked jobs.",
+      "h1": "Book more jobs without losing leads to weak pages and slow follow-up.",
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "What you get",
+        "What gets fixed",
+        "How it works",
+        "Pricing",
+        "Get leak review",
+        "Book a live review",
+        "Get leak review",
+        "See if the pilot fits",
+        "Reserve Pilot Launch",
+        "Start with the leak review",
+        "book the live review",
+        "Get leak review",
+        "Book live review",
+        "Live Review",
+        "Leak Review",
+        "Privacy",
+        "Thank you"
+      ],
+      "formLabels": [],
+      "overflow": false,
+      "sectionIds": [
+        "services",
+        "delivery",
+        "workflow",
+        "pricing"
+      ]
+    },
+    {
+      "name": "home-mobile",
+      "url": "http://127.0.0.1:44635/",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "title": "Northline Growth Systems",
+      "metaDescription": "Northline helps plumbers, HVAC teams, electricians, roofers, cleaners, and other small service businesses fix weak homepages, missed calls, quote-request drop-off, and after-hours follow-up so more leads turn into booked jobs.",
+      "h1": "Book more jobs without losing leads to weak pages and slow follow-up.",
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "What you get",
+        "What gets fixed",
+        "How it works",
+        "Pricing",
+        "Get leak review",
+        "Book a live review",
+        "Get leak review",
+        "See if the pilot fits",
+        "Reserve Pilot Launch",
+        "Start with the leak review",
+        "book the live review",
+        "Get leak review",
+        "Book live review",
+        "Live Review",
+        "Leak Review",
+        "Privacy",
+        "Thank you"
+      ],
+      "formLabels": [],
+      "overflow": false,
+      "sectionIds": [
+        "services",
+        "delivery",
+        "workflow",
+        "pricing"
+      ]
+    },
+    {
+      "name": "book-desktop",
+      "url": "http://127.0.0.1:44635/book.html",
+      "viewport": {
+        "width": 1440,
+        "height": 1200
+      },
+      "title": "Northline Growth Systems Live Review",
+      "metaDescription": "Book a short live review with Northline Growth Systems.",
+      "h1": "Book a 15-minute live review if you want Northline to point at the leak with you.",
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Leak Review",
+        "Privacy",
+        "Need the async leak review instead?",
+        "Request Live Review"
+      ],
+      "formLabels": [
+        "Business name",
+        "Your name",
+        "Email",
+        "Phone",
+        "Page to review",
+        "Preferred review window",
+        "What should Northline look at first?"
+      ],
+      "overflow": false,
+      "sectionIds": []
+    },
+    {
+      "name": "book-mobile",
+      "url": "http://127.0.0.1:44635/book.html",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "title": "Northline Growth Systems Live Review",
+      "metaDescription": "Book a short live review with Northline Growth Systems.",
+      "h1": "Book a 15-minute live review if you want Northline to point at the leak with you.",
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Leak Review",
+        "Privacy",
+        "Need the async leak review instead?",
+        "Request Live Review"
+      ],
+      "formLabels": [
+        "Business name",
+        "Your name",
+        "Email",
+        "Phone",
+        "Page to review",
+        "Preferred review window",
+        "What should Northline look at first?"
+      ],
+      "overflow": false,
+      "sectionIds": []
+    },
+    {
+      "name": "intake-desktop",
+      "url": "http://127.0.0.1:44635/intake.html",
+      "viewport": {
+        "width": 1440,
+        "height": 1200
+      },
+      "title": "Northline Growth Systems Leak Review",
+      "metaDescription": "Send the page and the main leak to Northline Growth Systems.",
+      "h1": "Send the page and the main leak. Northline will tell you what to fix first.",
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Live Review",
+        "Privacy",
+        "Need a live review instead?",
+        "Send Leak Review"
+      ],
+      "formLabels": [
+        "Business name",
+        "Your name",
+        "Email",
+        "Phone",
+        "Current page or website",
+        "Main service area",
+        "Best jobs to book more of",
+        "What looks broken right now?"
+      ],
+      "overflow": false,
+      "sectionIds": []
+    },
+    {
+      "name": "intake-mobile",
+      "url": "http://127.0.0.1:44635/intake.html",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "title": "Northline Growth Systems Leak Review",
+      "metaDescription": "Send the page and the main leak to Northline Growth Systems.",
+      "h1": "Send the page and the main leak. Northline will tell you what to fix first.",
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Live Review",
+        "Privacy",
+        "Need a live review instead?",
+        "Send Leak Review"
+      ],
+      "formLabels": [
+        "Business name",
+        "Your name",
+        "Email",
+        "Phone",
+        "Current page or website",
+        "Main service area",
+        "Best jobs to book more of",
+        "What looks broken right now?"
+      ],
+      "overflow": false,
+      "sectionIds": []
+    }
+  ],
+  "storedSubmission": {
+    "id": "northline-intake-1775446371149-signal-plumbing",
+    "receivedAt": "2026-04-06T03:32:51.149Z",
+    "remoteAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36",
+    "ownerName": "Chris",
+    "businessName": "Signal Plumbing",
+    "email": "dispatch@signalplumbing.com",
+    "phone": "(330) 555-0101",
+    "serviceArea": "Akron, OH",
+    "primaryServices": "Emergency plumbing repair and water heater installs",
+    "website": "https://signalplumbing.com",
+    "biggestLeak": "The homepage buries the CTA and nobody follows up fast after missed calls.",
+    "source": "northline-website-intake"
+  }
+}

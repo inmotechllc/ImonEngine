@@ -1,0 +1,219 @@
+{
+  "generatedAt": "2026-04-05T15:08:06.223Z",
+  "baseUrl": "https://northlinegrowthsystems.com",
+  "outputDir": "/root/ImonEngine/output/playwright/Northline",
+  "pages": [
+    {
+      "name": "home-desktop",
+      "url": "https://northlinegrowthsystems.com/",
+      "viewport": {
+        "width": 1440,
+        "height": 1200
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems",
+      "h1": "Book more jobs from the calls and traffic you already get.",
+      "metaDescription": "Northline helps plumbing, HVAC, electrical, roofing, and cleaning teams fix weak homepages, missed calls, quote requests, and after-hours follow-up so more leads turn into booked jobs.",
+      "sectionIds": [
+        "proof",
+        "client-proof",
+        "services",
+        "delivery",
+        "workflow",
+        "pricing"
+      ],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Proof",
+        "Services",
+        "Workflow",
+        "Live Review",
+        "Leak Review",
+        "Get leak review",
+        "Book a live review",
+        "Start with leak review",
+        "Confirm pilot fit",
+        "Book growth review",
+        "Request Lead Generation",
+        "Reserve Pilot Launch",
+        "Start Growth System",
+        "Start with the leak review",
+        "book the live review",
+        "Get leak review",
+        "Book live review",
+        "Facebook",
+        "Instagram"
+      ]
+    },
+    {
+      "name": "home-mobile",
+      "url": "https://northlinegrowthsystems.com/",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems",
+      "h1": "Book more jobs from the calls and traffic you already get.",
+      "metaDescription": "Northline helps plumbing, HVAC, electrical, roofing, and cleaning teams fix weak homepages, missed calls, quote requests, and after-hours follow-up so more leads turn into booked jobs.",
+      "sectionIds": [
+        "proof",
+        "client-proof",
+        "services",
+        "delivery",
+        "workflow",
+        "pricing"
+      ],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Proof",
+        "Services",
+        "Workflow",
+        "Live Review",
+        "Leak Review",
+        "Get leak review",
+        "Book a live review",
+        "Start with leak review",
+        "Confirm pilot fit",
+        "Book growth review",
+        "Request Lead Generation",
+        "Reserve Pilot Launch",
+        "Start Growth System",
+        "Start with the leak review",
+        "book the live review",
+        "Get leak review",
+        "Book live review",
+        "Facebook",
+        "Instagram"
+      ]
+    },
+    {
+      "name": "book-desktop",
+      "url": "https://northlinegrowthsystems.com/book.html",
+      "viewport": {
+        "width": 1440,
+        "height": 1200
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems Live Review",
+      "h1": "Book a 15-minute live review if you want Northline to point at the leak with you.",
+      "metaDescription": "Book a short live review with Northline Growth Systems.",
+      "sectionIds": [],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Leak Review",
+        "Privacy",
+        "Need the async leak review instead?",
+        "Request Live Review"
+      ]
+    },
+    {
+      "name": "book-mobile",
+      "url": "https://northlinegrowthsystems.com/book.html",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems Live Review",
+      "h1": "Book a 15-minute live review if you want Northline to point at the leak with you.",
+      "metaDescription": "Book a short live review with Northline Growth Systems.",
+      "sectionIds": [],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Leak Review",
+        "Privacy",
+        "Need the async leak review instead?",
+        "Request Live Review"
+      ]
+    },
+    {
+      "name": "intake-desktop",
+      "url": "https://northlinegrowthsystems.com/intake.html",
+      "viewport": {
+        "width": 1440,
+        "height": 1400
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems Leak Review",
+      "h1": "Send the page and the main leak. Northline will tell you what to fix first.",
+      "metaDescription": "Send the page and the main leak to Northline Growth Systems.",
+      "sectionIds": [],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Live Review",
+        "Privacy",
+        "Need a live review instead?",
+        "Send Leak Review"
+      ]
+    },
+    {
+      "name": "intake-mobile",
+      "url": "https://northlinegrowthsystems.com/intake.html",
+      "viewport": {
+        "width": 390,
+        "height": 980
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems Leak Review",
+      "h1": "Send the page and the main leak. Northline will tell you what to fix first.",
+      "metaDescription": "Send the page and the main leak to Northline Growth Systems.",
+      "sectionIds": [],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Live Review",
+        "Privacy",
+        "Need a live review instead?",
+        "Send Leak Review"
+      ]
+    },
+    {
+      "name": "validation-desktop",
+      "url": "https://northlinegrowthsystems.com/validation.html",
+      "viewport": {
+        "width": 1440,
+        "height": 1400
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems Validation",
+      "h1": "Run one low-risk Northline purchase before you send real traffic.",
+      "metaDescription": "Temporary validation page for Northline Growth Systems.",
+      "sectionIds": [],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Intake",
+        "Book",
+        "Create Validation Intake",
+        "Continue to $1 checkout",
+        "Confirm paid handoff"
+      ]
+    },
+    {
+      "name": "validation-mobile",
+      "url": "https://northlinegrowthsystems.com/validation.html",
+      "viewport": {
+        "width": 390,
+        "height": 980
+      },
+      "statusCode": 200,
+      "title": "Northline Growth Systems Validation",
+      "h1": "Run one low-risk Northline purchase before you send real traffic.",
+      "metaDescription": "Temporary validation page for Northline Growth Systems.",
+      "sectionIds": [],
+      "ctas": [
+        "NorthlineGrowth Systems",
+        "Home",
+        "Intake",
+        "Book",
+        "Create Validation Intake",
+        "Continue to $1 checkout",
+        "Confirm paid handoff"
+      ]
+    }
+  ]
+}

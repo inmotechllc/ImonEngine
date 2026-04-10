@@ -1,0 +1,28 @@
+{
+  "businessId": "auto-funding-agency",
+  "provenance": "internal_manual",
+  "proofEligible": false,
+  "clientName": "Harbor Ridge Heating",
+  "niche": "HVAC",
+  "geo": "Queens, NY",
+  "primaryPhone": "(347) 555-0142",
+  "primaryEmail": "ops@harborridgeheating.com",
+  "offerId": "founding-offer",
+  "billingStatus": "deposit_pending",
+  "formEndpoint": "https://forms.example.com/harbor-ridge-heating",
+  "assets": {
+    "logoText": "Harbor Ridge Heating",
+    "brandColors": ["#11243A", "#C96A1B", "#F6F1E8"],
+    "heroImageHint": "HVAC service van outside a rowhouse during winter",
+    "services": ["Furnace repair", "Boiler replacement", "Emergency heating service"],
+    "testimonials": ["Replace with real operator language only if this record is deliberately reclassified."],
+    "reviews": ["Leave blank or use internal review copy only while this remains a rehearsal brand."]
+  },
+  "intakeNotes": [
+    "Primary service line to pressure-test first",
+    "Target boroughs or ZIP codes for the rehearsal run",
+    "Expected missed-call or intake-routing failure to test",
+    "Any ad, GBP, or seasonal offer context to mirror"
+  ],
+  "nextAction": "Run the Northline rehearsal through preview, QA, proof-bundle packaging, and handoff without reclassifying it as proof"
+}

@@ -10,6 +10,12 @@ import { ControlRoomSnapshotService } from "./control-room-snapshot.js";
 import { OfficeDashboardService } from "./office-dashboard.js";
 import { FileStore } from "../storage/store.js";
 import { OfficeChatService } from "./office-chat.js";
+import { ClipBaitersStudioService } from "./clipbaiters-studio.js";
+
+const CLIPBAITERS_BUSINESS_ID = "clipbaiters-viral-moments";
+const CLIPBAITERS_BUSINESS_APPROVAL_ID = `approval-${CLIPBAITERS_BUSINESS_ID}`;
+const CLIPBAITERS_LANE_POSTURE_APPROVAL_ID =
+  `approval-clipbaiters-lane-posture-${CLIPBAITERS_BUSINESS_ID}`;
 
 type RouteMatch =
   | { type: "home" }
@@ -35,6 +41,7 @@ type RouteMatch =
   | { type: "command-activate-business" }
   | { type: "command-pause-business" }
   | { type: "command-route-task" }
+  | { type: "command-resolve-approval" }
   | { type: "missing" };
 
 function html(res: ServerResponse, statusCode: number, body: string): void {
@@ -109,6 +116,7 @@ function routePath(pathname: string): RouteMatch {
   if (pathname === "/api/control-room/commands/activate-business") return { type: "command-activate-business" };
   if (pathname === "/api/control-room/commands/pause-business") return { type: "command-pause-business" };
   if (pathname === "/api/control-room/commands/route-task") return { type: "command-route-task" };
+  if (pathname === "/api/control-room/commands/resolve-approval") return { type: "command-resolve-approval" };
 
   const businessMatch = pathname.match(/^\/business\/([^/]+)$/);
   if (businessMatch?.[1]) {
@@ -191,6 +199,8 @@ export class ControlRoomServer {
 
   private readonly officeChat: OfficeChatService;
 
+  private readonly clipbaitersStudio: ClipBaitersStudioService;
+
   private server?: Server;
 
   constructor(
@@ -202,6 +212,7 @@ export class ControlRoomServer {
     this.imonEngine = new ImonEngineAgent(config, store);
     this.officeDashboard = new OfficeDashboardService(config, store);
     this.officeChat = new OfficeChatService(config, store);
+    this.clipbaitersStudio = new ClipBaitersStudioService(config, store);
   }
 
   async listen(): Promise<{ host: string; port: number }> {
@@ -506,9 +517,79 @@ export class ControlRoomServer {
         json(res, 200, { status: "ok", routed });
         return;
       }
+      case "command-resolve-approval": {
+        if (req.method !== "POST") {
+          json(res, 405, { status: "method_not_allowed" });
+          return;
+        }
+        const body = await readJsonBody<{
+          approvalId?: string;
+          approvedBy?: string;
+          note?: string;
+        }>(req);
+        const { approvalId, approvedBy, note } = body;
+        if (!approvalId) {
+          json(res, 400, { status: "error", message: "Missing approvalId." });
+          return;
+        }
+        json(res, 200, await this.resolveSupportedApproval({ approvalId, approvedBy, note }));
+        return;
+      }
       default: {
         json(res, 404, { status: "missing" });
       }
+    }
+  }
+
+  private async resolveSupportedApproval(body: {
+    approvalId: string;
+    approvedBy?: string;
+    note?: string;
+  }): Promise<unknown> {
+    const approval = (await this.store.getApprovals()).find(
+      (candidate) => candidate.id === body.approvalId
+    );
+    if (!approval) {
+      throw new Error(`Approval ${body.approvalId} was not found.`);
+    }
+
+    switch (approval.id) {
+      case CLIPBAITERS_BUSINESS_APPROVAL_ID: {
+        const result = await this.clipbaitersStudio.approveRightsReviewPolicy({
+          businessId: CLIPBAITERS_BUSINESS_ID,
+          approvedBy: body.approvedBy,
+          note: body.note
+        });
+        const report = await this.imonEngine.sync();
+        return {
+          status: "ok",
+          approvalId: approval.id,
+          handledBy: "clipbaiters-rights-policy",
+          message: "Recorded the ClipBaiters rights and fair-use approval.",
+          plan: result.plan,
+          report
+        };
+      }
+      case CLIPBAITERS_LANE_POSTURE_APPROVAL_ID: {
+        const result = await this.clipbaitersStudio.approveLanePosturePolicy({
+          businessId: CLIPBAITERS_BUSINESS_ID,
+          approvedBy: body.approvedBy,
+          note: body.note
+        });
+        const report = await this.imonEngine.sync();
+        return {
+          status: "ok",
+          approvalId: approval.id,
+          handledBy: "clipbaiters-lane-posture",
+          message: "Recorded the ClipBaiters lane posture approval.",
+          plan: result.plan,
+          report
+        };
+      }
+      default:
+        throw new Error(
+          `Approval ${approval.id} is not directly actionable from the control room yet. ${approval.ownerInstructions}`
+        );
     }
   }
 

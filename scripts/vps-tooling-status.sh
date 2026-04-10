@@ -26,8 +26,21 @@ PY
 docker_version="$(command_output docker docker version --format '{{.Server.Version}}')"
 compose_version="$(command_output docker docker compose version)"
 chrome_version="$(command_output google-chrome google-chrome --version)"
+ffmpeg_version="$(command_output ffmpeg ffmpeg -version)"
+yt_dlp_version="$(command_output yt-dlp yt-dlp --version)"
 playwright_version="$(command_output playwright playwright --version)"
 codex_version="$(command_output codex codex --version)"
+whisper_version=""
+if command -v python3 >/dev/null 2>&1; then
+  whisper_version="$(python3 - <<'PY'
+try:
+    import whisper
+    print(getattr(whisper, "__version__", "installed"))
+except Exception:
+    print("")
+PY
+)"
+fi
 xvfb_running="false"
 if pgrep -f "Xvfb :${DISPLAY_NUMBER}" >/dev/null 2>&1; then
   xvfb_running="true"
@@ -65,6 +78,9 @@ printf '{\n'
 printf '  "dockerVersion": %s,\n' "$(json_escape "$docker_version")"
 printf '  "composeVersion": %s,\n' "$(json_escape "$compose_version")"
 printf '  "chromeVersion": %s,\n' "$(json_escape "$chrome_version")"
+printf '  "ffmpegVersion": %s,\n' "$(json_escape "$ffmpeg_version")"
+printf '  "ytDlpVersion": %s,\n' "$(json_escape "$yt_dlp_version")"
+printf '  "whisperVersion": %s,\n' "$(json_escape "$whisper_version")"
 printf '  "playwrightVersion": %s,\n' "$(json_escape "$playwright_version")"
 printf '  "codexVersion": %s,\n' "$(json_escape "$codex_version")"
 printf '  "xvfbRunning": %s,\n' "$xvfb_running"

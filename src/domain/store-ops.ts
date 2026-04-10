@@ -1,6 +1,12 @@
 import type { DigitalAssetType } from "./digital-assets.js";
 
-export type GrowthChannel = "gumroad_update" | "facebook_page" | "x" | "linkedin" | "pinterest";
+export type GrowthChannel =
+  | "gumroad_update"
+  | "facebook_page"
+  | "instagram_account"
+  | "x"
+  | "linkedin"
+  | "pinterest";
 
 export type GrowthWorkItemStatus = "planned" | "queued" | "posted" | "skipped";
 
@@ -12,6 +18,7 @@ export interface GrowthWorkItem {
   title: string;
   caption: string;
   assetPath: string;
+  assetUrl?: string;
   destinationUrl: string;
   scheduledFor: string;
   status: GrowthWorkItemStatus;

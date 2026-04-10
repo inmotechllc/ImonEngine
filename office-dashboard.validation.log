@@ -1,0 +1,9 @@
+
+> auto-funding@0.1.0 dev
+> tsx src/index.ts office-dashboard
+
+[info] Office dashboard refreshed at /root/ImonEngine/runtime/ops/control-room/index.html.
+{
+  "htmlPath": "/root/ImonEngine/runtime/ops/control-room/index.html",
+  "dataPath": "/root/ImonEngine/runtime/ops/control-room/data.json"
+}

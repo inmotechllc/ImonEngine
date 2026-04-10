@@ -1,13 +1,16 @@
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import nodemailer from "nodemailer";
 import type { AppConfig } from "../config.js";
+import type { RetentionReport } from "../domain/contracts.js";
 import { readJsonFile, writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
+import type { NorthlineValidationRunResult } from "./northline-validation.js";
 
-type NorthlineIntakePayload = {
+export type NorthlineIntakePayload = {
   ownerName?: string;
   businessName?: string;
   email?: string;
@@ -23,19 +26,119 @@ type NorthlineIntakePayload = {
   source?: string;
 };
 
-type NorthlineIntakeSubmission = NorthlineIntakePayload & {
+export type NorthlineIntakeSubmission = NorthlineIntakePayload & {
   id: string;
   receivedAt: string;
   remoteAddress?: string;
   userAgent?: string;
 };
 
-type NorthlineIntakeStore =
+export type NorthlineIntakeStore =
   | NorthlineIntakeSubmission[]
   | {
       submissions: NorthlineIntakeSubmission[];
       lastReceivedAt?: string;
     };
+
+type NorthlineSiteServerOptions = {
+  onSubmissionStored?: (submission: NorthlineIntakeSubmission) => Promise<void>;
+  onProposalPaymentCompleted?: (request: {
+    clientId: string;
+    status: "paid" | "retainer_active";
+    formEndpoint?: string;
+    stripeContext: {
+      customerEmail?: string;
+      eventId: string;
+      referenceId?: string;
+      sessionId?: string;
+    };
+  }) => Promise<{
+    status: "success" | "blocked";
+    summary: string;
+    businessId: string;
+    clientId: string;
+    clientName: string;
+    billingStatus: string;
+    previewPath?: string;
+    siteStatus: string;
+    qaStatus: string;
+    handoffPackage?: {
+      clientId: string;
+      createdAt: string;
+      reportPath: string;
+      readmePath: string;
+    };
+    retentionReport?: {
+      clientId: string;
+      createdAt: string;
+      upsellCandidate: string;
+      upgradeOffer?: RetentionReport["upgradeOffer"];
+    };
+    warnings: string[];
+    artifacts: {
+      autonomySummaryPath: string;
+      previewPath?: string;
+      handoffPackagePath?: string;
+      productionUrl?: string;
+    };
+  }>;
+  onValidationConfirmed?: (request: {
+    submissionId: string;
+    status: "paid" | "retainer_active";
+    formEndpoint?: string;
+  }) => Promise<NorthlineValidationRunResult>;
+};
+
+type NorthlineValidationConfirmationRecord = {
+  submissionId: string;
+  token: string;
+  createdAt: string;
+  lastConfirmedAt?: string;
+  lastStripeCompletedAt?: string;
+  lastStripeCustomerEmail?: string;
+  lastStripeEventId?: string;
+  lastStripeLivemode?: boolean;
+  lastStripeReferenceId?: string;
+  lastStripeSessionId?: string;
+  lastResult?: NorthlineValidationRunResult;
+};
+
+type NorthlineValidationConfirmationStore = {
+  confirmations: NorthlineValidationConfirmationRecord[];
+  processedStripeEventIds?: string[];
+  updatedAt?: string;
+};
+
+type StripeCheckoutSession = {
+  client_reference_id?: string | null;
+  customer_details?: {
+    email?: string | null;
+  } | null;
+  id?: string;
+  livemode?: boolean;
+  metadata?: Record<string, string>;
+  payment_status?: string | null;
+  status?: string | null;
+};
+
+type StripeWebhookEvent = {
+  created?: number;
+  data?: {
+    object?: StripeCheckoutSession;
+  };
+  id?: string;
+  livemode?: boolean;
+  type?: string;
+};
+
+const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
+const MAX_PROCESSED_STRIPE_EVENT_IDS = 250;
+
+type NorthlineProposalPaymentMatch = {
+  clientId: string;
+  status: "paid" | "retainer_active";
+  formEndpoint?: string;
+};
 
 function json(res: ServerResponse, statusCode: number, body: unknown): void {
   const serialized = `${JSON.stringify(body, null, 2)}\n`;
@@ -87,6 +190,26 @@ function normalizeField(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function normalizeFirst(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = normalizeField(record[key]);
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function normalizeFirstParam(params: URLSearchParams, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = normalizeField(params.get(key));
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function contentTypeFor(filePath: string): string {
   switch (path.extname(filePath).toLowerCase()) {
     case ".html":
@@ -112,13 +235,141 @@ function intakeId(seed: string): string {
   return `northline-intake-${Date.now()}-${slug}`;
 }
 
+function validationConfirmationToken(): string {
+  return randomBytes(24).toString("hex");
+}
+
+function validationStatus(value: string | undefined): "paid" | "retainer_active" | undefined {
+  const normalized = normalizeField(value);
+  if (normalized === "paid" || normalized === "retainer_active") {
+    return normalized;
+  }
+  return undefined;
+}
+
+function isValidationSubmission(submission: NorthlineIntakeSubmission): boolean {
+  return normalizeField(submission.source) === "northline-validation-page";
+}
+
+function isoFromUnixTimestamp(value: number | undefined): string | undefined {
+  if (typeof value !== "number") {
+    return undefined;
+  }
+  return new Date(value * 1000).toISOString();
+}
+
+function keepRecentEventIds(values: string[], nextValue?: string): string[] {
+  if (!nextValue) {
+    return values.slice(-MAX_PROCESSED_STRIPE_EVENT_IDS);
+  }
+  return [...values.filter((value) => value !== nextValue), nextValue].slice(
+    -MAX_PROCESSED_STRIPE_EVENT_IDS
+  );
+}
+
+function safeCompareHex(left: string, right: string): boolean {
+  try {
+    const leftBuffer = Buffer.from(left, "hex");
+    const rightBuffer = Buffer.from(right, "hex");
+    if (leftBuffer.length !== rightBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(leftBuffer, rightBuffer);
+  } catch {
+    return false;
+  }
+}
+
+function stripeSignatureMatches(secret: string, rawBody: string, signatureHeader: string): boolean {
+  const parsed = signatureHeader
+    .split(",")
+    .map((part) => part.trim())
+    .reduce<Record<string, string[]>>((accumulator, part) => {
+      const [key, value] = part.split("=", 2);
+      if (!key || !value) {
+        return accumulator;
+      }
+      accumulator[key] = [...(accumulator[key] ?? []), value];
+      return accumulator;
+    }, {});
+  const timestamp = Number(parsed.t?.[0]);
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+  if (Math.abs(Date.now() / 1000 - timestamp) > STRIPE_WEBHOOK_TOLERANCE_SECONDS) {
+    return false;
+  }
+
+  const expected = createHmac("sha256", secret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest("hex");
+  return (parsed.v1 ?? []).some((candidate) => safeCompareHex(expected, candidate));
+}
+
+function validationSubmissionIdFromReference(referenceId: string | undefined): string | undefined {
+  const normalized = normalizeField(referenceId);
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.startsWith("validation:")) {
+    const submissionId = normalized.slice("validation:".length).trim();
+    return submissionId || undefined;
+  }
+  return normalized;
+}
+
+function proposalPaymentReference(referenceId: string | undefined): {
+  clientId: string;
+  status?: "paid" | "retainer_active";
+} | undefined {
+  const normalized = normalizeField(referenceId);
+  if (!normalized || normalized.startsWith("validation:")) {
+    return undefined;
+  }
+
+  const parts = normalized.split(":").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) {
+    return undefined;
+  }
+
+  const prefix = parts[0]?.toLowerCase();
+  if (!prefix || !["client", "proposal", "northline-client"].includes(prefix)) {
+    return undefined;
+  }
+
+  const clientId = parts[1];
+  if (!clientId) {
+    return undefined;
+  }
+
+  return {
+    clientId,
+    status: validationStatus(parts[2])
+  };
+}
+
 export class NorthlineSiteServer {
   private server?: Server;
 
   private readonly siteRoot: string;
 
-  constructor(private readonly config: AppConfig) {
+  private readonly validationConfirmationStorePath: string;
+
+  private automationQueue: Promise<void> = Promise.resolve();
+
+  private readonly activeValidationSubmissionIds = new Set<string>();
+
+  private readonly activeProposalPaymentClientIds = new Set<string>();
+
+  constructor(
+    private readonly config: AppConfig,
+    private readonly options: NorthlineSiteServerOptions = {}
+  ) {
     this.siteRoot = path.join(config.outputDir, "agency-site");
+    this.validationConfirmationStorePath = path.join(
+      config.stateDir,
+      "northlineValidationConfirmations.json"
+    );
   }
 
   async listen(): Promise<{ host: string; port: number }> {
@@ -149,6 +400,7 @@ export class NorthlineSiteServer {
 
   async close(): Promise<void> {
     if (!this.server) {
+      await this.waitForAutomation();
       return;
     }
     const activeServer = this.server;
@@ -163,7 +415,12 @@ export class NorthlineSiteServer {
         resolve();
       });
     });
+    await this.waitForAutomation();
     this.server = undefined;
+  }
+
+  async waitForAutomation(): Promise<void> {
+    await this.automationQueue.catch(() => undefined);
   }
 
   async getHealth(): Promise<{
@@ -202,6 +459,33 @@ export class NorthlineSiteServer {
       return;
     }
 
+    if (requestUrl.pathname === "/api/northline-validation-confirm") {
+      if (req.method !== "POST") {
+        json(res, 405, { status: "method_not_allowed" });
+        return;
+      }
+      await this.handleValidationConfirmation(req, res);
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/northline-validation-status") {
+      if (req.method !== "GET") {
+        json(res, 405, { status: "method_not_allowed" });
+        return;
+      }
+      await this.handleValidationStatus(requestUrl, res);
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/northline-stripe-webhook") {
+      if (req.method !== "POST") {
+        json(res, 405, { status: "method_not_allowed" });
+        return;
+      }
+      await this.handleStripeWebhook(req, res);
+      return;
+    }
+
     await this.serveStatic(requestUrl.pathname, res);
   }
 
@@ -216,6 +500,8 @@ export class NorthlineSiteServer {
     };
     const nextStore = await this.appendSubmission(submission);
     await this.notifySubmission(submission);
+    const validationConfirmation = await this.issueValidationConfirmation(submission);
+    this.queueSubmissionAutomation(submission);
 
     const prefersJson =
       firstHeaderValue(req.headers.accept)?.includes("application/json") === true ||
@@ -226,12 +512,363 @@ export class NorthlineSiteServer {
         status: "ok",
         submissionId: submission.id,
         storedCount: nextStore.submissions.length,
-        redirectTo: "/thank-you.html"
+        redirectTo: "/thank-you.html",
+        validationConfirmation: validationConfirmation
+          ? {
+              autoHandoffEnabled: Boolean(this.config.northlineStripe.webhookSecret),
+              checkoutReference: `validation:${submission.id}`,
+              confirmationToken: validationConfirmation.token,
+              endpoint: "/api/northline-validation-confirm",
+              statusEndpoint: "/api/northline-validation-status",
+              fallbackCommand: `npm run dev -- northline-validation-run --submission ${submission.id}`
+            }
+          : undefined
       });
       return;
     }
 
     redirect(res, "/thank-you.html");
+  }
+
+  private queueSubmissionAutomation(submission: NorthlineIntakeSubmission): void {
+    if (!this.options.onSubmissionStored) {
+      return;
+    }
+
+    this.automationQueue = this.automationQueue
+      .catch(() => undefined)
+      .then(() => this.options.onSubmissionStored?.(submission))
+      .catch((error) => {
+        const message = error instanceof Error ? error.stack ?? error.message : String(error);
+        console.error(
+          `[NorthlineSiteServer] Immediate automation failed for ${submission.id}: ${message}`
+        );
+      });
+  }
+
+  private async handleValidationConfirmation(
+    req: IncomingMessage,
+    res: ServerResponse
+  ): Promise<void> {
+    if (!this.options.onValidationConfirmed) {
+      json(res, 503, {
+        status: "unavailable",
+        message: "Hosted Northline validation handoff is not configured on this server."
+      });
+      return;
+    }
+
+    const parsed = await this.parseValidationConfirmation(req);
+    if (!parsed.submissionId || !parsed.confirmationToken) {
+      json(res, 400, {
+        status: "invalid_request",
+        message: "submissionId and confirmationToken are required."
+      });
+      return;
+    }
+    if (parsed.statusRaw && !parsed.status) {
+      json(res, 400, {
+        status: "invalid_request",
+        message: "status must be paid or retainer_active when it is provided."
+      });
+      return;
+    }
+
+    const submission = await this.findSubmission(parsed.submissionId);
+    if (!submission) {
+      json(res, 404, {
+        status: "not_found",
+        message: `Validation submission ${parsed.submissionId} was not found.`
+      });
+      return;
+    }
+    if (!isValidationSubmission(submission)) {
+      json(res, 403, {
+        status: "forbidden",
+        message: "Hosted validation handoff is only available for validation-page submissions."
+      });
+      return;
+    }
+
+    const confirmation = await this.findValidationConfirmation(parsed.submissionId);
+    if (!confirmation || confirmation.token !== parsed.confirmationToken) {
+      json(res, 403, {
+        status: "forbidden",
+        message: "Validation confirmation token is missing or invalid."
+      });
+      return;
+    }
+
+    if (this.activeValidationSubmissionIds.has(parsed.submissionId)) {
+      json(res, 409, {
+        status: "already_running",
+        message: `Validation handoff for ${parsed.submissionId} is already running.`
+      });
+      return;
+    }
+
+    try {
+      const result = await this.runValidationConfirmation({
+        confirmation,
+        formEndpoint: parsed.formEndpoint,
+        status: parsed.status ?? "retainer_active",
+        submissionId: parsed.submissionId
+      });
+      json(res, 200, {
+        status: "ok",
+        submissionId: parsed.submissionId,
+        result
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Hosted validation handoff failed.";
+      json(res, 500, {
+        status: "error",
+        message
+      });
+    }
+  }
+
+  private async handleValidationStatus(
+    requestUrl: URL,
+    res: ServerResponse
+  ): Promise<void> {
+    const submissionId = normalizeFirstParam(requestUrl.searchParams, ["submissionId"]);
+    const confirmationToken = normalizeFirstParam(requestUrl.searchParams, ["confirmationToken", "token"]);
+    if (!submissionId || !confirmationToken) {
+      json(res, 400, {
+        status: "invalid_request",
+        message: "submissionId and confirmationToken are required."
+      });
+      return;
+    }
+
+    const confirmation = await this.findValidationConfirmation(submissionId);
+    if (!confirmation || confirmation.token !== confirmationToken) {
+      json(res, 403, {
+        status: "forbidden",
+        message: "Validation confirmation token is missing or invalid."
+      });
+      return;
+    }
+
+    json(res, 200, {
+      status: "ok",
+      submissionId,
+      autoHandoffEnabled: Boolean(this.config.northlineStripe.webhookSecret),
+      confirmation: {
+        createdAt: confirmation.createdAt,
+        lastConfirmedAt: confirmation.lastConfirmedAt,
+        lastResult: confirmation.lastResult,
+        lastStripeCompletedAt: confirmation.lastStripeCompletedAt,
+        lastStripeCustomerEmail: confirmation.lastStripeCustomerEmail,
+        lastStripeEventId: confirmation.lastStripeEventId,
+        lastStripeLivemode: confirmation.lastStripeLivemode,
+        lastStripeReferenceId: confirmation.lastStripeReferenceId,
+        lastStripeSessionId: confirmation.lastStripeSessionId
+      }
+    });
+  }
+
+  private async handleStripeWebhook(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const webhookSecret = this.config.northlineStripe.webhookSecret;
+    if (!webhookSecret) {
+      json(res, 503, {
+        status: "unavailable",
+        message: "Stripe webhook handling is not configured on this server."
+      });
+      return;
+    }
+
+    const signatureHeader = firstHeaderValue(req.headers["stripe-signature"]);
+    if (!signatureHeader) {
+      json(res, 400, {
+        status: "invalid_request",
+        message: "Missing Stripe-Signature header."
+      });
+      return;
+    }
+
+    const rawBody = await readRequestBody(req);
+    if (!stripeSignatureMatches(webhookSecret, rawBody, signatureHeader)) {
+      json(res, 400, {
+        status: "invalid_signature",
+        message: "Stripe signature verification failed."
+      });
+      return;
+    }
+
+    let event: StripeWebhookEvent;
+    try {
+      event = JSON.parse(rawBody || "{}") as StripeWebhookEvent;
+    } catch {
+      json(res, 400, {
+        status: "invalid_request",
+        message: "Stripe webhook body must be valid JSON."
+      });
+      return;
+    }
+    const eventId = normalizeField(event.id);
+    if (!eventId) {
+      json(res, 400, {
+        status: "invalid_request",
+        message: "Stripe webhook event is missing an id."
+      });
+      return;
+    }
+
+    const store = await this.readValidationConfirmationStore();
+    if ((store.processedStripeEventIds ?? []).includes(eventId)) {
+      json(res, 200, {
+        status: "duplicate",
+        eventId
+      });
+      return;
+    }
+
+    if (event.type !== "checkout.session.completed") {
+      await this.saveProcessedStripeEventId(eventId);
+      json(res, 200, {
+        status: "ignored",
+        eventId,
+        eventType: event.type ?? "unknown"
+      });
+      return;
+    }
+
+    const session = event.data?.object;
+    if (!session) {
+      json(res, 400, {
+        status: "invalid_request",
+        message: "Stripe webhook event is missing a checkout session payload."
+      });
+      return;
+    }
+
+    if (normalizeField(session.payment_status) && normalizeField(session.payment_status) !== "paid") {
+      await this.saveProcessedStripeEventId(eventId);
+      json(res, 200, {
+        status: "ignored",
+        eventId,
+        reason: `payment_status=${session.payment_status}`
+      });
+      return;
+    }
+
+    const confirmationLookup = await this.findValidationConfirmationForCheckout(session);
+    if (confirmationLookup) {
+      const stripeContext = {
+        completedAt: isoFromUnixTimestamp(event.created),
+        customerEmail: normalizeField(session.customer_details?.email ?? undefined),
+        eventId,
+        livemode: typeof event.livemode === "boolean" ? event.livemode : session.livemode,
+        referenceId: normalizeField(session.client_reference_id ?? undefined),
+        sessionId: normalizeField(session.id)
+      };
+
+      if (this.activeValidationSubmissionIds.has(confirmationLookup.submissionId)) {
+        await this.saveValidationConfirmation(
+          {
+            ...confirmationLookup.confirmation,
+            lastStripeCompletedAt: stripeContext.completedAt,
+            lastStripeCustomerEmail: stripeContext.customerEmail,
+            lastStripeEventId: stripeContext.eventId,
+            lastStripeLivemode: stripeContext.livemode,
+            lastStripeReferenceId: stripeContext.referenceId,
+            lastStripeSessionId: stripeContext.sessionId
+          },
+          { processedStripeEventId: eventId }
+        );
+        json(res, 200, {
+          status: "already_running",
+          eventId,
+          submissionId: confirmationLookup.submissionId
+        });
+        return;
+      }
+
+      try {
+        const result = await this.runValidationConfirmation({
+          confirmation: confirmationLookup.confirmation,
+          status: "retainer_active",
+          stripeContext,
+          submissionId: confirmationLookup.submissionId
+        });
+        json(res, 200, {
+          status: "ok",
+          eventId,
+          submissionId: confirmationLookup.submissionId,
+          result
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Stripe validation handoff failed.";
+        json(res, 500, {
+          status: "error",
+          eventId,
+          message
+        });
+      }
+      return;
+    }
+
+    const proposalPayment = this.findProposalPaymentForCheckout(session);
+    if (!proposalPayment) {
+      await this.saveProcessedStripeEventId(eventId);
+      json(res, 200, {
+        status: "ignored",
+        eventId,
+        reason: "no_checkout_match"
+      });
+      return;
+    }
+
+    if (!this.options.onProposalPaymentCompleted) {
+      json(res, 503, {
+        status: "unavailable",
+        eventId,
+        message: "Hosted Northline proposal-payment handoff is not configured on this server."
+      });
+      return;
+    }
+
+    const proposalStripeContext = {
+      customerEmail: normalizeField(session.customer_details?.email ?? undefined),
+      eventId,
+      referenceId: normalizeField(session.client_reference_id ?? undefined),
+      sessionId: normalizeField(session.id)
+    };
+
+    if (this.activeProposalPaymentClientIds.has(proposalPayment.clientId)) {
+      await this.saveProcessedStripeEventId(eventId);
+      json(res, 200, {
+        status: "already_running",
+        eventId,
+        clientId: proposalPayment.clientId
+      });
+      return;
+    }
+
+    try {
+      const result = await this.runProposalPaymentCompletion({
+        clientId: proposalPayment.clientId,
+        status: proposalPayment.status,
+        formEndpoint: proposalPayment.formEndpoint,
+        stripeContext: proposalStripeContext
+      });
+      await this.saveProcessedStripeEventId(eventId);
+      json(res, 200, {
+        status: "ok",
+        eventId,
+        clientId: proposalPayment.clientId,
+        result
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Stripe proposal-payment handoff failed.";
+      json(res, 500, {
+        status: "error",
+        eventId,
+        message
+      });
+    }
   }
 
   private async parseSubmission(req: IncomingMessage): Promise<NorthlineIntakePayload> {
@@ -241,37 +878,70 @@ export class NorthlineSiteServer {
     if (contentType.includes("application/json")) {
       const parsed = JSON.parse(rawBody || "{}") as Record<string, unknown>;
       return {
-        ownerName: normalizeField(parsed.ownerName),
-        businessName: normalizeField(parsed.businessName),
-        email: normalizeField(parsed.email),
-        phone: normalizeField(parsed.phone),
-        serviceArea: normalizeField(parsed.serviceArea),
-        primaryServices: normalizeField(parsed.primaryServices),
-        preferredCallWindow: normalizeField(parsed.preferredCallWindow),
-        contactPreference: normalizeField(parsed.contactPreference),
-        website: normalizeField(parsed.website),
-        leadGoal: normalizeField(parsed.leadGoal),
-        biggestLeak: normalizeField(parsed.biggestLeak),
-        notes: normalizeField(parsed.notes),
-        source: normalizeField(parsed.source)
+        ownerName: normalizeFirst(parsed, ["ownerName", "operatorName", "contactName"]),
+        businessName: normalizeFirst(parsed, ["businessName"]),
+        email: normalizeFirst(parsed, ["email"]),
+        phone: normalizeFirst(parsed, ["phone"]),
+        serviceArea: normalizeFirst(parsed, ["serviceArea", "coverageArea", "targetArea"]),
+        primaryServices: normalizeFirst(parsed, ["primaryServices", "jobType", "targetJobs"]),
+        preferredCallWindow: normalizeFirst(parsed, ["preferredCallWindow", "callWindow", "reviewWindow"]),
+        contactPreference: normalizeFirst(parsed, ["contactPreference", "replyPreference"]),
+        website: normalizeFirst(parsed, ["website", "pageUrl"]),
+        leadGoal: normalizeFirst(parsed, ["leadGoal", "bestOutcome", "nextGoal"]),
+        biggestLeak: normalizeFirst(parsed, ["biggestLeak", "responseGap", "mainProblem"]),
+        notes: normalizeFirst(parsed, ["notes"]),
+        source: normalizeFirst(parsed, ["source"])
       };
     }
 
     const params = new URLSearchParams(rawBody);
     return {
-      ownerName: normalizeField(params.get("ownerName")),
-      businessName: normalizeField(params.get("businessName")),
-      email: normalizeField(params.get("email")),
-      phone: normalizeField(params.get("phone")),
-      serviceArea: normalizeField(params.get("serviceArea")),
-      primaryServices: normalizeField(params.get("primaryServices")),
-      preferredCallWindow: normalizeField(params.get("preferredCallWindow")),
-      contactPreference: normalizeField(params.get("contactPreference")),
-      website: normalizeField(params.get("website")),
-      leadGoal: normalizeField(params.get("leadGoal")),
-      biggestLeak: normalizeField(params.get("biggestLeak")),
-      notes: normalizeField(params.get("notes")),
-      source: normalizeField(params.get("source"))
+      ownerName: normalizeFirstParam(params, ["ownerName", "operatorName", "contactName"]),
+      businessName: normalizeFirstParam(params, ["businessName"]),
+      email: normalizeFirstParam(params, ["email"]),
+      phone: normalizeFirstParam(params, ["phone"]),
+      serviceArea: normalizeFirstParam(params, ["serviceArea", "coverageArea", "targetArea"]),
+      primaryServices: normalizeFirstParam(params, ["primaryServices", "jobType", "targetJobs"]),
+      preferredCallWindow: normalizeFirstParam(params, ["preferredCallWindow", "callWindow", "reviewWindow"]),
+      contactPreference: normalizeFirstParam(params, ["contactPreference", "replyPreference"]),
+      website: normalizeFirstParam(params, ["website", "pageUrl"]),
+      leadGoal: normalizeFirstParam(params, ["leadGoal", "bestOutcome", "nextGoal"]),
+      biggestLeak: normalizeFirstParam(params, ["biggestLeak", "responseGap", "mainProblem"]),
+      notes: normalizeFirstParam(params, ["notes"]),
+      source: normalizeFirstParam(params, ["source"])
+    };
+  }
+
+  private async parseValidationConfirmation(req: IncomingMessage): Promise<{
+    submissionId?: string;
+    confirmationToken?: string;
+    status?: "paid" | "retainer_active";
+    statusRaw?: string;
+    formEndpoint?: string;
+  }> {
+    const rawBody = await readRequestBody(req);
+    const contentType = firstHeaderValue(req.headers["content-type"]) ?? "";
+
+    if (contentType.includes("application/json")) {
+      const parsed = JSON.parse(rawBody || "{}") as Record<string, unknown>;
+      const statusRaw = normalizeFirst(parsed, ["status"]);
+      return {
+        submissionId: normalizeFirst(parsed, ["submissionId"]),
+        confirmationToken: normalizeFirst(parsed, ["confirmationToken", "token"]),
+        statusRaw,
+        status: validationStatus(statusRaw),
+        formEndpoint: normalizeFirst(parsed, ["formEndpoint"])
+      };
+    }
+
+    const params = new URLSearchParams(rawBody);
+    const statusRaw = normalizeFirstParam(params, ["status"]);
+    return {
+      submissionId: normalizeFirstParam(params, ["submissionId"]),
+      confirmationToken: normalizeFirstParam(params, ["confirmationToken", "token"]),
+      statusRaw,
+      status: validationStatus(statusRaw),
+      formEndpoint: normalizeFirstParam(params, ["formEndpoint"])
     };
   }
 
@@ -292,6 +962,239 @@ export class NorthlineSiteServer {
     return nextStore;
   }
 
+  private async issueValidationConfirmation(
+    submission: NorthlineIntakeSubmission
+  ): Promise<NorthlineValidationConfirmationRecord | undefined> {
+    if (!this.options.onValidationConfirmed || !isValidationSubmission(submission)) {
+      return undefined;
+    }
+
+    const record: NorthlineValidationConfirmationRecord = {
+      submissionId: submission.id,
+      token: validationConfirmationToken(),
+      createdAt: submission.receivedAt
+    };
+    await this.saveValidationConfirmation(record);
+    return record;
+  }
+
+  private async findSubmission(
+    submissionId: string
+  ): Promise<NorthlineIntakeSubmission | undefined> {
+    const existing = await readJsonFile<NorthlineIntakeStore>(
+      this.config.northlineSite.submissionStorePath,
+      { submissions: [] }
+    );
+    const submissions = Array.isArray(existing) ? existing : existing.submissions;
+    return submissions.find((submission) => submission.id === submissionId);
+  }
+
+  private async readValidationConfirmationStore(): Promise<NorthlineValidationConfirmationStore> {
+    return readJsonFile<NorthlineValidationConfirmationStore>(
+      this.validationConfirmationStorePath,
+      { confirmations: [] }
+    );
+  }
+
+  private async findValidationConfirmation(
+    submissionId: string
+  ): Promise<NorthlineValidationConfirmationRecord | undefined> {
+    const store = await this.readValidationConfirmationStore();
+    return store.confirmations.find((record) => record.submissionId === submissionId);
+  }
+
+  private async saveValidationConfirmation(
+    record: NorthlineValidationConfirmationRecord,
+    options?: { processedStripeEventId?: string }
+  ): Promise<void> {
+    const store = await this.readValidationConfirmationStore();
+    const confirmations = store.confirmations.filter(
+      (entry) => entry.submissionId !== record.submissionId
+    );
+    confirmations.push(record);
+    const processedStripeEventIds = options?.processedStripeEventId
+      ? keepRecentEventIds([
+          ...(store.processedStripeEventIds ?? []),
+          options.processedStripeEventId
+        ])
+      : store.processedStripeEventIds;
+    await writeJsonFile(this.validationConfirmationStorePath, {
+      confirmations,
+      processedStripeEventIds,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  private async saveProcessedStripeEventId(eventId: string): Promise<void> {
+    const store = await this.readValidationConfirmationStore();
+    await writeJsonFile(this.validationConfirmationStorePath, {
+      confirmations: store.confirmations,
+      processedStripeEventIds: keepRecentEventIds([
+        ...(store.processedStripeEventIds ?? []),
+        eventId
+      ]),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  private async findValidationConfirmationForCheckout(
+    session: StripeCheckoutSession
+  ): Promise<
+    | {
+        submissionId: string;
+        confirmation: NorthlineValidationConfirmationRecord;
+      }
+    | undefined
+  > {
+    const candidates = [
+      normalizeField(session.client_reference_id ?? undefined),
+      normalizeField(session.metadata?.submissionId),
+      normalizeField(session.metadata?.validationSubmissionId)
+    ].filter((value): value is string => Boolean(value));
+
+    for (const candidate of candidates) {
+      const submissionId = validationSubmissionIdFromReference(candidate) ?? candidate;
+      const confirmation = await this.findValidationConfirmation(submissionId);
+      if (confirmation) {
+        return {
+          submissionId,
+          confirmation
+        };
+      }
+    }
+
+    return undefined;
+  }
+
+  private findProposalPaymentForCheckout(
+    session: StripeCheckoutSession
+  ): NorthlineProposalPaymentMatch | undefined {
+    const reference = proposalPaymentReference(normalizeField(session.client_reference_id ?? undefined));
+    const clientId =
+      normalizeField(session.metadata?.northlineClientId) ??
+      normalizeField(session.metadata?.clientId) ??
+      reference?.clientId;
+    const status =
+      validationStatus(normalizeField(session.metadata?.northlineBillingStatus)) ??
+      validationStatus(normalizeField(session.metadata?.billingStatus)) ??
+      reference?.status;
+
+    if (!clientId || !status) {
+      return undefined;
+    }
+
+    return {
+      clientId,
+      status,
+      formEndpoint:
+        normalizeField(session.metadata?.northlineFormEndpoint) ??
+        normalizeField(session.metadata?.formEndpoint)
+    };
+  }
+
+  private async runValidationConfirmation(options: {
+    confirmation: NorthlineValidationConfirmationRecord;
+    submissionId: string;
+    status: "paid" | "retainer_active";
+    formEndpoint?: string;
+    stripeContext?: {
+      completedAt?: string;
+      customerEmail?: string;
+      eventId: string;
+      livemode?: boolean;
+      referenceId?: string;
+      sessionId?: string;
+    };
+  }): Promise<NorthlineValidationRunResult> {
+    if (!this.options.onValidationConfirmed) {
+      throw new Error("Hosted Northline validation handoff is not configured on this server.");
+    }
+
+    const formEndpoint = options.formEndpoint ?? this.defaultValidationFormEndpoint();
+    await this.waitForAutomation();
+    this.activeValidationSubmissionIds.add(options.submissionId);
+    try {
+      const result = await this.options.onValidationConfirmed({
+        submissionId: options.submissionId,
+        status: options.status,
+        formEndpoint
+      });
+      await this.saveValidationConfirmation(
+        {
+          ...options.confirmation,
+          lastConfirmedAt: new Date().toISOString(),
+          lastResult: result,
+          lastStripeCompletedAt:
+            options.stripeContext?.completedAt ?? options.confirmation.lastStripeCompletedAt,
+          lastStripeCustomerEmail:
+            options.stripeContext?.customerEmail ?? options.confirmation.lastStripeCustomerEmail,
+          lastStripeEventId:
+            options.stripeContext?.eventId ?? options.confirmation.lastStripeEventId,
+          lastStripeLivemode:
+            options.stripeContext?.livemode ?? options.confirmation.lastStripeLivemode,
+          lastStripeReferenceId:
+            options.stripeContext?.referenceId ?? options.confirmation.lastStripeReferenceId,
+          lastStripeSessionId:
+            options.stripeContext?.sessionId ?? options.confirmation.lastStripeSessionId
+        },
+        options.stripeContext?.eventId
+          ? { processedStripeEventId: options.stripeContext.eventId }
+          : undefined
+      );
+      return result;
+    } finally {
+      this.activeValidationSubmissionIds.delete(options.submissionId);
+    }
+  }
+
+  private async runProposalPaymentCompletion(options: {
+    clientId: string;
+    status: "paid" | "retainer_active";
+    formEndpoint?: string;
+    stripeContext: {
+      customerEmail?: string;
+      eventId: string;
+      referenceId?: string;
+      sessionId?: string;
+    };
+  }): Promise<Awaited<ReturnType<NonNullable<NorthlineSiteServerOptions["onProposalPaymentCompleted"]>>>> {
+    if (!this.options.onProposalPaymentCompleted) {
+      throw new Error("Hosted Northline proposal-payment handoff is not configured on this server.");
+    }
+
+    await this.waitForAutomation();
+    this.activeProposalPaymentClientIds.add(options.clientId);
+    try {
+      return this.options.onProposalPaymentCompleted({
+        clientId: options.clientId,
+        status: options.status,
+        formEndpoint: options.formEndpoint,
+        stripeContext: options.stripeContext
+      });
+    } finally {
+      this.activeProposalPaymentClientIds.delete(options.clientId);
+    }
+  }
+
+  private defaultValidationFormEndpoint(): string | undefined {
+    const action = normalizeField(this.config.business.leadFormAction);
+    if (!action) {
+      return undefined;
+    }
+    if (/^https?:\/\//i.test(action)) {
+      return action;
+    }
+    const siteUrl = normalizeField(this.config.business.siteUrl);
+    if (!siteUrl) {
+      return undefined;
+    }
+    try {
+      return new URL(action, siteUrl).toString();
+    } catch {
+      return undefined;
+    }
+  }
+
   private async notifySubmission(submission: NorthlineIntakeSubmission): Promise<void> {
     const subject = `[Northline Intake] ${submission.businessName ?? submission.ownerName ?? "New operator"}`;
     const body = [
@@ -306,10 +1209,10 @@ export class NorthlineSiteServer {
       `Preferred call window: ${submission.preferredCallWindow ?? "Not provided"}`,
       `Contact preference: ${submission.contactPreference ?? "Not provided"}`,
       `Website: ${submission.website ?? "Not provided"}`,
-      `Lead goal: ${submission.leadGoal ?? "Not provided"}`,
+      `Best outcome: ${submission.leadGoal ?? "Not provided"}`,
       `Source: ${submission.source ?? "northline-website-intake"}`,
       "",
-      "Biggest leak:",
+      "Booked-job leak:",
       submission.biggestLeak ?? "Not provided",
       "",
       "Notes:",

@@ -110,6 +110,76 @@
       ]
     },
     {
+      "id": "clipbaiters",
+      "docs": [
+        "docs/clipbaiters-viral-moments.md",
+        "docs/org-control-plane.md",
+        "docs/vps-tooling.md",
+        "docs/venture-studio.md",
+        "docs/playbook.md",
+        "docs/setup.md"
+      ],
+      "code": [
+        "src/domain/defaults.ts",
+        "src/domain/clipbaiters.ts",
+        "src/agents/imon-engine.ts",
+        "src/services/venture-studio.ts",
+        "src/services/store-ops.ts",
+        "src/services/org-templates.ts",
+        "src/services/organization-control-plane.ts",
+        "src/services/clipbaiters-studio.ts",
+        "src/services/clipbaiters-collector.ts",
+        "src/services/clipbaiters-skimmer.ts",
+        "src/services/clipbaiters-radar.ts",
+        "src/services/clipbaiters-ingest.ts",
+        "src/services/clipbaiters-editor.ts",
+        "src/services/clipbaiters-autonomy.ts",
+        "src/services/clipbaiters-publisher.ts",
+        "src/services/clipbaiters-analytics.ts",
+        "src/services/clipbaiters-deals.ts",
+        "src/services/clipbaiters-intake.ts",
+        "src/services/clipbaiters-monetization.ts",
+        "scripts/chrome_cdp.py",
+        "scripts/youtube_studio_upload.py",
+        "src/domain/venture.ts"
+      ],
+      "runtime": [
+        "runtime/state/businesses.json",
+        "runtime/state/socialProfiles.json",
+        "runtime/state/clipbaiters",
+        "runtime/ops/clipbaiters",
+        "runtime/ops/venture-blueprints/clipbaiters-viral-moments.json",
+        "runtime/ops/venture-blueprints/clipbaiters-viral-moments.md",
+        "runtime/source-feeds/clipbaiters",
+        "runtime/source-feeds/clipbaiters/clipbaiters-viral-moments/creator-orders",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/source-watchlists.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/video-discovery.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/skim-summaries.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/clip-candidates.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/clip-jobs.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/publishing-queue.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/channel-metrics.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/publish-history.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/creator-leads.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/creator-outreach.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/creator-offers.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/creator-orders.json",
+        "runtime/state/clipbaiters/clipbaiters-viral-moments/revenue-snapshots.json",
+        "runtime/ops/org-control-plane.json",
+        "runtime/ops/office-views.json",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/launch-checklist.md",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/daily-summary.md",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/autonomy-run.json",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/autonomy-run.md",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/draft-clips",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/upload-batches.json",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/review-queue.md",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/channel-metrics.md",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/creator-deals.md",
+        "runtime/ops/clipbaiters/clipbaiters-viral-moments/monetization-report.md"
+      ]
+    },
+    {
       "id": "pod",
       "docs": [
         "docs/imonic-store.md"
@@ -149,13 +219,27 @@
         "src/agents/qa-reviewer.ts",
         "src/agents/deployer.ts",
         "src/services/agency-site.ts",
+        "src/services/northline-business-profile.ts",
+        "src/services/northline-profile-admin.ts",
         "src/services/northline-ops.ts",
-        "src/services/northline-site-server.ts"
+        "src/services/northline-autonomy.ts",
+        "src/services/northline-prospect-collector.ts",
+        "src/services/northline-prospect-sourcing.ts",
+        "src/services/northline-site-server.ts",
+        "src/domain/northline.ts",
+        "src/domain/northline-autonomy.ts"
       ],
       "runtime": [
         "runtime/agency-site",
         "runtime/previews",
-        "runtime/reports"
+        "runtime/reports",
+        "runtime/state/northlineIntakeSubmissions.json",
+        "runtime/state/northlineAutonomy.json",
+        "runtime/state/northline",
+        "runtime/state/northlineProspectCollection.json",
+        "runtime/state/northlineProspectSourcing.json",
+        "runtime/prospect-sources/northline",
+        "runtime/ops/northline-growth-system"
       ]
     },
     {
@@ -170,6 +254,7 @@
       ],
       "runtime": [
         "runtime/ops/bootstrap-vps.sh",
+        "runtime/ops/imon-engine-sync.sh",
         "runtime/ops/imon-engine.cron",
         "runtime/ops/autopilot-last-run.json"
       ]

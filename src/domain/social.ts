@@ -1,6 +1,7 @@
 export type SocialPlatform =
   | "facebook_page"
   | "meta_business"
+  | "youtube_channel"
   | "instagram_account"
   | "x"
   | "pinterest"

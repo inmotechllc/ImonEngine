@@ -749,7 +749,192 @@ const CATEGORY_WORKFLOW_OWNERSHIP: Partial<Record<BusinessCategory, WorkflowOwne
       successMetric: "Software releases and onboarding changes ship with low operational risk.",
       notes: []
     }
+  ],
+  client_services_agency: [
+    {
+      workflowId: "product-production",
+      workflowName: "Client Delivery Production",
+      departmentKind: "product_content",
+      positionTitle: "Product / Content Lead",
+      allowedModelTier: "mid",
+      allowedTools: ["content-generation", "qa", "reports", "browser-automation"],
+      escalationTargetTitle: "Operations Manager",
+      successMetric:
+        "Client-facing deliverables, proof bundles, and offer updates ship QA-ready and on cadence.",
+      notes: [
+        "Service businesses use the product/content lane for delivery packets, proof updates, and approved offer assets."
+      ]
+    }
   ]
+};
+
+interface BusinessWorkflowOwnershipOverrideSpec {
+  workflowOwnership: WorkflowOwnershipTemplateSpec[];
+  replaceDefaults?: boolean;
+}
+
+const BUSINESS_WORKFLOW_OWNERSHIP_OVERRIDES: Record<string, BusinessWorkflowOwnershipOverrideSpec> = {
+  "clipbaiters-viral-moments": {
+    replaceDefaults: true,
+    workflowOwnership: [
+      {
+        workflowId: "business-governance",
+        workflowName: "ClipBaiters Launch Governance",
+        departmentKind: "executive_management",
+        positionTitle: "General Manager / Brand Director",
+        allowedModelTier: "premium",
+        allowedTools: ["business-registry", "approvals", "org-control-plane", "clipbaiters-plan"],
+        escalationTargetTitle: "Chief Executive / Portfolio Director",
+        successMetric: "ClipBaiters stays review-gated, worker-ready, and launch-safe while office artifacts stay current.",
+        notes: [
+          "Use the launch checklist and office views as the decision surface before changing review posture or worker scope."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-collect",
+        workflowName: "ClipBaiters Source Collection",
+        departmentKind: "analytics_research",
+        positionTitle: "Analytics And Research Lead",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-collect", "research", "reports"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "Lane watchlists and video discovery stay fresh across all active ClipBaiters lanes.",
+        notes: [
+          "Collection should stay roster-driven and avoid broad unaudited scraping."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-skim",
+        workflowName: "ClipBaiters Discovery Skimming",
+        departmentKind: "analytics_research",
+        positionTitle: "Analytics And Research Lead",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-skim", "research", "reports"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "Discovery items are turned into ranked skim summaries before heavier clip workflows run.",
+        notes: [
+          "Skim summaries should stay metadata-first and only escalate to heavier processing when the lane is still active."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-radar",
+        workflowName: "ClipBaiters Editorial Radar",
+        departmentKind: "analytics_research",
+        positionTitle: "Analytics And Research Lead",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-radar", "research", "reports"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "The daily brief stays current and highlights review-gated event opportunities.",
+        notes: [
+          "Political and rights-sensitive stories remain review-gated even when radar refresh is scheduled."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-autonomy-run",
+        workflowName: "ClipBaiters Draft Autonomy",
+        departmentKind: "content_studio",
+        positionTitle: "Content Studio Lead",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-autonomy-run", "video", "content-generation"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "Approved sources turn into draft clip packages without bypassing dry-run or editorial gates.",
+        notes: [
+          "Keep the scheduled cadence aligned to the currently active YouTube lanes and preserve dry-run rendering until review gates clear."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-publish",
+        workflowName: "ClipBaiters Review-Gated Publishing",
+        departmentKind: "growth_marketing",
+        positionTitle: "Growth And Marketing Manager",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-publish", "social-posting", "approvals"],
+        escalationTargetTitle: "Community And QA Lead",
+        successMetric: "Review queues, upload batches, and channel metrics stay current without auto-publishing blocked clips.",
+        notes: [
+          "Scheduled publishing refreshes queue state only; live uploads stay blocked until channel readiness and review approvals clear."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-youtube-channel-ops",
+        workflowName: "ClipBaiters YouTube Channel Ops",
+        departmentKind: "growth_marketing",
+        positionTitle: "Growth And Marketing Manager",
+        allowedModelTier: "mid",
+        allowedTools: ["browser-automation", "social-posting", "approvals", "reports"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "Active YouTube lanes stay domain-backed, review-safe, and ready for controlled uploads without account sprawl.",
+        notes: [
+          "Keep the rollout YouTube-first: political and media can be active now, while Facebook, Instagram, and TikTok remain deferred until the channel loop is stable."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-source-creators",
+        workflowName: "ClipBaiters Creator Sourcing",
+        departmentKind: "operations",
+        positionTitle: "Operations Manager",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-source-creators", "runtime-ops", "reports"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "Creator leads stay sourced from authorized streaming rosters and existing paid work.",
+        notes: [
+          "Keep the creator pipeline lightweight and file-backed instead of rebuilding a full sales stack."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-draft-creator-outreach",
+        workflowName: "ClipBaiters Creator Outreach Drafting",
+        departmentKind: "growth_marketing",
+        positionTitle: "Growth And Marketing Manager",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-draft-creator-outreach", "reports", "approvals"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "Qualified creator leads have clear outreach drafts and recommended offers without silent sending assumptions.",
+        notes: [
+          "Use the shared sender only when it is configured; otherwise keep the drafts manual-send ready."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-deals-report",
+        workflowName: "ClipBaiters Creator Deals Reporting",
+        departmentKind: "finance",
+        positionTitle: "Finance Lead",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-deals-report", "reports", "clipbaiters-intake"],
+        escalationTargetTitle: "Chief Financial Officer / Controller",
+        successMetric: "Creator deal stages, intake handoffs, and paid-work backlogs stay visible in one report.",
+        notes: [
+          "Accepted leads should materialize into the creator-order intake folder instead of living in a separate CRM."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-intake",
+        workflowName: "ClipBaiters Creator Intake",
+        departmentKind: "operations",
+        positionTitle: "Operations Manager",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-intake", "scheduler", "runtime-ops"],
+        escalationTargetTitle: "General Manager / Brand Director",
+        successMetric: "Creator-order intake stays normalized, traceable, and ready for fulfillment review.",
+        notes: [
+          "Manual creator-order drops should reconcile into durable state before monetization or delivery review runs."
+        ]
+      },
+      {
+        workflowId: "clipbaiters-monetization-report",
+        workflowName: "ClipBaiters Monetization Reporting",
+        departmentKind: "finance",
+        positionTitle: "Finance Lead",
+        allowedModelTier: "mid",
+        allowedTools: ["clipbaiters-monetization-report", "reports", "approvals"],
+        escalationTargetTitle: "Chief Financial Officer / Controller",
+        successMetric: "Creator offers, revenue snapshots, and payment-link gaps stay current.",
+        notes: [
+          "Payment-link readiness, shared Stripe planning metadata, Relay cashout notes, and delivery verification stay explicit checkpoints instead of silent assumptions."
+        ]
+      }
+    ]
+  }
 };
 
 const CATEGORY_SUMMARIES: Record<BusinessCategory | "engine", string> = {
@@ -869,7 +1054,14 @@ export function buildEngineOrgTemplate(): OrgTemplateSpec {
   };
 }
 
-export function buildBusinessOrgTemplate(category: BusinessCategory): OrgTemplateSpec {
+export function buildBusinessOrgTemplate(
+  category: BusinessCategory,
+  businessId?: string
+): OrgTemplateSpec {
+  const workflowOverride = businessId
+    ? BUSINESS_WORKFLOW_OWNERSHIP_OVERRIDES[businessId]
+    : undefined;
+
   return {
     summary: CATEGORY_SUMMARIES[category],
     departments: mergeDepartments(
@@ -881,10 +1073,16 @@ export function buildBusinessOrgTemplate(category: BusinessCategory): OrgTemplat
       CATEGORY_POSITION_EXTENSIONS[category] ?? []
     ),
     approvalRoutes: cloneApprovalRoutes(BASE_APPROVAL_ROUTES),
-    workflowOwnership: mergeWorkflowOwnership(
-      COMMON_BUSINESS_WORKFLOW_OWNERSHIP,
-      CATEGORY_WORKFLOW_OWNERSHIP[category] ?? []
-    )
+    workflowOwnership:
+      workflowOverride?.replaceDefaults
+        ? cloneWorkflowOwnership(workflowOverride.workflowOwnership)
+        : mergeWorkflowOwnership(
+            mergeWorkflowOwnership(
+              COMMON_BUSINESS_WORKFLOW_OWNERSHIP,
+              CATEGORY_WORKFLOW_OWNERSHIP[category] ?? []
+            ),
+            workflowOverride?.workflowOwnership ?? []
+          )
   };
 }
 

@@ -1,12 +1,17 @@
 import path from "node:path";
 import { DEFAULT_AGENCY_PROFILE, DEFAULT_OFFERS } from "./domain/defaults.js";
-import type { ClientJob, LeadRecord, OfferConfig } from "./domain/contracts.js";
+import {
+  clientProofEligibilityForProvenance,
+  type ClientJob,
+  type LeadRecord,
+  type OfferConfig
+} from "./domain/contracts.js";
 import { loadConfig } from "./config.js";
 import { Logger } from "./lib/logger.js";
 import { hashControlRoomPassword } from "./lib/control-room-auth.js";
 import { readJsonFile, readTextFile } from "./lib/fs.js";
 import { slugify } from "./lib/text.js";
-import { AIClient } from "./openai/client.js";
+import { AIClient } from "./ai/client.js";
 import { FileStore } from "./storage/store.js";
 import { OrchestratorAgent } from "./agents/orchestrator.js";
 import { SiteBuilderAgent } from "./agents/site-builder.js";
@@ -21,8 +26,25 @@ import { OfficeDashboardService } from "./services/office-dashboard.js";
 import { ControlRoomServer } from "./services/control-room-server.js";
 import { ControlRoomLocalServer } from "./services/control-room-local-server.js";
 import { MicroSaasStudioService } from "./services/micro-saas-studio.js";
+import { NorthlineAutonomyService } from "./services/northline-autonomy.js";
+import { NorthlineProfileAdminService } from "./services/northline-profile-admin.js";
 import { NorthlineOpsService } from "./services/northline-ops.js";
+import { NorthlineProspectCollectorService } from "./services/northline-prospect-collector.js";
+import { NorthlineProspectSourcingService } from "./services/northline-prospect-sourcing.js";
 import { NorthlineSiteServer } from "./services/northline-site-server.js";
+import { NorthlineValidationService } from "./services/northline-validation.js";
+import { NorthlineDepartmentSmokeService } from "./services/northline-department-smoke.js";
+import { ClipBaitersAutonomyService } from "./services/clipbaiters-autonomy.js";
+import { ClipBaitersCollectorService } from "./services/clipbaiters-collector.js";
+import { ClipBaitersDealsService } from "./services/clipbaiters-deals.js";
+import { ClipBaitersIntakeService } from "./services/clipbaiters-intake.js";
+import { ClipBaitersMonetizationService } from "./services/clipbaiters-monetization.js";
+import { ClipBaitersPublisherService } from "./services/clipbaiters-publisher.js";
+import { ClipBaitersRadarService } from "./services/clipbaiters-radar.js";
+import { ClipBaitersSkimmerService } from "./services/clipbaiters-skimmer.js";
+import { ClipBaitersStudioService } from "./services/clipbaiters-studio.js";
+import { resolveNorthlineBusinessProfile } from "./services/northline-business-profile.js";
+import { processLeadReply } from "./services/lead-replies.js";
 import { PodAutonomyService } from "./services/pod-autonomy.js";
 import { PodStudioService } from "./services/pod-studio.js";
 import { buildStorefrontSite } from "./services/storefront-site.js";
@@ -37,6 +59,8 @@ interface ClientBrief {
   id?: string;
   businessId?: string;
   leadId?: string;
+  provenance?: ClientJob["provenance"];
+  proofEligible?: boolean;
   clientName: string;
   niche: string;
   geo: string;
@@ -48,6 +72,32 @@ interface ClientBrief {
   assets?: ClientJob["assets"];
   intakeNotes?: string[];
   nextAction?: string;
+}
+
+type CreateClientOptions = {
+  generatedBrand?: boolean;
+};
+
+const GENERATED_BRAND_INTAKE_NOTE =
+  "Generated brand rehearsal. Keep this record internal-only and non-proof-eligible until an operator deliberately reclassifies it.";
+
+async function resolveDefaultNorthlineProfile(store: FileStore, config: Awaited<ReturnType<typeof loadConfig>>) {
+  const business = await store.getManagedBusiness("auto-funding-agency");
+  return resolveNorthlineBusinessProfile(config, business);
+}
+
+function agencySiteOverridesFromNorthlineProfile(profile: Awaited<ReturnType<typeof resolveDefaultNorthlineProfile>>) {
+  return {
+    bookingUrl: profile.bookingUrl,
+    domain: profile.domain,
+    leadFormAction: profile.leadFormAction,
+    primaryServiceArea: profile.primaryServiceArea,
+    salesEmail: profile.salesEmail,
+    siteUrl: profile.siteUrl,
+    stripeFounding: profile.stripeFounding,
+    stripeStandard: profile.stripeStandard,
+    stripeValidation: profile.stripeValidation
+  };
 }
 
 const logger = new Logger();
@@ -96,6 +146,7 @@ function usage(): string {
     "  npm run dev -- prospect --input examples/prospects/home-services.csv",
     "  npm run dev -- daily-run --input examples/prospects/home-services.csv",
     "  npm run dev -- create-client --brief examples/briefs/sunrise-plumbing.json",
+    "  npm run dev -- create-client --brief examples/briefs/northline-generated-brand-template.json --generated-brand",
     "  npm run dev -- build-site --client sunrise-plumbing",
     "  npm run dev -- qa --client sunrise-plumbing",
     "  npm run dev -- deploy --client sunrise-plumbing",
@@ -132,7 +183,31 @@ function usage(): string {
     "  npm run dev -- build-storefront-site",
     "  npm run dev -- social-profiles [--business <id>] [--all]",
     "  npm run dev -- venture-studio [--business <id>]",
+    "  npm run dev -- clipbaiters-plan [--business clipbaiters-viral-moments] [--notify-roadblocks]",
+    "  npm run dev -- clipbaiters-approve-policy [--business clipbaiters-viral-moments] [--approved-by <name-or-email>] [--note <text>]",
+    "  npm run dev -- clipbaiters-approve-lane-posture [--business clipbaiters-viral-moments] [--approved-by <name-or-email>] [--note <text>]",
+    "  npm run dev -- clipbaiters-collect [--business clipbaiters-viral-moments] [--lane clipbaiters-political]",
+    "  npm run dev -- clipbaiters-skim [--business clipbaiters-viral-moments] [--lane clipbaiters-political]",
+    "  npm run dev -- clipbaiters-radar [--business clipbaiters-viral-moments] [--lane clipbaiters-political]",
+    "  npm run dev -- clipbaiters-autonomy-run [--business clipbaiters-viral-moments] [--lane clipbaiters-political] [--all-active-lanes] [--dry-run]",
+    "  npm run dev -- clipbaiters-publish [--business clipbaiters-viral-moments] [--lane clipbaiters-political] [--all-active-lanes] [--dry-run]",
+    "  npm run dev -- clipbaiters-intake [--business clipbaiters-viral-moments] [--file <json>]",
+    "  npm run dev -- clipbaiters-source-creators [--business clipbaiters-viral-moments]",
+    "  npm run dev -- clipbaiters-draft-creator-outreach [--business clipbaiters-viral-moments]",
+    "  npm run dev -- clipbaiters-deals-report [--business clipbaiters-viral-moments]",
+    "  npm run dev -- clipbaiters-monetization-report [--business clipbaiters-viral-moments]",
     "  npm run dev -- northline-plan [--business auto-funding-agency]",
+    "  npm run dev -- northline-promotion-queue [--business auto-funding-agency]",
+    "  npm run dev -- northline-profile-show [--business auto-funding-agency] [--probe-payments]",
+    "  npm run dev -- northline-profile-update --business <id> --file <json> [--replace] [--skip-payment-probe]",
+    "  npm run dev -- northline-payment-check [--business auto-funding-agency] [--skip-probe]",
+    "  npm run dev -- northline-department-smoke [--business auto-funding-agency] [--skip-route-drills]",
+    "  npm run dev -- northline-collect-prospects [--business auto-funding-agency] [--force]",
+    "  npm run dev -- northline-source-prospects [--business auto-funding-agency]",
+    "  npm run dev -- northline-inbox-sync [--business auto-funding-agency]",
+    "  npm run dev -- northline-autonomy-run [--business auto-funding-agency] [--notify-roadblocks]",
+    "  npm run dev -- northline-billing-handoff --client <id> --status paid|retainer_active [--form-endpoint <url>] [--next-action <text>]",
+    "  npm run dev -- northline-validation-run [--business auto-funding-agency] [--submission latest|<id>] [--status paid|retainer_active] [--form-endpoint <url>]",
     "  npm run dev -- northline-site-serve",
     "  npm run dev -- northline-site-health",
     "  npm run dev -- micro-saas-plan [--business imon-micro-saas-factory] [--notify-roadblocks]",
@@ -162,14 +237,60 @@ async function buildContext() {
   const storeAutopilot = new StoreAutopilotAgent(config, store, digitalAssetFactory, imonEngine);
   const storeOps = new StoreOpsService(config, store);
   const ventureStudio = new VentureStudioService(config, store);
+  const clipbaitersStudio = new ClipBaitersStudioService(config, store);
+  const clipbaitersCollector = new ClipBaitersCollectorService(config, store);
+  const clipbaitersDeals = new ClipBaitersDealsService(config, store);
+  const clipbaitersSkimmer = new ClipBaitersSkimmerService(config, store);
+  const clipbaitersRadar = new ClipBaitersRadarService(config, store);
+  const clipbaitersAutonomy = new ClipBaitersAutonomyService(config, store);
+  const clipbaitersPublisher = new ClipBaitersPublisherService(config, store, orchestrator);
+  const clipbaitersIntake = new ClipBaitersIntakeService(config, store);
+  const clipbaitersMonetization = new ClipBaitersMonetizationService(config, store, orchestrator);
   const northlineOps = new NorthlineOpsService(config, store);
+  const northlineProfileAdmin = new NorthlineProfileAdminService(config, store);
+  const northlineProspectCollector = new NorthlineProspectCollectorService(config, store, fetch, ai);
+  const northlineProspectSourcing = new NorthlineProspectSourcingService(config, store, orchestrator);
+  const northlineDepartmentSmoke = new NorthlineDepartmentSmokeService(config, store, imonEngine);
+  const northlineAutonomy = new NorthlineAutonomyService(
+    config,
+    store,
+    northlineOps,
+    northlineProspectCollector,
+    northlineProspectSourcing,
+    orchestrator,
+    replyHandler,
+    siteBuilder,
+    qaReviewer,
+    {
+      deployer
+    }
+  );
+  const northlineValidation = new NorthlineValidationService(config, store, northlineAutonomy);
   const microSaasStudio = new MicroSaasStudioService(config, store);
   const podStudio = new PodStudioService(config, store);
   const podAutonomy = new PodAutonomyService(config, store, podStudio, storeOps);
   const officeDashboard = new OfficeDashboardService(config, store);
   const controlRoomServer = new ControlRoomServer(config, store);
   const controlRoomLocalServer = new ControlRoomLocalServer(config);
-  const northlineSiteServer = new NorthlineSiteServer(config);
+  let northlineSiteBootstrapPromise: Promise<void> | undefined;
+  const ensureNorthlineSiteReady = async (): Promise<void> => {
+    northlineSiteBootstrapPromise ??= imonEngine.bootstrap().then(() => undefined);
+    await northlineSiteBootstrapPromise;
+  };
+  const northlineSiteServer = new NorthlineSiteServer(config, {
+    onSubmissionStored: async () => {
+      await ensureNorthlineSiteReady();
+      await northlineAutonomy.run();
+    },
+    onProposalPaymentCompleted: async (request) => {
+      await ensureNorthlineSiteReady();
+      return northlineAutonomy.runBillingAutomation(request);
+    },
+    onValidationConfirmed: async (request) => {
+      await ensureNorthlineSiteReady();
+      return northlineValidation.run(request);
+    }
+  });
 
   return {
     config,
@@ -185,7 +306,22 @@ async function buildContext() {
     storeAutopilot,
     storeOps,
     ventureStudio,
+    clipbaitersStudio,
+    clipbaitersCollector,
+    clipbaitersDeals,
+    clipbaitersSkimmer,
+    clipbaitersRadar,
+    clipbaitersAutonomy,
+    clipbaitersPublisher,
+    clipbaitersIntake,
+    clipbaitersMonetization,
     northlineOps,
+    northlineProfileAdmin,
+    northlineProspectCollector,
+    northlineProspectSourcing,
+    northlineDepartmentSmoke,
+    northlineAutonomy,
+    northlineValidation,
     microSaasStudio,
     podStudio,
     podAutonomy,
@@ -196,13 +332,28 @@ async function buildContext() {
   };
 }
 
-async function createClientFromBrief(store: FileStore, briefPath: string): Promise<ClientJob> {
+export async function createClientFromBrief(
+  store: FileStore,
+  briefPath: string,
+  options: CreateClientOptions = {}
+): Promise<ClientJob> {
   const brief = await readJsonFile<ClientBrief>(path.resolve(briefPath), {} as ClientBrief);
   const now = new Date().toISOString();
+  const generatedBrand = options.generatedBrand === true;
+  const provenance = generatedBrand ? "internal_manual" : brief.provenance ?? "internal_manual";
+  const intakeNotes = brief.intakeNotes ?? [];
+  const nextIntakeNotes =
+    generatedBrand && !intakeNotes.includes(GENERATED_BRAND_INTAKE_NOTE)
+      ? [GENERATED_BRAND_INTAKE_NOTE, ...intakeNotes]
+      : intakeNotes;
   const client: ClientJob = {
     id: brief.id ?? slugify(brief.clientName),
     businessId: brief.businessId ?? "auto-funding-agency",
     leadId: brief.leadId,
+    provenance,
+    proofEligible: generatedBrand
+      ? false
+      : clientProofEligibilityForProvenance(provenance) && (brief.proofEligible ?? true),
     clientName: brief.clientName,
     niche: brief.niche,
     geo: brief.geo,
@@ -217,7 +368,7 @@ async function createClientFromBrief(store: FileStore, briefPath: string): Promi
       platform: "local-preview"
     },
     assets: brief.assets ?? {},
-    intakeNotes: brief.intakeNotes ?? [],
+    intakeNotes: nextIntakeNotes,
     nextAction: brief.nextAction ?? "Send preview for review",
     createdAt: now,
     updatedAt: now
@@ -238,21 +389,18 @@ async function createClientFromBrief(store: FileStore, briefPath: string): Promi
 }
 
 async function handleReply(store: FileStore, replyHandler: ReplyHandlerAgent, leadId: string, messageFile: string) {
-  const lead = await store.getLead(leadId);
-  if (!lead) {
-    throw new Error(`Lead ${leadId} not found.`);
-  }
-
   const message = await readTextFile(path.resolve(messageFile));
-  const result = await replyHandler.classify(message);
-  const updated: LeadRecord = {
-    ...lead,
-    stage: result.recommendedStage,
-    lastTouchAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  await store.saveLead(updated);
-  logger.info(`${lead.businessName}: ${result.disposition} -> ${result.nextAction}`);
+  const result = await processLeadReply({
+    store,
+    replyHandler,
+    leadId,
+    message,
+    subject: path.basename(messageFile),
+    source: "manual_file"
+  });
+  logger.info(
+    `${result.lead.businessName}: ${result.classification.disposition}/${result.classification.route} -> ${result.classification.nextAction}`
+  );
 }
 
 async function main(): Promise<void> {
@@ -270,7 +418,22 @@ async function main(): Promise<void> {
     storeAutopilot,
     storeOps,
     ventureStudio,
+    clipbaitersStudio,
+    clipbaitersCollector,
+    clipbaitersDeals,
+    clipbaitersSkimmer,
+    clipbaitersRadar,
+    clipbaitersAutonomy,
+    clipbaitersPublisher,
+    clipbaitersIntake,
+    clipbaitersMonetization,
     northlineOps,
+    northlineProfileAdmin,
+    northlineProspectCollector,
+    northlineProspectSourcing,
+    northlineDepartmentSmoke,
+    northlineAutonomy,
+    northlineValidation,
     microSaasStudio,
     podStudio,
     podAutonomy,
@@ -285,7 +448,12 @@ async function main(): Promise<void> {
     case "bootstrap": {
       await imonEngine.bootstrap();
       await orchestrator.getAccountOps().ensureOperationalApprovals();
-      await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
+      const defaultNorthlineProfile = await resolveDefaultNorthlineProfile(store, config);
+      await buildAgencySite(
+        config,
+        defaultNorthlineProfile.agencyProfile,
+        agencySiteOverridesFromNorthlineProfile(defaultNorthlineProfile)
+      );
       await orchestrator.getReports().generateRunReport(["Bootstrap completed.", "ImonEngine portfolio seeded."]);
       await imonEngine.writeVpsArtifacts();
       await ventureStudio.writeArtifacts();
@@ -303,6 +471,13 @@ async function main(): Promise<void> {
       logger.info(`Imported and scored ${leads.length} leads.`);
       break;
     }
+    case "northline-source-prospects": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineProspectSourcing.run({ businessId });
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     case "daily-run": {
       const input = typeof flags.input === "string" ? flags.input : undefined;
       await orchestrator.dailyRun(input);
@@ -314,7 +489,9 @@ async function main(): Promise<void> {
       if (!brief) {
         throw new Error("Missing --brief for create-client command.");
       }
-      const client = await createClientFromBrief(store, brief);
+      const client = await createClientFromBrief(store, brief, {
+        generatedBrand: Boolean(flags["generated-brand"])
+      });
       logger.info(`Client ${client.clientName} created with id ${client.id}.`);
       break;
     }
@@ -355,7 +532,11 @@ async function main(): Promise<void> {
         throw new Error(`Client ${clientId} not found.`);
       }
       const report = await orchestrator.getReports().generateRetentionReport(client);
-      logger.info(`Retention report created with upsell: ${report.upsellCandidate}`);
+      logger.info(
+        report.upgradeOffer
+          ? `Retention report created with upsell: ${report.upsellCandidate}. Growth upgrade path: ${report.upgradeOffer.label}`
+          : `Retention report created with upsell: ${report.upsellCandidate}`
+      );
       break;
     }
     case "handle-reply": {
@@ -724,6 +905,142 @@ async function main(): Promise<void> {
       );
       break;
     }
+    case "clipbaiters-plan": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const result = await clipbaitersStudio.writePlan({
+        businessId,
+        notifyRoadblocks: flags["notify-roadblocks"] === true
+      });
+      logger.info(`ClipBaiters planning dossier refreshed for ${result.plan.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-approve-policy": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const result = await clipbaitersStudio.approveRightsReviewPolicy({
+        businessId,
+        approvedBy: typeof flags["approved-by"] === "string" ? flags["approved-by"] : undefined,
+        note: typeof flags.note === "string" ? flags.note : undefined
+      });
+      await imonEngine.sync();
+      logger.info(`ClipBaiters rights policy approved for ${result.plan.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-approve-lane-posture": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const result = await clipbaitersStudio.approveLanePosturePolicy({
+        businessId,
+        approvedBy: typeof flags["approved-by"] === "string" ? flags["approved-by"] : undefined,
+        note: typeof flags.note === "string" ? flags.note : undefined
+      });
+      await imonEngine.sync();
+      logger.info(`ClipBaiters lane posture approved for ${result.plan.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-collect": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const laneId = typeof flags.lane === "string" ? flags.lane : undefined;
+      const result = await clipbaitersCollector.collect({ businessId, laneId });
+      logger.info(result.summary);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-skim": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const laneId = typeof flags.lane === "string" ? flags.lane : undefined;
+      const result = await clipbaitersSkimmer.skim({ businessId, laneId });
+      logger.info(result.summary);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-radar": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const laneId = typeof flags.lane === "string" ? flags.lane : "clipbaiters-political";
+      const result = await clipbaitersRadar.refresh({ businessId, laneId });
+      logger.info(result.summary);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-autonomy-run": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const laneId = typeof flags.lane === "string" ? flags.lane : "clipbaiters-political";
+      const result = await clipbaitersAutonomy.run({
+        businessId,
+        laneId,
+        dryRun: Boolean(flags["dry-run"]),
+        allActiveLanes: Boolean(flags["all-active-lanes"])
+      });
+      logger.info(`${result.snapshot.status.toUpperCase()}: ${result.snapshot.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-publish": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const laneId = typeof flags.lane === "string" ? flags.lane : "clipbaiters-political";
+      const result = await clipbaitersPublisher.run({
+        businessId,
+        laneId,
+        dryRun: Boolean(flags["dry-run"]),
+        allActiveLanes: Boolean(flags["all-active-lanes"])
+      });
+      logger.info(`${result.snapshot.status.toUpperCase()}: ${result.snapshot.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-intake": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const manifestFile = typeof flags.file === "string" ? path.resolve(flags.file) : undefined;
+      const result = await clipbaitersIntake.sync({
+        businessId,
+        manifestFile
+      });
+      logger.info(`ClipBaiters creator intake refreshed with ${result.ordersState.orders.length} order(s).`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-source-creators": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const result = await clipbaitersDeals.sourceCreators({ businessId });
+      logger.info(`ClipBaiters creator leads refreshed with ${result.leadState.leads.length} lead(s).`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-draft-creator-outreach": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const result = await clipbaitersDeals.draftCreatorOutreach({ businessId });
+      logger.info(`ClipBaiters outreach drafts refreshed with ${result.outreachState.drafts.length} draft(s).`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-deals-report": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const result = await clipbaitersDeals.report({ businessId });
+      logger.info(result.snapshot.summary);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "clipbaiters-monetization-report": {
+      const businessId =
+        typeof flags.business === "string" ? flags.business : "clipbaiters-viral-moments";
+      const result = await clipbaitersMonetization.run({ businessId });
+      logger.info(`${result.snapshot.status.toUpperCase()}: ${result.snapshot.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     case "northline-plan": {
       const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
       const result = await northlineOps.writePlan({ businessId });
@@ -731,8 +1048,136 @@ async function main(): Promise<void> {
       console.log(JSON.stringify(result, null, 2));
       break;
     }
+    case "northline-promotion-queue": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineOps.refreshPromotionQueue({ businessId });
+      logger.info(`Northline promotion queue refreshed for ${result.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-profile-show": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineProfileAdmin.inspect({
+        businessId,
+        probePayments: Boolean(flags["probe-payments"])
+      });
+      logger.info(`Loaded Northline profile for ${result.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-profile-update": {
+      const businessId = String(flags.business ?? "");
+      const filePath = typeof flags.file === "string" ? flags.file : undefined;
+      if (!businessId) {
+        throw new Error("Missing --business for northline-profile-update command.");
+      }
+      if (!filePath) {
+        throw new Error("Missing --file for northline-profile-update command.");
+      }
+      const result = await northlineProfileAdmin.updateFromFile({
+        businessId,
+        filePath: path.resolve(filePath),
+        replace: Boolean(flags.replace),
+        probePayments: !Boolean(flags["skip-payment-probe"])
+      });
+      logger.info(`Updated Northline profile for ${result.businessName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-payment-check": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineProfileAdmin.checkPayments({
+        businessId,
+        probeLinks: !Boolean(flags["skip-probe"])
+      });
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-department-smoke": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      await imonEngine.sync();
+      const result = await northlineDepartmentSmoke.run({
+        businessId,
+        routeDrills: !Boolean(flags["skip-route-drills"])
+      });
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-collect-prospects": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineProspectCollector.run({
+        businessId,
+        force: Boolean(flags.force)
+      });
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-autonomy-run": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineAutonomy.run({
+        businessId,
+        notifyRoadblocks: Boolean(flags["notify-roadblocks"])
+      });
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-inbox-sync": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const result = await northlineAutonomy.syncInbox({ businessId });
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-billing-handoff": {
+      const clientId = String(flags.client ?? "");
+      const status = String(flags.status ?? "paid");
+      if (!clientId) {
+        throw new Error("Missing --client for northline-billing-handoff command.");
+      }
+      if (status !== "paid" && status !== "retainer_active") {
+        throw new Error("Northline billing handoff status must be paid or retainer_active.");
+      }
+      const result = await northlineAutonomy.applyBillingHandoff({
+        clientId,
+        status,
+        formEndpoint:
+          typeof flags["form-endpoint"] === "string" ? flags["form-endpoint"] : undefined,
+        nextAction:
+          typeof flags["next-action"] === "string" ? flags["next-action"] : undefined
+      });
+      logger.info(`Billing handoff recorded for ${result.client.clientName}.`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "northline-validation-run": {
+      const businessId = typeof flags.business === "string" ? flags.business : "auto-funding-agency";
+      const submissionId = typeof flags.submission === "string" ? flags.submission : undefined;
+      const status =
+        typeof flags.status === "string" && (flags.status === "paid" || flags.status === "retainer_active")
+          ? flags.status
+          : undefined;
+      const result = await northlineValidation.run({
+        businessId,
+        submissionId,
+        status,
+        formEndpoint:
+          typeof flags["form-endpoint"] === "string" ? flags["form-endpoint"] : undefined
+      });
+      logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     case "northline-site-serve": {
-      await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
+      const defaultNorthlineProfile = await resolveDefaultNorthlineProfile(store, config);
+      await buildAgencySite(
+        config,
+        defaultNorthlineProfile.agencyProfile,
+        agencySiteOverridesFromNorthlineProfile(defaultNorthlineProfile)
+      );
       const address = await northlineSiteServer.listen();
       logger.info(`Northline site listening on http://${address.host}:${address.port}.`);
       process.once("SIGINT", () => {
@@ -788,7 +1233,12 @@ async function main(): Promise<void> {
       break;
     }
     case "build-agency-site": {
-      const output = await buildAgencySite(config, DEFAULT_AGENCY_PROFILE);
+      const defaultNorthlineProfile = await resolveDefaultNorthlineProfile(store, config);
+      const output = await buildAgencySite(
+        config,
+        defaultNorthlineProfile.agencyProfile,
+        agencySiteOverridesFromNorthlineProfile(defaultNorthlineProfile)
+      );
       logger.info(`Agency site generated at ${output}`);
       break;
     }
@@ -799,8 +1249,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  logger.error(message);
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(message);
+    process.exitCode = 1;
+  });
+}

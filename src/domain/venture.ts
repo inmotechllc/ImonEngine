@@ -39,7 +39,7 @@ export interface VentureAgentRole {
 
 export type VentureFacebookStrategy = "legacy_live" | "umbrella_brand" | "avoid_by_default";
 
-export type VentureInstagramStrategy = "single_brand" | "niche_accounts";
+export type VentureInstagramStrategy = "single_brand" | "niche_accounts" | "deferred";
 
 export interface VentureNicheLane {
   id: string;

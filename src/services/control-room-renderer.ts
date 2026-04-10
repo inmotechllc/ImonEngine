@@ -50,6 +50,7 @@ export class ControlRoomRenderer {
         engineSync: "/api/control-room/commands/engine-sync",
         activateBusiness: "/api/control-room/commands/activate-business",
         pauseBusiness: "/api/control-room/commands/pause-business",
+        resolveApproval: "/api/control-room/commands/resolve-approval",
         routeTask: "/api/control-room/commands/route-task",
         chat: {
           engine: "/api/control-room/chat/engine",
@@ -231,7 +232,21 @@ export class ControlRoomRenderer {
         </label>
         <button class="button button-primary" type="submit">Route directive</button>
       </form>
-      <div class="detail-panel" id="control-result">Use this panel to sync the engine, change business state, or route operator guidance into the control plane.</div>`;
+      <div class="detail-panel" id="control-result">Use this panel to sync the engine, change business state, or route operator guidance into the control plane.</div>
+      <div class="region-title">Approval Actions</div>
+      <div class="list" id="approval-action-list"></div>
+      <form id="approval-form" class="task-form">
+        <label class="field">
+          <span>Approved by</span>
+          <input id="approval-approved-by" name="approvedBy" type="text" placeholder="owner@example.org or owner name" />
+        </label>
+        <label class="field">
+          <span>Approval note</span>
+          <textarea id="approval-note" name="note" rows="4" placeholder="Optional approval note for the saved artifact."></textarea>
+        </label>
+        <button class="button button-primary" id="approval-submit-button" type="submit">Record approval</button>
+      </form>
+      <div class="detail-panel" id="approval-panel">Select an approval waiting item to see whether the control room can resolve it directly.</div>`;
   }
 
   private pageStyles(): string {
@@ -244,14 +259,14 @@ export class ControlRoomRenderer {
       .hero::after{content:"";position:absolute;inset:auto -10% -35% 40%;height:220px;background:radial-gradient(circle,rgba(124,199,255,.18),transparent 60%);filter:blur(18px);pointer-events:none}
       .hero-top,.headline{display:flex;justify-content:space-between;gap:18px;align-items:start}.hero h1{margin:0;font-size:clamp(2rem,4vw,4.1rem);line-height:.95;letter-spacing:-.04em;max-width:10ch}.hero p{max-width:62ch;margin:16px 0 0;color:var(--muted);line-height:1.6}.hero-actions{display:grid;gap:8px;justify-items:end}
       .eyebrow,.mono{font-family:"Cascadia Code","IBM Plex Mono","Consolas",monospace;font-size:.78rem}.eyebrow,.region-title,.field span{color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
-      .button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer}.button:hover{border-color:rgba(124,199,255,.38)}.button-primary{background:rgba(88,211,164,.12);border-color:rgba(88,211,164,.26)}.button-muted{opacity:.8;cursor:default}
+      .button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer}.button:hover{border-color:rgba(124,199,255,.38)}.button:disabled{opacity:.55;cursor:not-allowed}.button-primary{background:rgba(88,211,164,.12);border-color:rgba(88,211,164,.26)}.button-muted{opacity:.8;cursor:default}
       .banner{display:none;margin-top:18px;padding:12px 14px;border:1px solid rgba(255,177,74,.28);background:rgba(255,177,74,.08);color:var(--warning)}.banner.visible{display:block}
       .breadcrumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.crumb{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:6px 10px;cursor:pointer}.crumb.active{border-color:rgba(88,211,164,.34)}
       .kpi-strip{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}.kpi{min-width:150px;padding:12px 14px;border-top:1px solid var(--line)}.kpi label,.metric-box label{display:block;font-size:.73rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}.kpi strong,.metric-box strong{font-size:1.35rem}
       .rail,.main,.inspector{border:1px solid var(--line);background:linear-gradient(180deg,rgba(17,27,35,.9),rgba(11,17,23,.96))}.rail,.inspector{padding:18px}.main{padding:20px 24px}.stack,.list,.roster,.controls,.tree{display:grid;gap:10px}
       .tab-strip{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tab-button{min-height:38px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer}.tab-button.active{background:rgba(88,211,164,.12);border-color:rgba(88,211,164,.26)}
       .inspector-panel{display:none;gap:10px}.inspector-panel.active{display:grid}
-      .tree-node,.row-button,.worker-button{width:100%;text-align:left;border:1px solid transparent;background:rgba(255,255,255,.02);padding:12px 14px;color:var(--text);cursor:pointer}.tree-node{padding-left:calc(14px + var(--depth,0) * 16px)}.tree-node:hover,.tree-node.active,.row-button:hover,.worker-button:hover{border-color:rgba(124,199,255,.38);background:rgba(124,199,255,.08)}
+      .tree-node,.row-button,.worker-button{width:100%;text-align:left;border:1px solid transparent;background:rgba(255,255,255,.02);padding:12px 14px;color:var(--text);cursor:pointer}.tree-node{padding-left:calc(14px + var(--depth,0) * 16px)}.tree-node:hover,.tree-node.active,.row-button:hover,.row-button.active,.worker-button:hover{border-color:rgba(124,199,255,.38);background:rgba(124,199,255,.08)}.row-button.active{border-color:rgba(88,211,164,.34);background:rgba(88,211,164,.08)}
       .tree-node strong,.row-button strong,.worker-button strong{display:block}.tree-meta,.muted{color:var(--muted)}.tree-meta,.row-meta{font-size:.84rem;line-height:1.5}.headline{align-items:end;margin-bottom:18px}.headline h2{margin:0;font-size:clamp(1.6rem,2vw,2.3rem);letter-spacing:-.035em}
       .status{display:inline-flex;align-items:center;gap:8px;font-size:.84rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}.status::before{content:"";width:9px;height:9px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 6px rgba(88,211,164,.08)}.status[data-tone="blocked"]::before,.status[data-tone="attention-needed"]::before,.status[data-tone="degraded"]::before{background:var(--warning)}.status[data-tone="paused"]::before,.status[data-tone="deferred"]::before{background:var(--muted)}
       .section{padding-bottom:22px;margin-bottom:22px;border-bottom:1px solid var(--line)}.section:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}.metric-grid{display:grid;gap:14px;grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -271,6 +286,7 @@ export class ControlRoomRenderer {
         selectedBusinessId: app.selectedBusinessId || (app.snapshot.businesses[0] && app.snapshot.businesses[0].id) || null,
         selectedDepartmentId: app.selectedDepartmentId || null,
         inspectorTab: "chat",
+        selectedApprovalId: null,
         chatScopeKey: null,
         chatView: null
       };
@@ -298,6 +314,12 @@ export class ControlRoomRenderer {
         taskForm: document.getElementById("task-form"),
         controlContext: document.getElementById("control-context"),
         controlResult: document.getElementById("control-result"),
+        approvalActionList: document.getElementById("approval-action-list"),
+        approvalForm: document.getElementById("approval-form"),
+        approvalApprovedBy: document.getElementById("approval-approved-by"),
+        approvalNote: document.getElementById("approval-note"),
+        approvalSubmitButton: document.getElementById("approval-submit-button"),
+        approvalPanel: document.getElementById("approval-panel"),
         chatTabButton: document.getElementById("chat-tab-button"),
         controlsTabButton: document.getElementById("controls-tab-button"),
         chatPanel: document.getElementById("chat-panel"),
@@ -315,6 +337,36 @@ export class ControlRoomRenderer {
       function replaceUrl(route) { try { history.replaceState({}, "", route); } catch {} }
       function currentBusiness() { return app.snapshot.businesses.find((entry) => entry.id === state.selectedBusinessId) || app.snapshot.businesses[0] || null; }
       function currentWorkspace() { return app.snapshot.departmentWorkspaces.find((entry) => entry.businessId === state.selectedBusinessId && entry.departmentId === state.selectedDepartmentId) || null; }
+      function currentApprovals() {
+        if (state.scope === "department") {
+          const workspace = currentWorkspace();
+          return (workspace && workspace.approvalTasks) || [];
+        }
+        if (state.scope === "business") {
+          const business = currentBusiness();
+          return (business && business.office && business.office.approvalTasks) || [];
+        }
+        return app.snapshot.executiveView.approvalTasks || [];
+      }
+      function approvalActionConfig(approval) {
+        if (!approval) return null;
+        if (approval.id === "approval-clipbaiters-viral-moments") {
+          return {
+            label: "Record rights approval",
+            summary: "Write the ClipBaiters rights and fair-use approval artifact and rerun engine sync."
+          };
+        }
+        if (approval.id === "approval-clipbaiters-lane-posture-clipbaiters-viral-moments") {
+          return {
+            label: "Record lane posture approval",
+            summary: "Write the ClipBaiters lane posture approval artifact for the current rollout set and rerun engine sync."
+          };
+        }
+        return null;
+      }
+      function selectedApproval() {
+        return currentApprovals().find((entry) => entry.id === state.selectedApprovalId) || null;
+      }
       function currentScopeKey() { return state.scope === "department" ? "department:" + (state.selectedBusinessId || "") + ":" + (state.selectedDepartmentId || "") : state.scope === "business" ? "business:" + (state.selectedBusinessId || "") : "engine"; }
       function chatEndpoint() {
         if (state.scope === "department") return app.routes.chat.departmentBase + "/" + encodeURIComponent(state.selectedBusinessId || "") + "/" + encodeURIComponent(state.selectedDepartmentId || "");
@@ -365,6 +417,32 @@ export class ControlRoomRenderer {
       function allHandoffs() { return [...app.snapshot.executiveView.handoffs, ...app.snapshot.businesses.flatMap((business) => business.office ? business.office.handoffs : [])]; }
       function setControlMessage(message) { if (el.controlResult) el.controlResult.textContent = message; }
       function setChatStatus(message) { if (el.chatStatusPanel) el.chatStatusPanel.textContent = message; }
+      function renderApprovalActions() {
+        if (!el.approvalActionList || !el.approvalPanel) return;
+        const approvals = currentApprovals();
+        if (!approvals.some((approval) => approval.id === state.selectedApprovalId)) {
+          state.selectedApprovalId = approvals[0] ? approvals[0].id : null;
+        }
+        el.approvalActionList.innerHTML = approvals.length > 0
+          ? approvals.map((approval) => {
+              const active = approval.id === state.selectedApprovalId;
+              const config = approvalActionConfig(approval);
+              return "<button class='row-button " + (active ? "active" : "") + "' data-approval-action-id='" + escapeHtml(approval.id) + "'><div class='row-shell'><div><strong>" + escapeHtml(approval.actionNeeded) + "</strong><div class='muted'>" + escapeHtml(approval.reason) + "</div></div><div class='row-meta'>" + escapeHtml((config ? config.label : approval.relatedEntityType) + " | " + approval.status) + "</div><div><span class='tag'>" + escapeHtml(config ? "actionable" : approval.status) + "</span></div></div></button>";
+            }).join("")
+          : "<div class='detail-panel'>No approvals are waiting in this office.</div>";
+        const approval = selectedApproval();
+        const config = approvalActionConfig(approval);
+        if (el.approvalSubmitButton) el.approvalSubmitButton.disabled = !config;
+        if (!approval) {
+          el.approvalPanel.textContent = "Select an approval waiting item to see whether the control room can resolve it directly.";
+          return;
+        }
+        if (!config) {
+          el.approvalPanel.innerHTML = "<strong>" + escapeHtml(approval.actionNeeded) + "</strong><div style='height:10px'></div><div>" + escapeHtml("Reason: " + approval.reason) + "</div><div>" + escapeHtml("Status: " + approval.status) + "</div><div>" + escapeHtml("Next step: " + approval.ownerInstructions) + "</div><div style='height:10px'></div><div class='muted'>This approval is visible here, but it is not directly actionable from the control room yet.</div>";
+          return;
+        }
+        el.approvalPanel.innerHTML = "<strong>" + escapeHtml(approval.actionNeeded) + "</strong><div style='height:10px'></div><div>" + escapeHtml(config.summary) + "</div><div>" + escapeHtml("Reason: " + approval.reason) + "</div><div>" + escapeHtml("Owner instructions: " + approval.ownerInstructions) + "</div>";
+      }
       function setInspectorTab(tab) {
         state.inspectorTab = tab;
         if (el.chatTabButton) el.chatTabButton.classList.toggle("active", tab === "chat");
@@ -555,7 +633,18 @@ export class ControlRoomRenderer {
       function bindDetailButtons() {
         document.querySelectorAll("[data-approval-id]").forEach((node) => node.addEventListener("click", () => {
           const approval = app.snapshot.approvals.find((entry) => entry.id === node.getAttribute("data-approval-id"));
-          if (approval) detail(approval.actionNeeded, ["Status: " + approval.status, "Reason: " + approval.reason, "Owner instructions: " + approval.ownerInstructions]);
+          if (approval) {
+            state.selectedApprovalId = approval.id;
+            renderApprovalActions();
+            detail(approval.actionNeeded, ["Status: " + approval.status, "Reason: " + approval.reason, "Owner instructions: " + approval.ownerInstructions, approvalActionConfig(approval) ? "Control room action: open Controls to record this approval." : "Control room action: not available for this approval yet."]);
+          }
+        }));
+        document.querySelectorAll("[data-approval-action-id]").forEach((node) => node.addEventListener("click", () => {
+          const approval = currentApprovals().find((entry) => entry.id === node.getAttribute("data-approval-action-id"));
+          if (!approval) return;
+          state.selectedApprovalId = approval.id;
+          renderApprovalActions();
+          detail(approval.actionNeeded, ["Status: " + approval.status, "Reason: " + approval.reason, "Owner instructions: " + approval.ownerInstructions]);
         }));
         document.querySelectorAll("[data-handoff-id]").forEach((node) => node.addEventListener("click", () => {
           const handoff = allHandoffs().find((entry) => entry.id === node.getAttribute("data-handoff-id"));
@@ -676,6 +765,7 @@ export class ControlRoomRenderer {
         if (el.businessToggleButton && business) el.businessToggleButton.textContent = business.stage === "active" ? "Pause selected business" : "Activate selected business";
         if (el.controlContext && business) el.controlContext.textContent = "Selected business context: " + business.name + " (" + business.id + ")";
         setInspectorTab(state.inspectorTab);
+        renderApprovalActions();
         renderChat(view.chatSummary);
         bindRouteButtons();
         bindDetailButtons();
@@ -697,6 +787,28 @@ export class ControlRoomRenderer {
         setControlMessage("Directive routed to " + result.routed.envelope.departmentId + " / " + result.routed.envelope.positionId + ".");
         await refreshSnapshot(true);
       }
+      async function resolveApproval(event) {
+        event.preventDefault();
+        const approval = selectedApproval();
+        const config = approvalActionConfig(approval);
+        if (!approval || !config) {
+          setControlMessage("Select a directly actionable approval first.");
+          return;
+        }
+        const approvedBy = el.approvalApprovedBy && el.approvalApprovedBy.value.trim();
+        const note = el.approvalNote && el.approvalNote.value.trim();
+        setControlMessage("Recording approval...");
+        const result = await postJson(app.routes.resolveApproval, {
+          approvalId: approval.id,
+          approvedBy: approvedBy || undefined,
+          note: note || undefined
+        });
+        if (el.approvalNote) el.approvalNote.value = "";
+        state.selectedApprovalId = null;
+        setControlMessage(result.message || "Approval recorded.");
+        detail(approval.actionNeeded, ["Status: completed", "Handler: " + (result.handledBy || "control-room"), "Message: " + (result.message || "Approval recorded.")]);
+        await refreshSnapshot(true);
+      }
       function connectStream() {
         if (app.appMode !== "hosted" || !window.EventSource) return;
         const stream = new EventSource(app.routes.stream, { withCredentials: true });
@@ -709,6 +821,7 @@ export class ControlRoomRenderer {
       if (el.engineSyncButton) el.engineSyncButton.addEventListener("click", () => { void runEngineSync().catch((error) => setControlMessage(error.message || String(error))); });
       if (el.businessToggleButton) el.businessToggleButton.addEventListener("click", () => { void toggleBusinessState().catch((error) => setControlMessage(error.message || String(error))); });
       if (el.taskForm) el.taskForm.addEventListener("submit", (event) => { void routeTask(event).catch((error) => setControlMessage(error.message || String(error))); });
+      if (el.approvalForm) el.approvalForm.addEventListener("submit", (event) => { void resolveApproval(event).catch((error) => setControlMessage(error.message || String(error))); });
       render();
       void ensureChatLoaded(false);
       connectStream();

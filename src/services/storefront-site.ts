@@ -41,6 +41,8 @@ function socialLabel(platform: SocialProfileRecord["platform"]): string {
       return "Gumroad";
     case "facebook_page":
       return "Facebook";
+    case "youtube_channel":
+      return "YouTube";
     case "pinterest":
       return "Pinterest";
     case "instagram_account":

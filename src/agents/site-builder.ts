@@ -3,8 +3,8 @@ import type { AppConfig } from "../config.js";
 import type { ClientJob, SiteBuildResult } from "../domain/contracts.js";
 import { writeJsonFile, writeTextFile } from "../lib/fs.js";
 import { slugify } from "../lib/text.js";
-import { AIClient, SiteCopySchema } from "../openai/client.js";
-import { siteCopyPrompt } from "../openai/prompts.js";
+import { AIClient, SiteCopySchema } from "../ai/client.js";
+import { siteCopyPrompt } from "../ai/prompts.js";
 import { FileStore } from "../storage/store.js";
 
 const FALLBACK_COLORS = ["#0f172a", "#d97706", "#f6efe7", "#fff9f0"];
@@ -20,6 +20,8 @@ export class SiteBuilderAgent {
     const generated = await this.ai.generateJson({
       schema: SiteCopySchema,
       prompt: siteCopyPrompt(client),
+      businessId: client.businessId ?? "auto-funding-agency",
+      capability: "site-copy",
       mode: "deep",
       fallback: () => this.fallbackCopy(client)
     });
