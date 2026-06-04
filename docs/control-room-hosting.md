@@ -170,7 +170,7 @@ When the public domain is live, `https://imonengine.com` is the simplest path fr
 
 For the most reliable Windows path to the hosted VPS control room, use:
 
-- `C:\AIWorkspace\Projects\Auto-Funding\Start-Imon-Control-Room.cmd`
+- `Start-Imon-Control-Room.cmd`
 
 That wrapper:
 
@@ -186,7 +186,7 @@ That wrapper:
 
 When you specifically want the local operator app instead of the direct hosted tunnel, use:
 
-- `C:\AIWorkspace\Projects\Auto-Funding\Start-Imon-Control-Room-Local-App.cmd`
+- `Start-Imon-Control-Room-Local-App.cmd`
 
 That wrapper keeps the existing `control-room-local` flow available for the local dashboard renderer, proxied office explorer, and local UI regression work.
 

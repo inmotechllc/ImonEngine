@@ -18,6 +18,6 @@ Create no-cost workflows that can generate traffic, visibility, and sales opport
 
 ## Handoff
 
-- Mark this phase `completed` and Phase 4 `in_progress` in [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
-- Update [log.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/log.md).
+- Mark this phase `completed` and Phase 4 `in_progress` in [state.json](../state.json).
+- Update [log.md](../log.md).
 - Schedule the Phase 4 automation and tell it to continue the same chain.

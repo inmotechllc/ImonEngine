@@ -242,7 +242,7 @@ For service-business lanes, those artifacts and metrics are no longer limited to
 
 UI validation for this surface is browser-based Playwright against `control-room-local` with `npm run test:control-room-ui`. Electron is intentionally out of scope for this phase.
 
-See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted service and VPS setup.
+See [control-room-hosting.md](control-room-hosting.md) for the hosted service and VPS setup.
 
 ## Current Migration Target
 

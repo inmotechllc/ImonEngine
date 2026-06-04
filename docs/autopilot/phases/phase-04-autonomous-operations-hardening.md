@@ -18,6 +18,6 @@ Make the store lane easier for ImonEngine and the VPS to operate safely with les
 
 ## Handoff
 
-- Mark this phase `completed` and Phase 5 `in_progress` in [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
-- Update [log.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/log.md).
+- Mark this phase `completed` and Phase 5 `in_progress` in [state.json](../state.json).
+- Update [log.md](../log.md).
 - Schedule the Phase 5 automation and tell it to continue the same chain.

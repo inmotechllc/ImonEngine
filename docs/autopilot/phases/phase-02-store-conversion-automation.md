@@ -18,6 +18,6 @@ Turn the expanded Gumroad catalog into a more effective store by improving conve
 
 ## Handoff
 
-- Mark this phase `completed` and Phase 3 `in_progress` in [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
-- Update [log.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/log.md).
+- Mark this phase `completed` and Phase 3 `in_progress` in [state.json](../state.json).
+- Update [log.md](../log.md).
 - Schedule the Phase 3 automation and tell it to continue the same chain.

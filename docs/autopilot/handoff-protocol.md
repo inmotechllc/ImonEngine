@@ -4,10 +4,10 @@ Every phase agent must follow this protocol.
 
 ## Before Doing Work
 
-1. Read [roadmap.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/roadmap.md).
-2. Read [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
-3. Read the matching phase file under [phases](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/phases).
-4. Review [docs/gumroad-store.md](C:/AIWorkspace/Projects/Auto-Funding/docs/gumroad-store.md) and current repo status.
+1. Read [roadmap.md](roadmap.md).
+2. Read [state.json](state.json).
+3. Read the matching phase file under [phases](phases).
+4. Review [docs/gumroad-store.md](../gumroad-store.md) and current repo status.
 
 ## Execution Rules
 
@@ -25,8 +25,8 @@ Every phase agent must follow this protocol.
 
 ## Required Outputs For Every Phase
 
-- Update [state.json](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/state.json).
-- Append a short entry to [log.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autopilot/log.md).
+- Update [state.json](state.json).
+- Append a short entry to [log.md](log.md).
 - Update any affected operational docs.
 - For control-room changes, run `npm test`, `npm run build`, and `npm run test:control-room-ui` before signoff.
 - For control-room changes that affect the webpage, sync the updated repo to `/opt/imon-engine`, restart `imon-engine-control-room.service`, and verify the hosted app plus `http://127.0.0.1:4310/` after publish.

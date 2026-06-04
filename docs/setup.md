@@ -13,10 +13,11 @@
 - `AI_PROVIDER_NVIDIA_API_KEY`: enables the default shared `fast` and `deep` routes.
 - `AI_PROVIDER_NVIDIA_BASE_URL`: optional NVIDIA API Catalog host override. It defaults to `https://integrate.api.nvidia.com/v1` when unset.
 - Legacy `NVIDIA_API_KEY` and `NVIDIA_BASE_URL` still hydrate the NVIDIA provider during the migration window if an existing machine has not been renamed to the `AI_PROVIDER_NVIDIA_*` keys yet.
+- `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL`: enable Nomi-backed ImonEngine office chat through the Nomi gateway `/requests` contract. Legacy `NOMI_GATEWAY_*` and `OMIN_NOMI_GATEWAY_*` keys still hydrate this provider during the migration window.
 - `AI_PROVIDER_OPENAI_API_KEY`: keeps the shared `research` route active during the first NVIDIA migration window.
 - `AI_PROVIDER_OPENAI_BASE_URL`: optional OpenAI-compatible host override for the retained `research` route or any future OpenAI-backed overrides.
 - `AI_PROVIDER_LOCAL_API_KEY` and `AI_PROVIDER_LOCAL_BASE_URL`: optional secondary provider credentials for future route swaps in `src/ai/api-map.ts`.
-- Shared route ids `fast`, `deep`, and `research`, plus the current business capability assignments, live in `src/ai/api-map.ts`. The current stage-1 defaults are `fast -> NVIDIA microsoft/phi-3.5-mini-instruct`, `deep -> NVIDIA deepseek-ai/deepseek-v3.1`, and `research -> OpenAI gpt-5` with `web_search_preview`. Caller files do not choose providers, models, or base URLs directly.
+- Shared route ids `fast`, `deep`, and `research`, plus the current business capability assignments, live in `src/ai/api-map.ts`. The current stage-1 defaults are `fast -> NVIDIA microsoft/phi-3.5-mini-instruct`, `deep -> NVIDIA deepseek-ai/deepseek-v3.1`, and `research -> OpenAI gpt-5` with `web_search_preview`, with ImonEngine office chat overriding `fast` to the `nomi` provider and `model=auto`. Caller files do not choose providers, models, or base URLs directly.
 - `OPENAI_API_KEY`, `OPENAI_MODEL_FAST`, and `OPENAI_MODEL_DEEP`: legacy fallback and model-override keys that still hydrate the new AI routing config during the transition window, including route-level model overrides after the `fast` and `deep` NVIDIA cutover. Leave `OPENAI_MODEL_FAST` and `OPENAI_MODEL_DEEP` unset unless you intentionally want those overrides active.
 - Shared engine and infra:
   `IMON_ENGINE_NAME`, `IMON_ENGINE_TIMEZONE`,
@@ -126,6 +127,7 @@
 29. Run `scripts/install-control-room-service.sh` on the VPS to install the persistent hosted control-room service on `127.0.0.1:4177`.
 30. Run `scripts/install-control-room-nginx-proxy.sh imonengine.com` on the VPS if you want the control room on standard web ports for any-device access.
 31. After `imonengine.com` resolves to the VPS, run `scripts/install-control-room-certbot.sh imonengine.com` so the control room works over HTTPS at `https://imonengine.com`.
+32. On the operator machine, run `python -m pip install -r requirements.txt` before using `scripts/sync_vps_repo.py`, `scripts/control_room_tunnel.py`, or the PowerShell launchers that depend on those helpers.
 32. Run `scripts/install-northline-site-service.sh` on the VPS if you want a persistent Northline proof-page service on port `4181`.
 33. Run `scripts/install-northline-nginx-proxy.sh` on the VPS if you want the Northline domain to terminate on standard HTTP port `80` instead of `:4181`.
 34. After the Northline domain resolves to the VPS, run `scripts/install-northline-certbot.sh northlinegrowthsystems.com` so the live proof page works over HTTPS.

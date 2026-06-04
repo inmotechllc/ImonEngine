@@ -80,13 +80,12 @@ export class AIClient {
     fallback: () => T;
   }): Promise<{ data: T; source: AIResponseSource; providerLabel?: string; routeId?: string }> {
     const route = this.resolveRoute({ mode, businessId, capability });
-    const client = route ? this.clientFor(route) : undefined;
-    if (!route || !client) {
+    if (!route || !this.canUseRoute(route)) {
       return { data: fallback(), source: "fallback" };
     }
 
     try {
-      const text = await this.createRouteText(client, route, {
+      const text = await this.createRouteText(route, {
         prompt,
         jsonMode: true
       });
@@ -124,13 +123,12 @@ export class AIClient {
     fallback: () => string;
   }): Promise<{ text: string; source: AIResponseSource; providerLabel?: string; routeId?: string }> {
     const route = this.resolveRoute({ mode, businessId, capability });
-    const client = route ? this.clientFor(route) : undefined;
-    if (!route || !client) {
+    if (!route || !this.canUseRoute(route)) {
       return { text: fallback(), source: "fallback" };
     }
 
     try {
-      const text = await this.createRouteText(client, route, {
+      const text = await this.createRouteText(route, {
         prompt
       });
       return {
@@ -156,13 +154,12 @@ export class AIClient {
     fallback: () => string;
   }): Promise<{ text: string; source: AIResponseSource; providerLabel?: string; routeId?: string }> {
     const route = this.resolveRoute({ sharedRouteId: "research", businessId, capability });
-    const client = route ? this.clientFor(route) : undefined;
-    if (!route || !client) {
+    if (!route || !this.canUseRoute(route)) {
       return { text: fallback(), source: "fallback" };
     }
 
     try {
-      const text = await this.createRouteText(client, route, {
+      const text = await this.createRouteText(route, {
         prompt
       });
       return {
@@ -197,7 +194,7 @@ export class AIClient {
 
   private applyLegacyModelOverride(route: AIResolvedRouteDefinition): AIResolvedRouteDefinition {
     const legacyModelOverride = this.config.ai.routeModelOverrides[route.sharedRouteId];
-    if (!legacyModelOverride) {
+    if (!legacyModelOverride || route.provider === "nomi") {
       return route;
     }
 
@@ -221,6 +218,11 @@ export class AIClient {
     return true;
   }
 
+  private canUseRoute(route: AIResolvedRouteDefinition): boolean {
+    const provider = this.providerConfig(route.provider);
+    return provider ? this.isProviderAvailable(provider) : false;
+  }
+
   private clientFor(route: AIResolvedRouteDefinition): OpenAI | undefined {
     const provider = this.providerConfig(route.provider);
     if (!provider || !this.isProviderAvailable(provider)) {
@@ -241,7 +243,6 @@ export class AIClient {
   }
 
   private async createRouteText(
-    client: OpenAI,
     route: AIResolvedRouteDefinition,
     request: {
       prompt: string;
@@ -253,11 +254,166 @@ export class AIClient {
       return undefined;
     }
 
+    if (provider.transport === "nomi-gateway") {
+      return this.createNomiGatewayText(provider, route, request);
+    }
+
+    const client = this.clientFor(route);
+    if (!client) {
+      return undefined;
+    }
+
     if (provider.apiKind === "chat-completions") {
       return this.createChatCompletionText(client, route, request);
     }
 
     return this.createResponsesText(client, route, request);
+  }
+
+  private async createNomiGatewayText(
+    provider: AIResolvedProviderConfig,
+    route: AIResolvedRouteDefinition,
+    request: {
+      prompt: string;
+      jsonMode?: boolean;
+    }
+  ): Promise<string | undefined> {
+    const baseUrl = this.normalizeBaseUrl(provider.baseUrl);
+    if (!baseUrl) {
+      return undefined;
+    }
+
+    const prompt = request.jsonMode
+      ? `${request.prompt}\n\nReturn only a valid JSON object. Do not wrap it in markdown.`
+      : request.prompt;
+    const capability = request.jsonMode || route.sharedRouteId === "deep" ? "reasoning" : "chat";
+    const timeoutMs = 30000;
+    const headers = this.buildNomiGatewayHeaders(provider);
+    const acceptedResponse = await fetch(this.resolveUrl(baseUrl, "/requests"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        modelId: route.model || "auto",
+        capability,
+        mode: "sync",
+        input: {
+          kind: "text",
+          text: prompt,
+          attachments: []
+        },
+        requestMetadata: {
+          taskClass: request.jsonMode ? "analysis" : "conversation",
+          preferredCapabilityPackId: request.jsonMode ? "workflow-planning" : "conversation-coordination",
+          workflowStage: request.jsonMode ? "planning" : undefined,
+          qualityMode: route.sharedRouteId === "fast" ? "fast" : "balanced",
+          preferredRoutingRole: request.jsonMode ? "planning" : "coordination"
+        },
+        context: {
+          promptId: route.routeId
+        },
+        timeoutMs
+      })
+    });
+
+    const acceptedPayload = (await acceptedResponse.json()) as {
+      statusPath?: string;
+      message?: string;
+      detail?: string;
+    };
+    if (!acceptedResponse.ok || !acceptedPayload.statusPath) {
+      throw new Error(
+        acceptedPayload.message?.trim() ||
+          acceptedPayload.detail?.trim() ||
+          "Nomi gateway rejected the request."
+      );
+    }
+
+    const statusPayload = await this.pollNomiGatewayStatus(baseUrl, acceptedPayload.statusPath, headers, timeoutMs);
+    if (statusPayload.state === "failed" || statusPayload.state === "cancelled") {
+      throw new Error(statusPayload.error?.message?.trim() || "Nomi gateway request failed.");
+    }
+
+    if (typeof statusPayload.output?.text === "string" && statusPayload.output.text.trim()) {
+      return statusPayload.output.text.trim();
+    }
+
+    if (statusPayload.output?.json !== undefined) {
+      return JSON.stringify(statusPayload.output.json);
+    }
+
+    return undefined;
+  }
+
+  private async pollNomiGatewayStatus(
+    baseUrl: string,
+    statusPath: string,
+    headers: Record<string, string>,
+    timeoutMs: number
+  ): Promise<{
+    state?: string;
+    output?: {
+      text?: string;
+      json?: unknown;
+    };
+    error?: {
+      message?: string;
+    };
+  }> {
+    const deadline = Date.now() + timeoutMs;
+    const pathName = statusPath.startsWith("/") ? statusPath : `/${statusPath}`;
+
+    while (Date.now() <= deadline) {
+      const response = await fetch(this.resolveUrl(baseUrl, pathName), {
+        method: "GET",
+        headers
+      });
+      const payload = (await response.json()) as {
+        state?: string;
+        output?: {
+          text?: string;
+          json?: unknown;
+        };
+        error?: {
+          message?: string;
+        };
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.message?.trim() || "Nomi gateway status request failed.");
+      }
+
+      if (payload.state === "succeeded" || payload.state === "failed" || payload.state === "cancelled") {
+        return payload;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    throw new Error("Timed out waiting for Nomi gateway output.");
+  }
+
+  private buildNomiGatewayHeaders(provider: AIResolvedProviderConfig): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    if (provider.apiKey) {
+      headers.Authorization = `Bearer ${provider.apiKey}`;
+    }
+    return headers;
+  }
+
+  private normalizeBaseUrl(value: string | undefined): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+    return withProtocol.endsWith("/") ? withProtocol.slice(0, -1) : withProtocol;
+  }
+
+  private resolveUrl(baseUrl: string, pathName: string): string {
+    return new URL(pathName, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`).toString();
   }
 
   private async createResponsesText(

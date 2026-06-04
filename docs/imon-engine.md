@@ -30,15 +30,15 @@ Business categories are normalized into reusable office-template profiles so dep
 - Active business route groups: `imon-engine` for office chat and market research, `imon-digital-asset-store` for asset blueprint generation, and `auto-funding-agency` for Northline scoring, outreach, site copy, reply classification, retention reporting, and prospect research
 - Reserved namespaces stay pre-registered for Northbeam, Velora, ClipBaiters, QuietPivot, and Imonic so future lane-specific AI APIs land in the same registry instead of spreading across callers
 
-Current stage-1 defaults are split by provider: `fast -> NVIDIA microsoft/phi-3.5-mini-instruct`, `deep -> NVIDIA deepseek-ai/deepseek-v3.1`, and `research -> OpenAI gpt-5` with `web_search_preview`.
+Current stage-1 defaults are split by provider: `fast -> NVIDIA microsoft/phi-3.5-mini-instruct`, `deep -> NVIDIA deepseek-ai/deepseek-v3.1`, and `research -> OpenAI gpt-5` with `web_search_preview`. ImonEngine office chat overrides the shared `fast` route to the `nomi` provider with `model=auto`, so hosted control-room office chat can run through Nomi processing when `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL` are configured.
 
-Provider secrets and optional host overrides stay in env through the `AI_PROVIDER_*` keys. NVIDIA defaults to `https://integrate.api.nvidia.com/v1` when no override is set, while OpenAI stays active for the current `research` route. The route map owns which provider and model each shared or business-specific capability uses.
+Provider secrets and optional host overrides stay in env through the `AI_PROVIDER_*` keys. NVIDIA defaults to `https://integrate.api.nvidia.com/v1` when no override is set, Nomi defaults to `http://127.0.0.1:1100` for local gateway use, and OpenAI stays active for the current `research` route. The route map owns which provider and model each shared or business-specific capability uses.
 
 ## Agent Context Hub
 
-Use [docs/autonomy/agents/README.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autonomy/agents/README.md) as the repo-aware custom-agent briefing for any agent working on ImonEngine. It points agents at the canonical docs, code surfaces, runtime artifacts, and validation paths for each subsystem.
+Use [docs/autonomy/agents/README.md](docs/autonomy/agents/README.md) as the repo-aware custom-agent briefing for any agent working on ImonEngine. It points agents at the canonical docs, code surfaces, runtime artifacts, and validation paths for each subsystem.
 
-Use [docs/autonomy/agents/auto-documentation.md](C:/AIWorkspace/Projects/Auto-Funding/docs/autonomy/agents/auto-documentation.md) for the required documentation follow-through whenever agents change commands, config, routes, runtime outputs, or operating rules.
+Use [docs/autonomy/agents/auto-documentation.md](docs/autonomy/agents/auto-documentation.md) for the required documentation follow-through whenever agents change commands, config, routes, runtime outputs, or operating rules.
 
 ## Managed Business Order
 
@@ -218,7 +218,7 @@ All repo-managed JSON and text state artifacts now write through an atomic temp-
 10. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
 11. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, `runtime/ops/venture-studio.json`, and the hosted control room.
 
-See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted/local control-room split and operator workflow.
+See [control-room-hosting.md](control-room-hosting.md) for the hosted/local control-room split and operator workflow.
 
 ## Northline Autonomy
 

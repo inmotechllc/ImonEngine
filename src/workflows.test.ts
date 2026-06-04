@@ -353,6 +353,10 @@ test("ai config preserves legacy OpenAI fallbacks and route overrides during the
     "NVIDIA_API_KEY",
     "AI_PROVIDER_OPENAI_API_KEY",
     "OPENAI_API_KEY",
+    "AI_PROVIDER_NOMI_API_KEY",
+    "NOMI_GATEWAY_API_KEY",
+    "AI_PROVIDER_NOMI_BASE_URL",
+    "NOMI_GATEWAY_URL",
     "OPENAI_MODEL_FAST",
     "OPENAI_MODEL_DEEP"
   ] as const;
@@ -363,6 +367,10 @@ test("ai config preserves legacy OpenAI fallbacks and route overrides during the
     process.env.NVIDIA_API_KEY = "nvidia-preview-key";
     delete process.env.AI_PROVIDER_OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "legacy-openai-key";
+    process.env.AI_PROVIDER_NOMI_API_KEY = "nomi-host-key";
+    delete process.env.NOMI_GATEWAY_API_KEY;
+    process.env.AI_PROVIDER_NOMI_BASE_URL = "http://nomi-host.local:1100";
+    delete process.env.NOMI_GATEWAY_URL;
     process.env.OPENAI_MODEL_FAST = "legacy-fast";
     process.env.OPENAI_MODEL_DEEP = "legacy-deep";
 
@@ -378,10 +386,17 @@ test("ai config preserves legacy OpenAI fallbacks and route overrides during the
       capability: "office-chat",
       mode: "fast"
     });
+    const imonOfficeRoute = ai.describeRoute({
+      businessId: "imon-engine",
+      capability: "office-chat",
+      mode: "fast"
+    });
 
     assert.equal(config.ai.providers.openai.apiKey, "legacy-openai-key");
     assert.equal(config.ai.providers.nvidia.apiKey, "nvidia-preview-key");
     assert.equal(config.ai.providers.nvidia.baseUrl, "https://integrate.api.nvidia.com/v1");
+    assert.equal(config.ai.providers.nomi.apiKey, "nomi-host-key");
+    assert.equal(config.ai.providers.nomi.baseUrl, "http://nomi-host.local:1100");
     assert.equal(config.ai.routeModelOverrides.fast, "legacy-fast");
     assert.equal(config.ai.routeModelOverrides.deep, "legacy-deep");
     assert.ok(assetBlueprintRoute);
@@ -396,7 +411,125 @@ test("ai config preserves legacy OpenAI fallbacks and route overrides during the
     assert.equal(inheritedClipbaitersRoute.sharedRouteId, "fast");
     assert.equal(inheritedClipbaitersRoute.provider, "nvidia");
     assert.equal(inheritedClipbaitersRoute.model, "legacy-fast");
+    assert.ok(imonOfficeRoute);
+    assert.equal(imonOfficeRoute.routeId, "imon-engine.office-chat");
+    assert.equal(imonOfficeRoute.sharedRouteId, "fast");
+    assert.equal(imonOfficeRoute.provider, "nomi");
+    assert.equal(imonOfficeRoute.providerLabel, "Nomi Gateway");
+    assert.equal(imonOfficeRoute.model, "auto");
+    assert.equal(imonOfficeRoute.available, true);
   } finally {
+    for (const key of touchedKeys) {
+      if (previous[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
+  }
+});
+
+test("AI client routes ImonEngine office chat through the Nomi gateway provider", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ai-nomi-provider-"));
+  const touchedKeys = [
+    "AI_PROVIDER_NOMI_API_KEY",
+    "AI_PROVIDER_NOMI_BASE_URL",
+    "NOMI_GATEWAY_API_KEY",
+    "NOMI_GATEWAY_URL"
+  ] as const;
+  const previous = Object.fromEntries(touchedKeys.map((key) => [key, process.env[key]]));
+  let acceptedBody = "";
+
+  const nomiServer = createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    if (url.pathname === "/requests" && req.method === "POST") {
+      assert.equal(req.headers.authorization, "Bearer nomi-host-key");
+      for await (const chunk of req) {
+        acceptedBody += String(chunk);
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          requestId: "req_imon_office_chat",
+          taskId: "task_imon_office_chat",
+          state: "queued",
+          mode: "sync",
+          modelId: "chat",
+          capability: "chat",
+          createdAt: new Date().toISOString(),
+          statusPath: "/requests/req_imon_office_chat"
+        })
+      );
+      return;
+    }
+
+    if (url.pathname === "/requests/req_imon_office_chat") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          requestId: "req_imon_office_chat",
+          taskId: "task_imon_office_chat",
+          state: "succeeded",
+          modelId: "chat",
+          capability: "chat",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          output: { text: "Nomi office response" }
+        })
+      );
+      return;
+    }
+
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ message: "missing" }));
+  });
+
+  await new Promise<void>((resolve) => nomiServer.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = nomiServer.address();
+    assert.ok(address && typeof address === "object");
+    process.env.AI_PROVIDER_NOMI_API_KEY = "nomi-host-key";
+    process.env.AI_PROVIDER_NOMI_BASE_URL = `http://127.0.0.1:${address.port}`;
+    delete process.env.NOMI_GATEWAY_API_KEY;
+    delete process.env.NOMI_GATEWAY_URL;
+
+    const config = await loadConfig(root);
+    const ai = new AIClient(config);
+    const result = await ai.generateText({
+      businessId: "imon-engine",
+      capability: "office-chat",
+      mode: "fast",
+      prompt: "Summarize the engine office.",
+      fallback: () => "fallback response"
+    });
+    const envelope = JSON.parse(acceptedBody) as {
+      modelId?: string;
+      capability?: string;
+      input?: { text?: string };
+      requestMetadata?: { taskClass?: string; preferredCapabilityPackId?: string };
+    };
+
+    assert.equal(result.text, "Nomi office response");
+    assert.equal(result.source, "nomi");
+    assert.equal(result.providerLabel, "Nomi Gateway");
+    assert.equal(result.routeId, "imon-engine.office-chat");
+    assert.equal(envelope.modelId, "auto");
+    assert.equal(envelope.capability, "chat");
+    assert.equal(envelope.input?.text, "Summarize the engine office.");
+    assert.equal(envelope.requestMetadata?.taskClass, "conversation");
+    assert.equal(envelope.requestMetadata?.preferredCapabilityPackId, "conversation-coordination");
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      nomiServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
     for (const key of touchedKeys) {
       if (previous[key] === undefined) {
         delete process.env[key];
@@ -1256,7 +1389,10 @@ test("northline uses the selected business profile for planning, collection, sou
     assert.deepEqual(planResult.plan.collectionAreas, ["Cleveland, OH"]);
     assert.deepEqual(planResult.plan.collectionTrades, ["roofing"]);
     assert.deepEqual(planResult.plan.targetIndustries, ["Roofing"]);
-    assert.ok(planResult.artifacts.planJsonPath.endsWith(`/northline-growth-system/${customBusinessId}/plan.json`));
+    assert.equal(
+      planResult.artifacts.planJsonPath,
+      path.join(config.opsDir, "northline-growth-system", customBusinessId, "plan.json")
+    );
 
     const collectionResult = await northlineProspectCollector.run({
       businessId: customBusinessId,
@@ -4387,11 +4523,12 @@ test("store ops import Gumroad and Relay data into a revenue snapshot", async ()
 
   const gumroadCsv = path.join(root, "gumroad-sales.csv");
   const relayCsv = path.join(root, "relay.csv");
+  const transactionDate = new Date().toISOString().slice(0, 10);
   await writeFile(
     gumroadCsv,
     [
       "Order ID,Product Name,Sale Price,Fee,Creator Earnings,Purchase Date,Currency,Email",
-      `sale-1,${first.title},9,1,8,2026-03-24,USD,buyer@example.com`
+      `sale-1,${first.title},9,1,8,${transactionDate},USD,buyer@example.com`
     ].join("\n"),
     "utf8"
   );
@@ -4399,8 +4536,8 @@ test("store ops import Gumroad and Relay data into a revenue snapshot", async ()
     relayCsv,
     [
       "Posted Date,Description,Amount,Account",
-      "2026-03-24,Gumroad payout,8.00,Relay Operating",
-      "2026-03-24,Meta Ads,-2.50,Relay Operating"
+      `${transactionDate},Gumroad payout,8.00,Relay Operating`,
+      `${transactionDate},Meta Ads,-2.50,Relay Operating`
     ].join("\n"),
     "utf8"
   );

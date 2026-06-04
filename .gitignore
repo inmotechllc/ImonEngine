@@ -2,7 +2,6 @@ node_modules/
 build/
 runtime/
 .env
-.env.example
 .DS_Store
 coverage/
 __pycache__/

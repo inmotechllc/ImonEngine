@@ -1,8 +1,8 @@
-export type AITransportKind = "openai-compatible";
+export type AITransportKind = "openai-compatible" | "nomi-gateway";
 
 export type AIRequestApiKind = "responses" | "chat-completions";
 
-export type AIProviderId = "openai" | "nvidia" | "local";
+export type AIProviderId = "openai" | "nvidia" | "local" | "nomi";
 
 export type AISharedRouteId = "fast" | "deep" | "research";
 
@@ -64,7 +64,7 @@ export interface AIBusinessCapabilityDefinition {
 export interface AIBusinessToolingDependency {
   id: string;
   label: string;
-  kind: "local-cli" | "browser-automation" | "openai-compatible";
+  kind: "local-cli" | "browser-automation" | "openai-compatible" | "nomi-gateway";
   status: AICapabilityStatus;
   notes: string;
 }
@@ -126,6 +126,22 @@ export const AI_PROVIDER_MAP: Record<AIProviderId, AIProviderDefinition> = {
     },
     requiresApiKey: false,
     requiresBaseUrl: true
+  },
+  nomi: {
+    label: "Nomi Gateway",
+    transport: "nomi-gateway",
+    apiKind: "responses",
+    env: {
+      apiKey: "AI_PROVIDER_NOMI_API_KEY",
+      baseUrl: "AI_PROVIDER_NOMI_BASE_URL"
+    },
+    defaultBaseUrl: "http://127.0.0.1:1100",
+    requiresApiKey: true,
+    requiresBaseUrl: true,
+    legacy: {
+      apiKey: ["NOMI_GATEWAY_API_KEY", "OMIN_NOMI_GATEWAY_API_KEY"],
+      baseUrl: ["NOMI_GATEWAY_URL", "OMIN_NOMI_GATEWAY_URL"]
+    }
   }
 };
 
@@ -211,8 +227,10 @@ export const AI_BUSINESS_ROUTE_MAP: Record<AIManagedBusinessId, Record<string, A
   "imon-engine": {
     "office-chat": {
       route: "fast",
+      provider: "nomi",
+      model: "auto",
       status: "active",
-      description: "Control-room assistant responses for engine, business, and department offices."
+      description: "Control-room assistant responses for engine, business, and department offices through Nomi processing."
     },
     "market-research": {
       route: "research",
