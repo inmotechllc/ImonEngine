@@ -50,6 +50,8 @@ Northline commands resolve the selected `--business` from the managed business r
 
 `northline-autonomy-run` is the file-backed Northline operating pass for the agency lane.
 
+- If `pause-business --business auto-funding-agency` has been issued, `northline-autonomy-run` exits with `status=skipped` before prospect collection, hosted intake, outreach drafting or sending, reply sync, or delivery queue work until `activate-business` is run. Manual `northline-plan` refreshes can still update the dossier without resuming automation.
+
 - Refreshes the Northline launch dossier under `runtime/ops/northline-growth-system/` for the default business, or `runtime/ops/northline-growth-system/<business-id>/` for other agency businesses
 - Refreshes deterministic Northline prospect feeds for the configured markets on the collection cadence, starting with OSM/Overpass and then supplementing with AI-assisted public web search when OpenAI web research is configured
 - Processes changed CSV or JSON prospect feeds from `NORTHLINE_PROSPECT_SOURCE_DIR`
@@ -71,6 +73,7 @@ Northline commands resolve the selected `--business` from the managed business r
 - Rewrites both `runtime/ops/northline-growth-system/plan.{json,md}` and `runtime/ops/northline-growth-system/autonomy-summary.{json,md}` after the queue work finishes so promotion criteria, proof counts, and manual gates reflect the same post-run state
 - Targeted commands such as `northline-inbox-sync`, `northline-payment-check`, and manual approval updates can advance `runtime/state/approvals.json` after the last full autonomy pass. If you have not rerun `northline-autonomy-run` yet, treat the targeted command output plus `runtime/state/approvals.json` as current state and treat the last autonomy summary as historical.
 - Refreshes the shared `runtime/state/growthQueue.json` plus `runtime/ops/growth-queue.{json,md}` with Facebook and Instagram-ready Northline promotion posts derived from the current social plan whenever those live surfaces are configured
+- The shared VPS sync wrapper now follows `northline-autonomy-run` with `npm run dev -- publish-growth-post`, which attempts the next due shared growth-queue item and exits idle when nothing is due yet
 - Generates teaser PNG assets for those queue items under `runtime/agency-site/social/` so the hosted Northline site can serve the same public image URLs the Instagram publisher needs
 - Refreshes `runtime/ops/northline-growth-system/autonomy-summary.json` plus the matching markdown summary, or the matching business-scoped summary path for non-default businesses
 - The hosted site server queues that same autonomy pass immediately after each stored submission when the site is live; the scheduled/manual `northline-autonomy-run` remains the backstop when the server is offline
@@ -127,7 +130,7 @@ Northline social scaffolding now promotes the configured `NORTHLINE_FACEBOOK_URL
 - `META_PAGE_ID`, `META_PAGE_ACCESS_TOKEN` for shared Meta publishing
 - `META_INSTAGRAM_ACCOUNT_ID` (optional override) and `META_INSTAGRAM_ACCESS_TOKEN` (optional when the page token already has Instagram publishing scope)
 
-When `META_PAGE_ACCESS_TOKEN` is missing, the repo falls back to the signed-in Facebook browser session and switches into the live Northline Page before posting. When Instagram account discovery needs a page id, the repo first uses the business-scoped `facebook_page` record in `runtime/state/socialProfiles.json` and only falls back to `META_PAGE_ID` when that record does not carry an external id.
+When `META_PAGE_ACCESS_TOKEN` is missing, the repo falls back to the signed-in Facebook browser session and switches into the live Northline Page before posting. That browser path now opens the business-scoped Page URL from `runtime/state/socialProfiles.json`, scrolls back to the top of the live Page, tries the visible page-native composer entries in order (`What's on your mind?`, `Create post`, `Write something`, `Share an update`), and then falls back to the Page overflow menu before it enters the caption and completes the `Next` -> `Post` flow. When Instagram account discovery needs a page id, the repo first uses the business-scoped `facebook_page` record in `runtime/state/socialProfiles.json` and only falls back to `META_PAGE_ID` when that record does not carry an external id.
 
 For automated outbound sends, keep the active sender path healthy. Gmail CDP mode needs the VPS browser signed into the Northline inbox that matches `NORTHLINE_SALES_EMAIL`. IMAP mode expects the shared `IMAP_*` settings or business-scoped `NORTHLINE_IMAP_*` overrides, plus either the shared SMTP or IMAP password or `NORTHLINE_ZOHO_APP_PASS`, and typically uses SMTP as the outbound channel when `SMTP_*` and `NORTHLINE_SMTP_FROM` are configured.
 

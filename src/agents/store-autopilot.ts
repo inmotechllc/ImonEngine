@@ -710,11 +710,28 @@ export class StoreAutopilotAgent {
     return null;
   }
 
-  async publishGrowthPost(itemId: string): Promise<AutopilotRunResult> {
+  async publishGrowthPost(itemId?: string): Promise<AutopilotRunResult> {
     const packs = await this.store.getAssetPacks();
+    if (!itemId) {
+      const plannedQueue = (await this.store.getGrowthQueue()).filter((item) => item.status === "planned");
+      if (this.countStaleAttemptedGrowthItems(plannedQueue) > 0) {
+        await this.refreshStoreOpsArtifacts(packs);
+      }
+    }
     const result = await this.executeDueGrowthItem(packs, itemId);
     if (!result) {
-      throw new Error(`Growth queue item ${itemId} was not found or is not eligible to publish.`);
+      if (itemId) {
+        throw new Error(`Growth queue item ${itemId} was not found or is not eligible to publish.`);
+      }
+      return {
+        phaseId: "phase-06-continuous-store-operations",
+        status: "idle",
+        summary: "No due growth queue item is ready to publish.",
+        details: [
+          "The shared growth queue does not have a planned item scheduled at or before the current time."
+        ],
+        changed: false
+      };
     }
     return result;
   }
@@ -1392,6 +1409,7 @@ export class StoreAutopilotAgent {
       "CONTROL_ROOM_SESSION_TTL_HOURS=12",
       "CONTROL_ROOM_STALE_THRESHOLD_MINUTES=120",
       "CONTROL_ROOM_SERVICE_LOG_PATH=/opt/imon-engine/runtime/ops/control-room/server.log",
+      "CONTROL_ROOM_PUBLIC_URL=",
       "CONTROL_ROOM_LOCAL_BIND_HOST=127.0.0.1",
       "CONTROL_ROOM_LOCAL_PORT=4310",
       "CONTROL_ROOM_REMOTE_URL=http://127.0.0.1:4311",

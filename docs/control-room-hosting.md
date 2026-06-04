@@ -3,10 +3,10 @@
 The control room now has two outputs backed by the same control-plane snapshot:
 
 - a static fallback export at `runtime/ops/control-room/index.html`
-- a private hosted app served directly from the repo
-- a local operator app that proxies the private VPS app over an SSH tunnel
+- a hosted app served directly from the repo on the VPS
+- a local operator app that can proxy the VPS app over an SSH tunnel
 
-The control plane remains the source of truth. The hosted app holds the durable state and execution environment. The local operator app renders the same control-room view-model locally while sending guided write actions back to the VPS control plane.
+The control plane remains the source of truth. The hosted app holds the durable state and execution environment. That hosted app can stay loopback-only for the VPS browser and tunnel flow, or it can sit behind nginx plus TLS on a public domain such as `https://imonengine.com`. The local operator app renders the same control-room view-model locally while sending guided write actions back to the VPS control plane.
 
 ## Folder Explorer Model
 
@@ -54,6 +54,7 @@ Behavior rules:
 - `CONTROL_ROOM_SESSION_TTL_HOURS`
 - `CONTROL_ROOM_STALE_THRESHOLD_MINUTES`
 - `CONTROL_ROOM_SERVICE_LOG_PATH`
+- `CONTROL_ROOM_PUBLIC_URL`
 - `CONTROL_ROOM_LOCAL_BIND_HOST`
 - `CONTROL_ROOM_LOCAL_PORT`
 - `CONTROL_ROOM_REMOTE_URL`
@@ -61,16 +62,32 @@ Behavior rules:
 - `CONTROL_ROOM_TUNNEL_PORT`
 - `CONTROL_ROOM_TUNNEL_PYTHON_BIN`
 
-Default v1 behavior:
+Hosted default behavior:
 
 - bind host: `127.0.0.1`
 - port: `4177`
 - auth: owner-only password gate with signed httpOnly cookies
-- exposure: private VPS only, via the VPS browser or SSH tunneling
+- public URL: optional through `CONTROL_ROOM_PUBLIC_URL`
+- exposure: VPS browser, SSH tunnel/local app, or a public nginx plus TLS domain
 - local app bind host: `127.0.0.1`
 - local app port: `4310`
 - local tunnel target: `127.0.0.1:4311 -> VPS 127.0.0.1:4177`
 - tunnel python default: `python` on Windows, `python3` on non-Windows hosts when `CONTROL_ROOM_TUNNEL_PYTHON_BIN` is blank
+- secure cookie behavior: the hosted login cookie automatically adds `Secure` when nginx forwards `X-Forwarded-Proto=https`
+
+## Public HTTPS Access
+
+The domain-hosted path keeps the Node service private on loopback and publishes standard ports through nginx:
+
+1. Keep `CONTROL_ROOM_BIND_HOST=127.0.0.1` and `CONTROL_ROOM_PORT=4177`.
+2. Set `CONTROL_ROOM_PUBLIC_URL=https://imonengine.com`.
+3. Run `scripts/install-control-room-service.sh` on the VPS.
+4. Run `scripts/install-control-room-nginx-proxy.sh imonengine.com` on the VPS.
+5. Point the `imonengine.com` DNS A record, and optionally `www.imonengine.com`, at the VPS IP.
+6. After DNS resolves to the VPS, run `scripts/install-control-room-certbot.sh imonengine.com`.
+7. Open `https://imonengine.com/login` from any device and sign in with the existing control-room password.
+
+The app still stays password-gated. nginx terminates TLS, forwards `X-Forwarded-Proto=https`, and leaves the repo-hosted control-room process bound to `127.0.0.1:4177`.
 
 ## Routes
 
@@ -149,6 +166,8 @@ Normal operator flow:
 4. Sign in once using the control-room password.
 5. Use the local UI for business switching, scoped orchestrator chat, engine sync, activation/pause, routed operator directives, and the supported approval actions surfaced in the `Approval Actions` panel.
 
+When the public domain is live, `https://imonengine.com` is the simplest path from phones, tablets, and other PCs. Keep the SSH tunnel and local operator app as the fallback path when the public domain is unavailable or when you explicitly want loopback-only access.
+
 For the most reliable Windows path to the hosted VPS control room, use:
 
 - `C:\AIWorkspace\Projects\Auto-Funding\Start-Imon-Control-Room.cmd`
@@ -184,6 +203,11 @@ Install the hosted control room on the VPS with:
 
 - `scripts/install-control-room-service.sh`
 
+Optional public-domain helpers:
+
+- `scripts/install-control-room-nginx-proxy.sh [domain]`
+- `scripts/install-control-room-certbot.sh [domain] [email]`
+
 Runtime wrapper:
 
 - `scripts/run-control-room.sh`
@@ -196,9 +220,15 @@ The install script:
 - installs `imon-engine-control-room.service`
 - enables and starts the service
 
+The nginx helper keeps the Node service on `127.0.0.1:4177`, installs an nginx site on ports `80` and `443`, forwards the hosted app through standard web ports, disables proxy buffering for the SSE stream, and writes `CONTROL_ROOM_PUBLIC_URL=https://<domain>` into `.env`.
+
+The certbot helper adds TLS and HTTP-to-HTTPS redirection after the domain already resolves to the VPS.
+
 The runtime wrapper now follows the same auth bootstrap rule for manual starts. When `CONTROL_ROOM_PASSWORD_HASH` is blank, `scripts/run-control-room.sh` reads `IMON_ENGINE_HOST_PASSWORD` first and `IMON_ENGINE_VPS_PASSWORD` second, derives a temporary control-room hash for the running process, and keeps the hosted login usable without requiring a separate pre-step. If neither a hash nor a fallback password exists, the wrapper exits immediately with a clear error instead of starting a server that cannot accept logins.
 
 The direct repo CLI now follows the same auth bootstrap rule. When you run `npm run dev -- control-room-serve` or `npm run dev -- control-room-health` without `CONTROL_ROOM_PASSWORD_HASH`, the app derives the control-room login from `IMON_ENGINE_HOST_PASSWORD` first and `IMON_ENGINE_VPS_PASSWORD` second so the dev path matches the wrapper behavior.
+
+`control-room-serve` now binds the hosted app first and treats the startup `engine-sync` as a best-effort background refresh. If the live runtime state makes that refresh fail, the control room stays online against the latest durable snapshot instead of exiting before the login page comes up.
 
 The hourly VPS autopilot now also rebuilds the repo and restarts the control-room service so the hosted app stays aligned with pulled code.
 
@@ -212,7 +242,8 @@ For control-room changes that affect the webpage:
 4. Sync the updated repo to `/opt/imon-engine`.
 5. Run the VPS-side rebuild or sync flow.
 6. Restart `imon-engine-control-room.service`.
-7. Verify the hosted VPS app and the local webpage at `http://127.0.0.1:4310/` both show the new UI and working scoped chats.
+7. Verify the hosted app at `CONTROL_ROOM_PUBLIC_URL` when the public domain path is enabled, or at the loopback/tunnel URL when it is not.
+8. Verify the local webpage at `http://127.0.0.1:4310/` when you still use the tunnel or local-operator path.
 
 ## Read-Only Data Rules
 

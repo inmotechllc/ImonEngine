@@ -206,7 +206,7 @@ For alternate Northline-managed service businesses, the same smoke artifacts are
 The first office UI pass now has two delivery modes:
 
 - a static export at `runtime/ops/control-room/index.html`
-- a private hosted app served from the VPS
+- a hosted app served from the VPS, either loopback-only or behind the ImonEngine domain
 
 Both modes are backed by the same shared control-room snapshot:
 

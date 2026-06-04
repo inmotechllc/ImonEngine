@@ -175,7 +175,7 @@ function usage(): string {
     "  npm run dev -- repair-asset-pack-media --pack <id>",
     "  npm run dev -- repair-asset-pack-content --pack <id>",
     "  npm run dev -- growth-queue",
-    "  npm run dev -- publish-growth-post --item <id>",
+    "  npm run dev -- publish-growth-post [--item <id>]",
     "  npm run dev -- import-gumroad-sales --file <csv>",
     "  npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]",
     "  npm run dev -- revenue-report [--business imon-digital-asset-store] [--days 30]",
@@ -332,6 +332,21 @@ async function buildContext() {
   };
 }
 
+async function buildControlRoomContext() {
+  const config = await loadConfig();
+  const store = new FileStore(config.stateDir);
+  await store.init();
+  await seedOffers(store);
+
+  return {
+    config,
+    imonEngine: new ImonEngineAgent(config, store),
+    officeDashboard: new OfficeDashboardService(config, store),
+    controlRoomServer: new ControlRoomServer(config, store),
+    controlRoomLocalServer: new ControlRoomLocalServer(config)
+  };
+}
+
 export async function createClientFromBrief(
   store: FileStore,
   briefPath: string,
@@ -405,6 +420,74 @@ async function handleReply(store: FileStore, replyHandler: ReplyHandlerAgent, le
 
 async function main(): Promise<void> {
   const { command, flags } = parseFlags(process.argv.slice(2));
+
+  if (command === "control-room-password-hash") {
+    const password = String(flags.password ?? "");
+    if (!password) {
+      throw new Error("Missing --password for control-room-password-hash.");
+    }
+    console.log(await hashControlRoomPassword(password));
+    return;
+  }
+
+  if (
+    command === "control-room-serve" ||
+    command === "control-room-local" ||
+    command === "control-room-health"
+  ) {
+    const { config, imonEngine, officeDashboard, controlRoomServer, controlRoomLocalServer } =
+      await buildControlRoomContext();
+
+    switch (command) {
+      case "control-room-serve": {
+        const address = await controlRoomServer.listen();
+        logger.info(
+          config.controlRoom.publicUrl
+            ? `Control room listening on http://${address.host}:${address.port} with public URL ${config.controlRoom.publicUrl}.`
+            : `Control room listening on http://${address.host}:${address.port} (private VPS mode).`
+        );
+        void imonEngine
+          .sync()
+          .then(async () => {
+            await officeDashboard.writeDashboard();
+          })
+          .catch((error) => {
+            const message = error instanceof Error ? error.message : "Unknown control-room sync error.";
+            logger.error(`Control-room background engine sync failed: ${message}`);
+          });
+        process.once("SIGINT", () => {
+          void controlRoomServer.close();
+        });
+        process.once("SIGTERM", () => {
+          void controlRoomServer.close();
+        });
+        await new Promise(() => {});
+        return;
+      }
+      case "control-room-local": {
+        const address = await controlRoomLocalServer.listen();
+        logger.info(
+          `Local control room listening on http://${address.host}:${address.port} and proxying the VPS control plane.`
+        );
+        process.once("SIGINT", () => {
+          void controlRoomLocalServer.close();
+        });
+        process.once("SIGTERM", () => {
+          void controlRoomLocalServer.close();
+        });
+        await new Promise(() => {});
+        return;
+      }
+      case "control-room-health": {
+        const health = await controlRoomServer.getHealth();
+        console.log(JSON.stringify(health, null, 2));
+        return;
+      }
+      default:
+        break;
+    }
+  }
+
   const {
     config,
     store,
@@ -622,48 +705,6 @@ async function main(): Promise<void> {
       console.log(JSON.stringify(artifacts, null, 2));
       break;
     }
-    case "control-room-serve": {
-      await imonEngine.sync();
-      const address = await controlRoomServer.listen();
-      logger.info(
-        `Control room listening on http://${address.host}:${address.port} (private VPS mode).`
-      );
-      process.once("SIGINT", () => {
-        void controlRoomServer.close();
-      });
-      process.once("SIGTERM", () => {
-        void controlRoomServer.close();
-      });
-      await new Promise(() => {});
-      break;
-    }
-    case "control-room-local": {
-      const address = await controlRoomLocalServer.listen();
-      logger.info(
-        `Local control room listening on http://${address.host}:${address.port} and proxying the VPS control plane.`
-      );
-      process.once("SIGINT", () => {
-        void controlRoomLocalServer.close();
-      });
-      process.once("SIGTERM", () => {
-        void controlRoomLocalServer.close();
-      });
-      await new Promise(() => {});
-      break;
-    }
-    case "control-room-health": {
-      const health = await controlRoomServer.getHealth();
-      console.log(JSON.stringify(health, null, 2));
-      break;
-    }
-    case "control-room-password-hash": {
-      const password = String(flags.password ?? "");
-      if (!password) {
-        throw new Error("Missing --password for control-room-password-hash.");
-      }
-      console.log(await hashControlRoomPassword(password));
-      break;
-    }
     case "route-task": {
       const title = String(flags.title ?? "");
       const summary = String(flags.summary ?? "");
@@ -815,13 +856,12 @@ async function main(): Promise<void> {
       break;
     }
     case "publish-growth-post": {
-      const itemId = String(flags.item ?? "");
-      if (!itemId) {
-        throw new Error("Missing --item for publish-growth-post command.");
-      }
+      const itemId = typeof flags.item === "string" ? flags.item : undefined;
       const result = await storeAutopilot.publishGrowthPost(itemId);
       logger.info(`${result.status.toUpperCase()}: ${result.summary}`);
-      console.log(JSON.stringify(result, null, 2));
+      if (result.details.length > 0) {
+        console.log(JSON.stringify(result, null, 2));
+      }
       break;
     }
     case "import-gumroad-sales": {

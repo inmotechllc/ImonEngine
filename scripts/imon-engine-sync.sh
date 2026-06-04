@@ -48,6 +48,7 @@ EOF
 cd "$APP_ROOT"
 npm run dev -- engine-sync
 npm run dev -- northline-autonomy-run --business auto-funding-agency --notify-roadblocks
+npm run dev -- publish-growth-post
 npm run dev -- clipbaiters-plan --business "$CLIPBAITERS_BUSINESS_ID" --notify-roadblocks
 npm run dev -- clipbaiters-collect --business clipbaiters-viral-moments
 npm run dev -- clipbaiters-skim --business clipbaiters-viral-moments

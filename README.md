@@ -195,6 +195,7 @@ Use these when you want an LLM or automation agent to work on ImonEngine with re
 
 - The system is intentionally conservative: it creates approval tasks instead of guessing through payments, marketplace access, email, or deployment when account credentials are missing.
 - `ImonEngine` does not auto-activate new businesses blindly. It ranks what should launch next and checks the VPS before you promote another business into the active set.
+- `pause-business --business auto-funding-agency` now suspends Northline autonomy work cleanly. Scheduled or manual `northline-autonomy-run` calls return `skipped` and leave the Northline queue untouched until `activate-business --business auto-funding-agency` resumes the lane, even if you refresh the Northline plan in between.
 - The first live business path is Gumroad-first. `IMON_STORE_GUMROAD_SELLER_EMAIL` is enough to connect the seller identity before you buy a Northline inbox.
 - After a Gumroad product goes live, record it with `publish-asset-pack`, then run `engine-sync` so ImonEngine reflects the live store state.
 - When a generated pack is complete but not yet published, mark it with `ready-asset-pack` so the queue distinguishes upload-ready products from drafts.

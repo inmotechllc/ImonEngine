@@ -6,7 +6,7 @@ It now also has a `venture studio` layer that turns the first live store into a 
 
 It now also has a real `organization control plane`. That layer maps the engine and each business into departments, positions, workflow ownership, approval routes, memory boundaries, and office views. The office is only a view of the control plane, not the source of truth.
 
-It now also has a private hosted `control room` app on top of the control plane plus a local `operator app` that connects back to the VPS. The VPS remains the execution and state layer. The local app is the normal dashboard/control surface, and the static dashboard export remains a fallback artifact.
+It now also has a hosted `control room` app on top of the control plane plus a local `operator app` that connects back to the VPS. The hosted app can stay loopback-only on the VPS or sit behind the ImonEngine domain for direct device access. The VPS remains the execution and state layer. The local app is the normal dashboard/control surface, and the static dashboard export remains a fallback artifact.
 
 That control room now renders a folder-style office explorer:
 
@@ -115,6 +115,8 @@ The first two businesses are marked `ready` by default because they have the lig
 - `npm run dev -- publish-asset-pack --pack <id> --url <gumroad-url>`
 - `npm run dev -- asset-packs`
 
+`pause-business` is now authoritative for the Northline lane. After you pause `auto-funding-agency`, `northline-autonomy-run` exits with `skipped` before collection, intake, outreach, reply sync, or delivery work until `activate-business` is run again. Manual `northline-plan` refreshes can still update the dossier, but they do not resume automation.
+
 ## State Files
 
 All repo-managed JSON and text state artifacts now write through an atomic temp-file-plus-rename path. That keeps concurrent VPS processes from leaving partial or duplicated `runtime/state/*` and `runtime/ops/*` files when autonomy, sourcing, reporting, or other workers update the same artifact family close together.
@@ -211,9 +213,10 @@ All repo-managed JSON and text state artifacts now write through an atomic temp-
 5. Start the persistent VPS browser with `scripts/vps-browser-start.sh` when a virtual display session is needed.
 6. Verify Docker, Chrome, Playwright, Codex CLI, and DevTools with `scripts/vps-tooling-status.sh`.
 7. Install the hosted control room with `scripts/install-control-room-service.sh`.
-8. Start the local operator app with `npm run dev -- control-room-local` when you want the dashboard/offices locally instead of through noVNC.
-9. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
-10. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, `runtime/ops/venture-studio.json`, and the private control room.
+8. If you want the control room reachable from any device, run `scripts/install-control-room-nginx-proxy.sh imonengine.com`, then `scripts/install-control-room-certbot.sh imonengine.com` after DNS resolves.
+9. Start the local operator app with `npm run dev -- control-room-local` when you want the dashboard/offices locally instead of through noVNC.
+10. Start isolated business containers with `scripts/business-worker-start.sh <business-id> "<business-name>"`.
+11. Review `runtime/ops/engine-overview.json`, `runtime/state/approvals.json`, `runtime/ops/venture-studio.json`, and the hosted control room.
 
 See [control-room-hosting.md](C:/AIWorkspace/Projects/Auto-Funding/docs/control-room-hosting.md) for the hosted/local control-room split and operator workflow.
 

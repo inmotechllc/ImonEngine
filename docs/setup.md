@@ -29,6 +29,13 @@
   `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_PAGES_PROJECT`,
   `META_PAGE_ID`, `META_PAGE_ACCESS_TOKEN`,
   `META_INSTAGRAM_ACCOUNT_ID`, `META_INSTAGRAM_ACCESS_TOKEN`
+- Control room:
+  `CONTROL_ROOM_BIND_HOST`, `CONTROL_ROOM_PORT`, `CONTROL_ROOM_SESSION_SECRET`,
+  `CONTROL_ROOM_PASSWORD_HASH`, `CONTROL_ROOM_SESSION_TTL_HOURS`,
+  `CONTROL_ROOM_STALE_THRESHOLD_MINUTES`, `CONTROL_ROOM_SERVICE_LOG_PATH`,
+  `CONTROL_ROOM_PUBLIC_URL`, `CONTROL_ROOM_LOCAL_BIND_HOST`, `CONTROL_ROOM_LOCAL_PORT`,
+  `CONTROL_ROOM_REMOTE_URL`, `CONTROL_ROOM_AUTO_TUNNEL`, `CONTROL_ROOM_TUNNEL_PORT`,
+  `CONTROL_ROOM_TUNNEL_PYTHON_BIN`
 - Imon Digital Asset Store:
   `IMON_STORE_GUMROAD_SELLER_EMAIL`, `IMON_STORE_GUMROAD_PROFILE_URL`,
   `IMON_STORE_SITE_URL`, `IMON_STORE_EMAIL_CAPTURE_ACTION`, `IMON_STORE_EMAIL_CAPTURE_EMAIL`,
@@ -64,6 +71,7 @@
 - `META_INSTAGRAM_ACCOUNT_ID` is optional. When it is unset, the Instagram publisher attempts to discover the connected Instagram business account from the business-scoped Facebook Page.
 - If `META_PAGE_ACCESS_TOKEN` is unset, the Facebook publisher falls back to the signed-in browser session and posts through the live Facebook Page UI referenced by the business social profile instead of the generic Meta Business Suite composer.
 - `NORTHLINE_SMTP_FROM` is the canonical Northline SMTP sender address and reply identity for SMTP fallback sends. Legacy `SMTP_FROM` still loads as a fallback.
+- `CONTROL_ROOM_PUBLIC_URL` should point at the final HTTPS control-room address, for example `https://imonengine.com`, once nginx and certbot are installed on the VPS. The hosted app still binds to `127.0.0.1:4177`; nginx terminates TLS and forwards the secure scheme so the login cookie adds the `Secure` attribute automatically.
 - `INBOX_PROVIDER` selects the default reply-sync path for the shared Zoho-owned mailbox. Use `imap` for the Zoho-backed mailbox path or `gmail_cdp` when the VPS browser session owns the inbox directly. `NORTHLINE_INBOX_PROVIDER` still overrides it for Northline if needed.
 - `OUTBOUND_CHANNEL` selects the default sender path for the shared Zoho-owned mailbox. It defaults to `smtp` when the resolved inbox provider is `imap`, otherwise it defaults to `gmail_cdp`. `NORTHLINE_OUTBOUND_CHANNEL` still overrides it for Northline if needed.
 - `NORTHLINE_INBOX_ALIAS_FILTER` lets IMAP inbox sync match replies that were addressed to the branded Northline alias inside a shared mailbox.
@@ -115,13 +123,16 @@
 26. When a Northline proposal becomes paid outside `/validation.html`, either send the operator through a Stripe link that carries `client_reference_id=client:<client-id>:paid|retainer_active` so the webhook can promote the client automatically, or run `npm run dev -- northline-billing-handoff --client <id> --status paid|retainer_active [--form-endpoint <url>]` as the manual fallback.
 27. Add Cloudflare credentials only if you intentionally use the standalone deployer outside the default Northline handoff workflow. `northline-autonomy-run` now ends in a QA-passed proof bundle plus handoff package for the client's own host or developer; it does not publish client sites automatically.
 28. For VPS staging, copy the repo to the server and run `scripts/bootstrap-vps.sh`, then `scripts/install-cron.sh`.
-29. Run `scripts/install-northline-site-service.sh` on the VPS if you want a persistent Northline proof-page service on port `4181`.
-30. Run `scripts/install-northline-nginx-proxy.sh` on the VPS if you want the domain to terminate on standard HTTP port `80` instead of `:4181`.
-31. After the domain resolves to the VPS, run `scripts/install-northline-certbot.sh northlinegrowthsystems.com` so the live proof page works over HTTPS.
-32. Start the persistent VPS Chrome profile with `scripts/vps-browser-start.sh` if you need browser-based auth or automation on the server.
-33. If Northline outbound or reply sync will use the Gmail path, keep that browser signed into the inbox behind `NORTHLINE_SALES_EMAIL` and smoke-test the helpers with `python3 scripts/send_gmail_message.py --help` and `python3 scripts/sync_northline_inbox.py --help`. If Northline uses the IMAP path, smoke-test `python3 scripts/sync_northline_inbox_imap.py --help` and confirm `NORTHLINE_IMAP_*` resolves the mailbox that receives the Northline alias.
-34. Verify the VPS toolchain with `scripts/vps-tooling-status.sh`.
-35. Start isolated business sandboxes with `scripts/business-worker-start.sh <business-id> "<business-name>"` when a new brand needs its own containerized workspace.
+29. Run `scripts/install-control-room-service.sh` on the VPS to install the persistent hosted control-room service on `127.0.0.1:4177`.
+30. Run `scripts/install-control-room-nginx-proxy.sh imonengine.com` on the VPS if you want the control room on standard web ports for any-device access.
+31. After `imonengine.com` resolves to the VPS, run `scripts/install-control-room-certbot.sh imonengine.com` so the control room works over HTTPS at `https://imonengine.com`.
+32. Run `scripts/install-northline-site-service.sh` on the VPS if you want a persistent Northline proof-page service on port `4181`.
+33. Run `scripts/install-northline-nginx-proxy.sh` on the VPS if you want the Northline domain to terminate on standard HTTP port `80` instead of `:4181`.
+34. After the Northline domain resolves to the VPS, run `scripts/install-northline-certbot.sh northlinegrowthsystems.com` so the live proof page works over HTTPS.
+35. Start the persistent VPS Chrome profile with `scripts/vps-browser-start.sh` if you need browser-based auth or automation on the server.
+36. If Northline outbound or reply sync will use the Gmail path, keep that browser signed into the inbox behind `NORTHLINE_SALES_EMAIL` and smoke-test the helpers with `python3 scripts/send_gmail_message.py --help` and `python3 scripts/sync_northline_inbox.py --help`. If Northline uses the IMAP path, smoke-test `python3 scripts/sync_northline_inbox_imap.py --help` and confirm `NORTHLINE_IMAP_*` resolves the mailbox that receives the Northline alias.
+37. Verify the VPS toolchain with `scripts/vps-tooling-status.sh`.
+38. Start isolated business sandboxes with `scripts/business-worker-start.sh <business-id> "<business-name>"` when a new brand needs its own containerized workspace.
 
 ## ClipBaiters Planning And Social Setup
 

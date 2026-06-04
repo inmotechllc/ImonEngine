@@ -87,7 +87,8 @@
 ## Growth And Revenue Controls
 
 - Refresh queue + promo assets: `npm run dev -- growth-queue`
-- Publish due Facebook, Instagram, or Pinterest posts from the live queue with `python scripts/publish_growth_post.py --queue-file runtime/state/growthQueue.json --social-profiles-file runtime/state/socialProfiles.json --item-id <id>`
+- Publish the next due Facebook, Instagram, or Pinterest item from the live queue with `npm run dev -- publish-growth-post`, or target a specific item with `npm run dev -- publish-growth-post --item <id>`
+- When Facebook tokens are missing, the shared publisher uses the signed-in live Page flow instead of Meta Business Suite: it opens the stored Page URL, switches into the Page when needed, then prefers the page-native composer entry before falling back to the Page overflow menu.
 - Refresh the social registry: `npm run dev -- social-profiles`
 - Import Gumroad CSV sales: `npm run dev -- import-gumroad-sales --file <csv>`
 - Import Relay CSV transactions: `npm run dev -- import-relay-transactions --file <csv> [--business imon-digital-asset-store]`

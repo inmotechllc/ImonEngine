@@ -268,6 +268,7 @@ export class ControlRoomServer {
       authConfigured,
       bindHost: this.config.controlRoom.bindHost,
       port: this.config.controlRoom.port,
+      publicUrl: this.config.controlRoom.publicUrl,
       snapshot: snapshotHealth
     };
   }
@@ -300,7 +301,7 @@ export class ControlRoomServer {
     }
 
     if (route.type === "logout") {
-      redirect(res, "/login", [this.clearSessionCookie()]);
+      redirect(res, "/login", [this.clearSessionCookie(req)]);
       return;
     }
 
@@ -626,7 +627,7 @@ export class ControlRoomServer {
       return;
     }
 
-    redirect(res, this.safeRedirectPath(nextPath), [this.issueSessionCookie()]);
+    redirect(res, this.safeRedirectPath(nextPath), [this.issueSessionCookie(req)]);
   }
 
   private async handleSse(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -680,16 +681,30 @@ export class ControlRoomServer {
     return this.config.controlRoom.passwordHash;
   }
 
-  private issueSessionCookie(): string {
+  private issueSessionCookie(req: IncomingMessage): string {
     const value = createSignedControlRoomSession(
       this.resolveSessionSecret(),
       this.config.controlRoom.sessionTtlHours
     );
-    return `control_room_session=${encodeURIComponent(value)}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${this.config.controlRoom.sessionTtlHours * 60 * 60}`;
+    const secureAttribute = this.requestUsesTls(req) ? "; Secure" : "";
+    return `control_room_session=${encodeURIComponent(value)}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${this.config.controlRoom.sessionTtlHours * 60 * 60}${secureAttribute}`;
   }
 
-  private clearSessionCookie(): string {
-    return "control_room_session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0";
+  private clearSessionCookie(req: IncomingMessage): string {
+    const secureAttribute = this.requestUsesTls(req) ? "; Secure" : "";
+    return `control_room_session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0${secureAttribute}`;
+  }
+
+  private requestUsesTls(req: IncomingMessage): boolean {
+    const forwardedProto = req.headers["x-forwarded-proto"];
+    const firstForwardedProto = Array.isArray(forwardedProto)
+      ? forwardedProto[0]
+      : forwardedProto?.split(",")[0];
+    if (firstForwardedProto?.trim().toLowerCase() === "https") {
+      return true;
+    }
+
+    return (req.socket as { encrypted?: boolean }).encrypted === true;
   }
 
   private safeRedirectPath(candidate: string): string {

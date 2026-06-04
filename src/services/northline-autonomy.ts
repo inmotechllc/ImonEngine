@@ -70,6 +70,7 @@ const execFileAsync = promisify(execFile);
 const PYTHON_COMMAND = process.platform === "win32" ? "python" : "python3";
 const MIN_INBOX_SYNC_TIMEOUT_MS = 120000;
 const INBOX_SYNC_TIMEOUT_MS_PER_CANDIDATE = 30000;
+const NORTHLINE_AUTOMATION_PAUSE_NOTE = "Northline automation pause requested via pause-business.";
 
 type NorthlineIntakePayload = {
   ownerName?: string;
@@ -445,6 +446,9 @@ export class NorthlineAutonomyService {
   }): Promise<NorthlineAutonomyRunResult> {
     const businessId = options?.businessId ?? NORTHLINE_BUSINESS_ID;
     const business = await this.requireBusiness(businessId);
+    if (this.hasOperatorPauseRequest(business)) {
+      return this.pausedRunResult(business);
+    }
     const startedAt = nowIso();
     const state = await this.readState(business.id);
     const collectionResult = await this.prospectCollector.run({ businessId: business.id });
@@ -598,6 +602,46 @@ export class NorthlineAutonomyService {
     };
   }
 
+  private async pausedRunResult(business: ManagedBusiness): Promise<NorthlineAutonomyRunResult> {
+    const plan = await this.currentPlanForRun(business);
+    const summary = `${business.name} automation is paused.`;
+    const snapshot: NorthlineAutonomySnapshot = {
+      businessId: business.id,
+      generatedAt: nowIso(),
+      planStatus: plan.status,
+      planOperatingMode: plan.operatingMode.current,
+      status: "skipped",
+      summary,
+      notes: [
+        `${business.name} is paused by operator request.`,
+        "Northline autonomy skipped prospect collection, hosted intake, outreach drafting and sending, reply sync, and delivery queue work."
+      ],
+      roadblocks: [`${business.name} automation is paused by operator request.`],
+      newIntakes: [],
+      outboundQueue: [],
+      replyQueue: [],
+      deliveryQueue: [],
+      manualGates: []
+    };
+
+    return {
+      status: snapshot.status,
+      summary: snapshot.summary,
+      details: [
+        ...snapshot.notes,
+        `Autonomy summary remains at ${this.summaryJsonPath(business.id)} until the lane is resumed or refreshed manually.`,
+        `Use npm run dev -- activate-business --business ${business.id} to resume scheduled Northline automation.`
+      ],
+      plan,
+      snapshot,
+      artifacts: {
+        statePath: this.statePath(business.id),
+        summaryJsonPath: this.summaryJsonPath(business.id),
+        summaryMarkdownPath: this.summaryMarkdownPath(business.id)
+      }
+    };
+  }
+
   async syncInbox(options?: {
     businessId?: string;
   }): Promise<{
@@ -631,6 +675,68 @@ export class NorthlineAutonomyService {
       throw new Error(`Managed business ${id} was not found.`);
     }
     return business;
+  }
+
+  private hasOperatorPauseRequest(business: ManagedBusiness): boolean {
+    return business.notes.includes(NORTHLINE_AUTOMATION_PAUSE_NOTE);
+  }
+
+  private async currentPlanForRun(business: ManagedBusiness): Promise<NorthlineAutomationPlan> {
+    const resolvedProfile = resolveNorthlineBusinessProfile(this.config, business);
+    const generatedAt = nowIso();
+    const fallbackPlan: NorthlineAutomationPlan = {
+      businessId: business.id,
+      businessName: business.name,
+      generatedAt,
+      status: "blocked",
+      primaryServiceArea: resolvedProfile.primaryServiceArea,
+      collectionAreas: resolvedProfile.collectionAreas,
+      collectionTrades: resolvedProfile.collectionTrades,
+      targetIndustries: resolvedProfile.targetIndustries,
+      targetServices: resolvedProfile.targetServices,
+      offerSummary: resolvedProfile.offerSummary,
+      salesEmail: resolvedProfile.salesEmail,
+      siteUrl: resolvedProfile.siteUrl,
+      offerStack: (await this.store.getOffers()).filter((offer) => offer.active),
+      operatingMode: {
+        current: "controlled_launch",
+        summary: `${business.name} is paused and Northline autonomy is suspended.`,
+        evidence: [NORTHLINE_AUTOMATION_PAUSE_NOTE],
+        scheduledAutomation: [
+          `Scheduled wrappers can invoke northline-autonomy-run, but the command exits before queue work until ${business.id} is reactivated.`
+        ],
+        manualCheckpoints: [
+          `Run npm run dev -- activate-business --business ${business.id} when you want Northline automation to resume.`
+        ],
+        promotionCriteria: []
+      },
+      readiness: [],
+      outboundSprint: [],
+      socialPlan: [],
+      proofAssets: [],
+      roadblocks: [
+        {
+          id: `northline-paused-${business.id}`,
+          category: "operator_pause",
+          summary: `${business.name} is paused by operator request.`,
+          requiredFromOwner: [
+            `Run npm run dev -- activate-business --business ${business.id} when you want Northline automation to resume.`
+          ],
+          continueAfterCompletion: [
+            "Re-run northline-autonomy-run after reactivation to refresh the Northline queue."
+          ]
+        }
+      ],
+      nextAutomationSteps: [
+        `Keep ${business.name} paused until you intentionally resume the lane.`,
+        `Use npm run dev -- activate-business --business ${business.id} before the next scheduled or manual Northline autonomy pass.`
+      ]
+    };
+
+    return readJsonFile<NorthlineAutomationPlan>(
+      path.join(northlineBusinessOpsDir(this.config, business.id), "plan.json"),
+      fallbackPlan
+    );
   }
 
   private async readState(businessId: string): Promise<NorthlineAutonomyState> {

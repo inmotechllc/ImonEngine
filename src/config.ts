@@ -170,6 +170,7 @@ export interface AppConfig {
   controlRoom: {
     bindHost: string;
     port: number;
+    publicUrl?: string;
     sessionSecret?: string;
     passwordHash?: string;
     sessionTtlHours: number;
@@ -630,6 +631,7 @@ export async function loadConfig(projectRoot = process.cwd()): Promise<AppConfig
     controlRoom: {
       bindHost: envValueOr("127.0.0.1", "CONTROL_ROOM_BIND_HOST"),
       port: envNumber("4177", "CONTROL_ROOM_PORT"),
+      publicUrl: envValue("CONTROL_ROOM_PUBLIC_URL"),
       sessionSecret: envValue("CONTROL_ROOM_SESSION_SECRET"),
       passwordHash: controlRoomPasswordHash,
       sessionTtlHours: envNumber("12", "CONTROL_ROOM_SESSION_TTL_HOURS"),

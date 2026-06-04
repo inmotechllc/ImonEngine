@@ -442,6 +442,28 @@ test("loadConfig derives a control-room password hash from host password fallbac
   }
 });
 
+test("loadConfig resolves the control-room public URL when configured", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "control-room-public-url-"));
+  const touchedKeys = ["CONTROL_ROOM_PUBLIC_URL"] as const;
+  const previous = Object.fromEntries(touchedKeys.map((key) => [key, process.env[key]]));
+
+  try {
+    process.env.CONTROL_ROOM_PUBLIC_URL = "https://imonengine.com";
+
+    const config = await loadConfig(root);
+
+    assert.equal(config.controlRoom.publicUrl, "https://imonengine.com");
+  } finally {
+    for (const key of touchedKeys) {
+      if (previous[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
+  }
+});
+
 test("draftOutreach picks high-score prospecting leads with email and skips no-email leads", async () => {
   const { store, orchestrator } = await setupWorkspace();
   const withEmail: LeadRecord = {
@@ -3293,6 +3315,7 @@ test("control-room server enforces auth and serves page, api, and stream routes"
   assert.equal(login.status, 303);
   const cookie = login.headers.get("set-cookie");
   assert.ok(cookie?.includes("control_room_session="));
+  assert.ok(!cookie?.includes("Secure"));
 
   const businessPage = await fetch(`${baseUrl}/business/imon-digital-asset-store`, {
     headers: {
@@ -3380,6 +3403,54 @@ test("control-room server enforces auth and serves page, api, and stream routes"
     : "";
   assert.match(textChunk, /event: snapshot/);
   await reader?.cancel();
+  await server.close();
+});
+
+test("control-room server issues secure cookies when nginx forwards https", async () => {
+  const { imonEngine, config, store } = await setupWorkspace();
+  await imonEngine.bootstrap();
+  await imonEngine.sync();
+
+  config.controlRoom.bindHost = "127.0.0.1";
+  config.controlRoom.port = 0;
+  config.controlRoom.publicUrl = "https://imonengine.com";
+  config.controlRoom.sessionSecret = "test-control-room-secret";
+  config.controlRoom.passwordHash = await hashControlRoomPassword("control-room-pass");
+
+  const server = new ControlRoomServer(config, store);
+  const address = await server.listen();
+  const baseUrl = `http://${address.host}:${address.port}`;
+
+  const login = await fetch(`${baseUrl}/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-Forwarded-Proto": "https"
+    },
+    body: new URLSearchParams({
+      password: "control-room-pass",
+      next: "/"
+    })
+  });
+  assert.equal(login.status, 303);
+  const cookie = login.headers.get("set-cookie") ?? "";
+  assert.match(cookie, /; Secure(?:;|$)/);
+
+  const logout = await fetch(`${baseUrl}/logout`, {
+    redirect: "manual",
+    headers: {
+      cookie,
+      "X-Forwarded-Proto": "https"
+    }
+  });
+  assert.equal(logout.status, 303);
+  assert.match(logout.headers.get("set-cookie") ?? "", /; Secure(?:;|$)/);
+
+  const healthResponse = await fetch(`${baseUrl}/api/control-room/health`);
+  const health = await healthResponse.json();
+  assert.equal(health.publicUrl, "https://imonengine.com");
+
   await server.close();
 });
 
@@ -4137,6 +4208,172 @@ test("store autopilot refreshes stale attempted growth items instead of leaving 
   assert.ok(refreshedQueue.every((item) => item.id !== "stale-facebook-item"));
   assert.ok(refreshedQueue.filter((item) => item.status === "planned").every((item) => item.scheduledFor > now));
   assert.ok(await exists(path.join(root, "runtime", "storefront-site", "index.html")));
+});
+
+test("store autopilot publishGrowthPost idles when no due growth item exists", async () => {
+  const { storeAutopilot } = await setupWorkspace();
+
+  const result = await storeAutopilot.publishGrowthPost();
+
+  assert.equal(result.status, "idle");
+  assert.match(result.summary, /No due growth queue item is ready to publish/i);
+  assert.equal(result.changed, false);
+});
+
+test("store autopilot publishGrowthPost publishes the next due growth item when no item id is provided", async () => {
+  const { store, storeAutopilot } = await setupWorkspace();
+  const now = new Date().toISOString();
+  const dueAt = new Date(Date.now() - 60_000).toISOString();
+
+  await store.saveGrowthWorkItem({
+    id: "due-growth-item",
+    businessId: "auto-funding-agency",
+    packId: "auto-funding-agency-social-post-1",
+    channel: "facebook_page",
+    title: "Due Northline promotion",
+    caption: "Due Northline promotion caption",
+    assetPath: "/tmp/due-growth-item.png",
+    destinationUrl: "https://northlinegrowthsystems.com/book.html",
+    scheduledFor: dueAt,
+    status: "planned",
+    notes: ["Generated from the Northline social plan."],
+    createdAt: now,
+    updatedAt: now
+  });
+
+  const originalRunPythonScript = (storeAutopilot as any).runPythonScript;
+  (storeAutopilot as any).runPythonScript = async (scriptName: string, args: string[]) => {
+    assert.equal(scriptName, "publish_growth_post.py");
+    assert.ok(args.includes("due-growth-item"));
+    return {
+      postedAt: now,
+      delivery: "facebook_page_browser",
+      pageUrl: "https://www.facebook.com/profile.php?id=61577559887468"
+    };
+  };
+
+  try {
+    const result = await storeAutopilot.publishGrowthPost();
+    const updatedItem = (await store.getGrowthQueue()).find((item) => item.id === "due-growth-item");
+
+    assert.equal(result.status, "progress");
+    assert.match(result.summary, /Posted Due Northline promotion through the live facebook_page automation path/i);
+    assert.equal(updatedItem?.status, "posted");
+    assert.ok(updatedItem?.notes.some((note) => note.includes("Posted automatically on")));
+    assert.ok(updatedItem?.notes.some((note) => note.includes("Delivery path: facebook_page_browser")));
+  } finally {
+    (storeAutopilot as any).runPythonScript = originalRunPythonScript;
+  }
+});
+
+test("store autopilot publishGrowthPost refreshes stale attempted store items before choosing the next due item", async () => {
+  const { config, store, storeAutopilot } = await setupWorkspace();
+  const now = new Date().toISOString();
+  const publishedPack = {
+    id: "published-pack",
+    businessId: "imon-digital-asset-store",
+    marketplace: "gumroad",
+    niche: "Paper textures",
+    assetType: "texture_pack",
+    style: "quiet matte grain",
+    audience: "brand designers",
+    title: "Paper Texture Pack",
+    shortDescription: "A quiet texture pack for brand work.",
+    description: "A quiet texture pack for brand work.",
+    packSize: 24,
+    suggestedPrice: 12,
+    priceVariants: [9, 12, 15],
+    tags: ["texture"],
+    deliverables: ["24 textures"],
+    promptSeeds: ["Seed"],
+    productionChecklist: ["Build"],
+    listingChecklist: ["Publish"],
+    outputDir: path.join(config.assetStoreDir, "published-pack"),
+    status: "published",
+    productUrl: "https://example.com/paper-texture-pack",
+    createdAt: now,
+    updatedAt: now,
+    publishedAt: now
+  } as any;
+  await store.saveAssetPack(publishedPack);
+
+  const marketingDir = path.join(config.outputDir, "marketing", publishedPack.id);
+  await mkdir(marketingDir, { recursive: true });
+  await writeFile(path.join(marketingDir, "teaser-square.png"), "img", "utf8");
+  await writeFile(path.join(marketingDir, "teaser-landscape.png"), "img", "utf8");
+  await writeFile(
+    path.join(config.outputDir, "marketing", "manifest.json"),
+    JSON.stringify(
+      [
+        {
+          packId: publishedPack.id,
+          square: path.join(marketingDir, "teaser-square.png"),
+          landscape: path.join(marketingDir, "teaser-landscape.png")
+        }
+      ],
+      null,
+      2
+    ),
+    "utf8"
+  );
+
+  await store.saveGrowthWorkItem({
+    id: "stale-facebook-item",
+    businessId: "imon-digital-asset-store",
+    packId: publishedPack.id,
+    channel: "facebook_page",
+    title: "Paper Texture Pack on facebook_page",
+    caption: "caption",
+    assetPath: path.join(marketingDir, "teaser-square.png"),
+    destinationUrl: publishedPack.productUrl,
+    scheduledFor: "2026-03-01T13:00:00.000Z",
+    status: "planned",
+    notes: [
+      "Generated by the repo-controlled store ops service.",
+      "Attempted on 2026-03-01T13:09:00.000Z: Timed out waiting for browser condition."
+    ],
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T13:09:00.000Z"
+  });
+
+  await store.saveGrowthWorkItem({
+    id: "due-northline-item",
+    businessId: "auto-funding-agency",
+    packId: "auto-funding-agency-social-post-1",
+    channel: "facebook_page",
+    title: "Due Northline promotion",
+    caption: "Due Northline promotion caption",
+    assetPath: "/tmp/due-northline-item.png",
+    destinationUrl: "https://northlinegrowthsystems.com/book.html",
+    scheduledFor: new Date(Date.now() - 60_000).toISOString(),
+    status: "planned",
+    notes: ["Generated from the Northline social plan."],
+    createdAt: now,
+    updatedAt: now
+  });
+
+  const originalRunPythonScript = (storeAutopilot as any).runPythonScript;
+  (storeAutopilot as any).runPythonScript = async (_scriptName: string, args: string[]) => {
+    assert.ok(args.includes("due-northline-item"));
+    assert.ok(!args.includes("stale-facebook-item"));
+    return {
+      postedAt: now,
+      delivery: "facebook_page_browser",
+      pageUrl: "https://www.facebook.com/profile.php?id=61577559887468"
+    };
+  };
+
+  try {
+    const result = await storeAutopilot.publishGrowthPost();
+    const refreshedQueue = await store.getGrowthQueue();
+    const updatedNorthlineItem = refreshedQueue.find((item) => item.id === "due-northline-item");
+
+    assert.equal(result.status, "progress");
+    assert.equal(updatedNorthlineItem?.status, "posted");
+    assert.ok(refreshedQueue.every((item) => item.id !== "stale-facebook-item"));
+  } finally {
+    (storeAutopilot as any).runPythonScript = originalRunPythonScript;
+  }
 });
 
 test("store ops import Gumroad and Relay data into a revenue snapshot", async () => {
@@ -6938,6 +7175,94 @@ test("northline autonomy turns hosted intake and drafted outbound into tracked w
     assert.ok(autonomyState.processedSubmissionIds.includes("northline-intake-1"));
     assert.equal(autonomySummary.snapshot.summary, result.summary);
     assert.equal(autonomySummary.snapshot.planOperatingMode, result.plan.operatingMode.current);
+  } finally {
+    for (const key of touchedKeys) {
+      const value = previous[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});
+
+test("northline autonomy skips queue work while the Northline business is paused", async () => {
+  const touchedKeys = [
+    "NORTHLINE_SITE_URL",
+    "NORTHLINE_DOMAIN",
+    "NORTHLINE_SALES_EMAIL",
+    "NORTHLINE_BOOKING_URL",
+    "NORTHLINE_LEAD_FORM_ACTION",
+    "NORTHLINE_SUBMISSION_STORE_PATH"
+  ] as const;
+  const previous = Object.fromEntries(touchedKeys.map((key) => [key, process.env[key]]));
+
+  try {
+    const submissionDir = await mkdtemp(path.join(os.tmpdir(), "northline-autonomy-paused-"));
+    const submissionStorePath = path.join(submissionDir, "submissions.json");
+    process.env.NORTHLINE_SITE_URL = "https://northlinegrowthsystems.com";
+    process.env.NORTHLINE_DOMAIN = "northlinegrowthsystems.com";
+    process.env.NORTHLINE_SALES_EMAIL = "contact@northlinegrowthsystems.com";
+    process.env.NORTHLINE_BOOKING_URL = "/book.html";
+    process.env.NORTHLINE_LEAD_FORM_ACTION = "/api/northline-intake";
+    process.env.NORTHLINE_SUBMISSION_STORE_PATH = submissionStorePath;
+
+    const { imonEngine, northlineAutonomy, northlineOps, store, config } = await setupWorkspace();
+    await imonEngine.bootstrap();
+    await imonEngine.pauseBusiness("auto-funding-agency");
+    await northlineOps.writePlan({ businessId: "auto-funding-agency" });
+
+    const now = new Date().toISOString();
+    await writeFile(
+      submissionStorePath,
+      JSON.stringify(
+        {
+          submissions: [
+            {
+              id: "northline-paused-intake-1",
+              receivedAt: now,
+              ownerName: "Casey",
+              businessName: "Paused Plumbing",
+              email: "dispatch@pausedplumbing.com",
+              phone: "(330) 555-0199",
+              serviceArea: "Akron, OH",
+              primaryServices: "Emergency plumbing repair",
+              preferredCallWindow: "Tue 1-3pm ET",
+              contactPreference: "Call",
+              website: "https://pausedplumbing.com",
+              leadGoal: "15 more booked calls",
+              biggestLeak: "Weak CTA",
+              notes: "Should stay untouched while paused",
+              source: "northline-intake-page"
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const result = await northlineAutonomy.run();
+    const pausedBusiness = await store.getManagedBusiness("auto-funding-agency");
+    const client = await store.getClient("paused-plumbing");
+    const drafts = await store.getOutreachDrafts();
+    const autonomyStateExists = await exists(path.join(config.stateDir, "northlineAutonomy.json"));
+
+    assert.equal(result.status, "skipped");
+    assert.equal(result.snapshot.status, "skipped");
+    assert.match(result.summary, /paused/i);
+    assert.equal(result.snapshot.newIntakes.length, 0);
+    assert.equal(result.snapshot.outboundQueue.length, 0);
+    assert.equal(result.snapshot.replyQueue.length, 0);
+    assert.equal(result.snapshot.deliveryQueue.length, 0);
+    assert.ok(
+      pausedBusiness?.notes.includes("Northline automation pause requested via pause-business.")
+    );
+    assert.equal(client, undefined);
+    assert.equal(drafts.length, 0);
+    assert.equal(autonomyStateExists, false);
   } finally {
     for (const key of touchedKeys) {
       const value = previous[key];

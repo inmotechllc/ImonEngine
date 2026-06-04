@@ -77,6 +77,27 @@ def body_text(page: CdpPage) -> str:
     return str(page.evaluate("(document.body.innerText || '').trim()"))
 
 
+def screenshot_path(name: str) -> Path:
+    return Path(__file__).resolve().parent.parent / "output" / "playwright" / name
+
+
+def capture_debug_screenshot(page: CdpPage, name: str) -> str:
+    path = screenshot_path(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        page.screenshot(path)
+    except Exception:
+        return str(path)
+    return str(path)
+
+
+def scroll_to_top(page: CdpPage) -> None:
+    page.evaluate(
+        "(() => { window.scrollTo(0, 0); return true; })()"
+    )
+    time.sleep(1.0)
+
+
 def click_at(page: CdpPage, x: float, y: float) -> None:
     page.send("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y, "button": "none"})
     page.send("Input.dispatchMouseEvent", {"type": "mousePressed", "x": x, "y": y, "button": "left", "clickCount": 1})
@@ -86,7 +107,11 @@ def click_at(page: CdpPage, x: float, y: float) -> None:
 def rect_for_selector(page: CdpPage, selector: str, *, index: int = 0) -> dict[str, float] | None:
     expression = f"""
 (() => {{
-  const matches = [...document.querySelectorAll({js_string(selector)})];
+    const matches = [...document.querySelectorAll({js_string(selector)})].filter((node) => {{
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+    }});
   const target = matches[{index}] ?? null;
   if (!target) return null;
   const rect = target.getBoundingClientRect();
@@ -123,7 +148,12 @@ def rect_for_exact_text(page: CdpPage, text: str, *, root_selector: str | None =
     const candidates = [
       ...root.querySelectorAll('button,[role=button],a,div,span')
     ];
-    const target = candidates.find((node) => ((node.innerText || node.getAttribute('aria-label') || '').trim()) === {js_string(text)});
+        const target = candidates.find((node) => {{
+            if (((node.innerText || node.getAttribute('aria-label') || '').trim()) !== {js_string(text)}) return false;
+            const rect = node.getBoundingClientRect();
+            const style = window.getComputedStyle(node);
+            return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+        }});
     if (!target) continue;
     const rect = target.getBoundingClientRect();
     return {{
@@ -490,7 +520,10 @@ def split_caption(caption: str, fallback_title: str) -> tuple[str, str]:
 def clear_and_insert_editor_text(page: CdpPage, text: str) -> None:
     clear_expression = """
 (() => {
-  const el = document.querySelector('[contenteditable=true]');
+    const el =
+        document.querySelector('[role=dialog] [contenteditable=true]') ||
+        document.querySelector('[contenteditable=true][role=textbox]') ||
+        document.querySelector('[contenteditable=true]');
   if (!el) return 'missing';
   el.focus();
   const selection = window.getSelection();
@@ -506,6 +539,67 @@ def clear_and_insert_editor_text(page: CdpPage, text: str) -> None:
     if state != "ready":
         raise RuntimeError("Could not focus the rich text editor.")
     page.send("Input.insertText", {"text": text})
+
+
+def click_first_exact_text(page: CdpPage, texts: list[str], *, root_selector: str | None = None) -> str | None:
+    for text in texts:
+        if click_exact_text(page, text, root_selector=root_selector, real_click=True):
+            return text
+    return None
+
+
+def click_first_selector(page: CdpPage, selectors: list[str]) -> str | None:
+    for selector in selectors:
+        if click_selector_center(page, selector):
+            return selector
+    return None
+
+
+def open_facebook_page_composer(page: CdpPage, page_name: str) -> str:
+    scroll_to_top(page)
+
+    direct_labels = [
+        "What's on your mind?",
+        "Create post",
+        "Write something",
+        "Share an update",
+    ]
+    clicked_text = click_first_exact_text(page, direct_labels)
+    if clicked_text:
+        return clicked_text
+
+    direct_selectors = [
+        '[aria-label="What\'s on your mind?"][role="button"]',
+        '[aria-label="Create post"][role="button"]',
+        '[aria-label="Write something"][role="button"]',
+        '[aria-label="Share an update"][role="button"]',
+    ]
+    clicked_selector = click_first_selector(page, direct_selectors)
+    if clicked_selector:
+        return clicked_selector
+
+    menu_selectors = [
+        '[aria-label="See options"][role="button"]',
+        '[aria-label="More"][role="button"]',
+        '[aria-label="More options"][role="button"]',
+        '[aria-label="See more options"][role="button"]',
+    ]
+    opened_menu = click_first_selector(page, menu_selectors)
+    if opened_menu:
+        wait_until(
+            page,
+            "(() => !!document.querySelector('[role=menu], [role=dialog]') || (document.body.innerText || '').includes('Create post'))()",
+            timeout=15.0,
+        )
+        menu_click = click_first_exact_text(page, ["Create post", "Write something"], root_selector='[role="menu"], [role="dialog"]')
+        if menu_click:
+            return f"{opened_menu} -> {menu_click}"
+
+    debug_path = capture_debug_screenshot(page, "facebook-page-composer-missing.png")
+    raise RuntimeError(
+        "Could not open the Facebook Page composer. "
+        f"Expected a page-native entry point for {page_name}. Debug screenshot: {debug_path}"
+    )
 
 
 def ensure_facebook_page_context(
@@ -569,8 +663,7 @@ def post_to_facebook_page(
         social_profiles=social_profiles,
     )
 
-    if not click_exact_text(page, "What's on your mind?", real_click=True):
-        raise RuntimeError("Could not open the Facebook Page composer.")
+    composer_entry = open_facebook_page_composer(page, page_name)
 
     wait_until(
         page,
@@ -628,6 +721,7 @@ def post_to_facebook_page(
         "postedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "pageUrl": page_url,
         "bodySnippet": str(page.evaluate("(document.body.innerText || '').slice(0, 1200)")),
+        "composerEntry": composer_entry,
         "delivery": "facebook_page_browser",
     }
 

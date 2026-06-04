@@ -53,6 +53,8 @@ For Meta/Facebook, prefer the official Page API path instead of a VPS browser lo
 
 With those set in `/opt/imon-engine/.env`, `scripts/publish_growth_post.py` can post Facebook Page growth content from the VPS without an authenticated Meta browser session on the server.
 
+Without `META_PAGE_ACCESS_TOKEN`, the same publisher now follows the page-native Facebook fallback that previously worked for Northline: open the live Page URL from the social-profile registry, switch into the Page context when Facebook prompts for it, use the visible on-page composer entry first, and only then fall back to the Page overflow menu before submitting the post.
+
 Default behavior:
 
 - Xvfb display: `:99`
@@ -78,7 +80,8 @@ Use the deployment path that matches the question you are answering:
 - When a live `/validation.html` run or public intake looks missing from the workspace checkout, inspect `/opt/imon-engine/runtime/state/northlineIntakeSubmissions.json`, `/opt/imon-engine/runtime/state/northlineValidationConfirmations.json`, and `/opt/imon-engine/runtime/ops/northline-growth-system/plan.md` before concluding that the hosted flow failed.
 - When you need a live-safe dossier recompute on the VPS after a hosted validation or intake event, prefer `cd /opt/imon-engine && npm run dev -- northline-plan --business auto-funding-agency` before a broader `northline-autonomy-run`.
 
-- `scripts/imon-engine-sync.sh` runs `npm run dev -- engine-sync`, `npm run dev -- northline-autonomy-run --business auto-funding-agency --notify-roadblocks`, `npm run dev -- clipbaiters-plan --business clipbaiters-viral-moments --notify-roadblocks`, `npm run dev -- clipbaiters-collect --business clipbaiters-viral-moments`, `npm run dev -- clipbaiters-skim --business clipbaiters-viral-moments`, a guarded `clipbaiters-autonomy-run --business clipbaiters-viral-moments --all-active-lanes`, a guaranteed dry-run `clipbaiters-publish --business clipbaiters-viral-moments --all-active-lanes --dry-run`, an optional guarded live `clipbaiters-publish --business clipbaiters-viral-moments --all-active-lanes`, `npm run dev -- clipbaiters-source-creators --business clipbaiters-viral-moments`, `npm run dev -- clipbaiters-draft-creator-outreach --business clipbaiters-viral-moments`, `npm run dev -- clipbaiters-deals-report --business clipbaiters-viral-moments`, and `npm run dev -- clipbaiters-monetization-report --business clipbaiters-viral-moments`
+- `scripts/imon-engine-sync.sh` runs `npm run dev -- engine-sync`, `npm run dev -- northline-autonomy-run --business auto-funding-agency --notify-roadblocks`, `npm run dev -- publish-growth-post`, `npm run dev -- clipbaiters-plan --business clipbaiters-viral-moments --notify-roadblocks`, `npm run dev -- clipbaiters-collect --business clipbaiters-viral-moments`, `npm run dev -- clipbaiters-skim --business clipbaiters-viral-moments`, a guarded `clipbaiters-autonomy-run --business clipbaiters-viral-moments --all-active-lanes`, a guaranteed dry-run `clipbaiters-publish --business clipbaiters-viral-moments --all-active-lanes --dry-run`, an optional guarded live `clipbaiters-publish --business clipbaiters-viral-moments --all-active-lanes`, `npm run dev -- clipbaiters-source-creators --business clipbaiters-viral-moments`, `npm run dev -- clipbaiters-draft-creator-outreach --business clipbaiters-viral-moments`, `npm run dev -- clipbaiters-deals-report --business clipbaiters-viral-moments`, and `npm run dev -- clipbaiters-monetization-report --business clipbaiters-viral-moments`
+- `npm run dev -- publish-growth-post` now publishes the next due shared growth-queue item when no `--item` is supplied, and it refreshes stale attempted store queue entries before choosing that item so old failed posts do not block the current queue
 - `scripts/install-cron.sh` installs that wrapper on a 30-minute cron cadence
 - `scripts/run_vps_autopilot.sh` now runs the same Northline and ClipBaiters cadence after `engine-sync` and before the optional Imonic POD refresh so the portfolio lanes do not stall behind unrelated POD roadblock-email failures
 - `northline-autonomy-run` now auto-sends approved Northline outreach drafts from the VPS Gmail session first, falls back to SMTP when it is configured, syncs Gmail replies into `runtime/state/leadReplies.json`, and only leaves an outbound manual gate behind when delivery or inbox access fails
@@ -95,13 +98,15 @@ This keeps hosted intake promotion, build and QA progression, retention refreshe
 
 Use `scripts/vps-codex-login.sh` after the VPS browser is running. It starts the browser if needed, then opens the Codex authentication flow against the saved Chrome profile so the CLI can be used directly from the server.
 
-## Private Control Room Service
+## Hosted Control Room Service
 
-The organization control room can now run as a persistent private VPS service.
+The organization control room can now run as a persistent VPS service that stays loopback-only by default and can optionally be published through nginx plus TLS on `imonengine.com`.
 
 Helper scripts:
 
 - Install: `scripts/install-control-room-service.sh`
+- Install nginx proxy: `scripts/install-control-room-nginx-proxy.sh [domain]`
+- Install TLS: `scripts/install-control-room-certbot.sh [domain] [email]`
 - Run wrapper: `scripts/run-control-room.sh`
 
 Default behavior:
@@ -109,11 +114,17 @@ Default behavior:
 - bind host: `127.0.0.1`
 - default port: `4177`
 - auth: owner-only password gate with signed httpOnly cookies
+- public URL: optional through `CONTROL_ROOM_PUBLIC_URL`
 
 The service is intended for:
 
 - the VPS Chrome profile through noVNC
-- SSH tunnel access later if needed
+- SSH tunnel and local-operator access
+- direct HTTPS access from any device when the nginx and certbot helpers are installed
+
+`scripts/install-control-room-nginx-proxy.sh` keeps the repo-hosted Node process on `127.0.0.1:4177`, publishes ports `80` and `443` through nginx, forwards the secure scheme so the app sets `Secure` on the login cookie, and disables proxy buffering so the hosted SSE stream keeps working.
+
+`scripts/install-control-room-certbot.sh` finishes that path after DNS already points at the VPS.
 
 `scripts/vps-tooling-status.sh` now reports whether the control-room service is up in addition to the browser stack.
 
@@ -144,7 +155,7 @@ Each worker mounts:
 
 - Use the VPS browser when the account session should persist on the server.
 - Use the VPS remote desktop when you need to log into the server-side Chrome profile yourself.
-- Use the private hosted control room for read-only executive/business/department operations instead of relying only on generated HTML artifacts.
+- Use the hosted control room through `https://imonengine.com`, the VPS browser, or the SSH-tunneled local app instead of relying only on generated HTML artifacts.
 - Use a business worker container when a new brand needs isolated dependencies, code, or experimental tooling.
 - Use the shared VPS Chrome profile for ClipBaiters channel setup instead of creating separate browser identities per niche.
 - Treat `clipbaiters-publish --dry-run` as the first readiness pass for every scheduled cycle, even after the lane is partly live.

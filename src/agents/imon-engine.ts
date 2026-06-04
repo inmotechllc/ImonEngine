@@ -28,6 +28,8 @@ import { SystemMonitorService } from "../services/system-monitor.js";
 import { OrganizationControlPlaneService } from "../services/organization-control-plane.js";
 import { OfficeDashboardService } from "../services/office-dashboard.js";
 
+const NORTHLINE_AUTOMATION_PAUSE_NOTE = "Northline automation pause requested via pause-business.";
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -149,6 +151,7 @@ export class ImonEngineAgent {
     const next: ManagedBusiness = {
       ...business,
       stage: "active",
+      notes: business.notes.filter((note) => note !== NORTHLINE_AUTOMATION_PAUSE_NOTE),
       metrics: {
         ...business.metrics,
         lastRunAt: nowIso()
@@ -179,6 +182,7 @@ export class ImonEngineAgent {
     const next: ManagedBusiness = {
       ...business,
       stage: "paused",
+      notes: [...new Set([...business.notes, NORTHLINE_AUTOMATION_PAUSE_NOTE])],
       updatedAt: nowIso()
     };
     await this.store.saveManagedBusiness(next);
@@ -409,6 +413,7 @@ export class ImonEngineAgent {
 
     const dynamicNotes = current.notes.filter(
       (note) =>
+        note === NORTHLINE_AUTOMATION_PAUSE_NOTE ||
         note.startsWith("Northline plan refreshed") ||
         note.startsWith("Current sales inbox:") ||
         note.startsWith("Imonic plan refreshed") ||
