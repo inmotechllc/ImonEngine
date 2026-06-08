@@ -286,7 +286,8 @@ export class AIClient {
     const prompt = request.jsonMode
       ? `${request.prompt}\n\nReturn only a valid JSON object. Do not wrap it in markdown.`
       : request.prompt;
-    const capability = request.jsonMode || route.sharedRouteId === "deep" ? "reasoning" : "chat";
+    const analysisRoute = request.jsonMode || route.sharedRouteId === "deep" || route.sharedRouteId === "research";
+    const capability = analysisRoute ? "reasoning" : "chat";
     const timeoutMs = 30000;
     const headers = this.buildNomiGatewayHeaders(provider);
     const acceptedResponse = await fetch(this.resolveUrl(baseUrl, "/requests"), {
@@ -302,11 +303,11 @@ export class AIClient {
           attachments: []
         },
         requestMetadata: {
-          taskClass: request.jsonMode ? "analysis" : "conversation",
-          preferredCapabilityPackId: request.jsonMode ? "workflow-planning" : "conversation-coordination",
-          workflowStage: request.jsonMode ? "planning" : undefined,
+          taskClass: analysisRoute ? "analysis" : "conversation",
+          preferredCapabilityPackId: analysisRoute ? "workflow-planning" : "conversation-coordination",
+          workflowStage: analysisRoute ? "planning" : undefined,
           qualityMode: route.sharedRouteId === "fast" ? "fast" : "balanced",
-          preferredRoutingRole: request.jsonMode ? "planning" : "coordination"
+          preferredRoutingRole: analysisRoute ? "planning" : "coordination"
         },
         context: {
           promptId: route.routeId

@@ -15,7 +15,7 @@ ImonEngine-based portfolio controller for multiple AI businesses, with the origi
 - Builds an Imonic POD operating system with design prompts, Shopify-ready listing drafts, collection plans, growth loops, ad gates, analytics, and revenue guardrails.
 - Imports public business lists from CSV or JSON and converts them into typed `LeadRecord` objects.
 - Collects Northline prospects from OpenStreetMap/Overpass into deterministic JSON feeds, with collection areas and trades resolved from the selected managed business profile, then watches only changed CSV or JSON source files before outreach drafting.
-- Centralizes shared and business-specific AI route assignments in `src/ai/api-map.ts`, so provider, model, and base-URL swaps happen in one file instead of at each caller.
+- Centralizes shared and business-specific AI route assignments in `src/ai/api-map.ts`, so provider, model, and base-URL swaps happen in one file instead of at each caller. The shared `fast`, `deep`, and `research` routes now use the Nomi gateway by default.
 - Scores prospects against the selected Northline business profile's target industries, services, and offer summary using heuristics by default, or the configured AI route map when the selected route provider keys are available.
 - Drafts compliant outreach with approval fallbacks written to email or `runtime/notifications/`.
 - Creates `ClientJob` records from intake briefs, builds static landing pages, and runs QA checks before deploy.
@@ -115,21 +115,20 @@ Use these when you want an LLM or automation agent to work on ImonEngine with re
 ## AI Route Map
 
 - Shared and business-specific AI assignments live in `src/ai/api-map.ts`.
-- Current stage-1 defaults are `fast -> NVIDIA microsoft/phi-3.5-mini-instruct`, `deep -> NVIDIA deepseek-ai/deepseek-v3.1`, and `research -> OpenAI gpt-5` with `web_search_preview`.
-- ImonEngine office chat now overrides the shared `fast` route to use the `nomi` provider with `model=auto`, so the hosted control-room assistant can run through Nomi processing when the gateway env is configured.
-- `AI_PROVIDER_NVIDIA_API_KEY` enables the shared `fast` and `deep` routes. `AI_PROVIDER_NVIDIA_BASE_URL` is optional and defaults to `https://integrate.api.nvidia.com/v1` when unset.
-- `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL` enable Nomi-backed ImonEngine office chat. Legacy `NOMI_GATEWAY_*` and `OMIN_NOMI_GATEWAY_*` keys still hydrate that provider during the migration window.
+- Current defaults route `fast`, `deep`, and `research` through the `nomi` provider with `model=auto`, so ImonEngine AI processing enters the Nomi gateway `/requests` contract when gateway env is configured.
+- `AI_PROVIDER_NVIDIA_API_KEY` enables NVIDIA only for routes you intentionally reassign away from Nomi. `AI_PROVIDER_NVIDIA_BASE_URL` is optional and defaults to `https://integrate.api.nvidia.com/v1` when unset.
+- `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL` enable Nomi-backed ImonEngine AI routes. Legacy `NOMI_GATEWAY_*` and `OMIN_NOMI_GATEWAY_*` keys still hydrate that provider during the migration window. Private `Secrets/*.env` files are loaded after `.env`, which lets workstation-only gateway keys stay out of tracked config.
 - Legacy `NVIDIA_API_KEY` still hydrates the NVIDIA provider during the migration window if your local `.env` already uses that older name.
-- `AI_PROVIDER_OPENAI_API_KEY` keeps the `research` route active during the first NVIDIA migration window. Legacy `OPENAI_API_KEY` still hydrates the OpenAI provider config.
+- `AI_PROVIDER_OPENAI_API_KEY` enables OpenAI only for routes you intentionally reassign away from Nomi. Legacy `OPENAI_API_KEY` still hydrates the OpenAI provider config.
 - Provider secrets and optional base-URL overrides stay in `.env` or private host env storage through `AI_PROVIDER_*` keys.
 - Legacy `OPENAI_API_KEY`, `OPENAI_MODEL_FAST`, and `OPENAI_MODEL_DEEP` still hydrate the new config during the migration window, but the model override keys should stay unset unless you intentionally want to override the shared route models.
 
 ## Required Owner Actions
 
-- Add `AI_PROVIDER_NVIDIA_API_KEY` if you want the shared `fast` and `deep` routes active on the current stage-1 NVIDIA defaults. Set `AI_PROVIDER_NVIDIA_BASE_URL` only when you need to override the default NVIDIA Catalog host.
-- Add `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL` before relying on hosted ImonEngine office chat; the Nomi-backed office route falls back when the gateway is unavailable or unauthenticated.
+- Add `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL`, or legacy `NOMI_GATEWAY_API_KEY` and `NOMI_GATEWAY_URL` in `Secrets/*.env`, before relying on ImonEngine AI routes; Nomi-backed routes fall back when the gateway is unavailable or unauthenticated.
+- Add `AI_PROVIDER_NVIDIA_API_KEY` only if you intentionally reassign a route back to the NVIDIA provider. Set `AI_PROVIDER_NVIDIA_BASE_URL` only when you need to override the default NVIDIA Catalog host.
 - Install Python helper dependencies with `python -m pip install -r requirements.txt` before using the VPS sync or control-room tunnel helpers.
-- Keep `AI_PROVIDER_OPENAI_API_KEY` if you want the `research` route and `web_search_preview` path active during the first NVIDIA migration window. Legacy `OPENAI_API_KEY` still works during the migration window.
+- Keep `AI_PROVIDER_OPENAI_API_KEY` only if you intentionally reassign a route back to OpenAI or add a future OpenAI-backed capability. Legacy `OPENAI_API_KEY` still hydrates that provider during the migration window.
 - Add `CLIPBAITERS_SHARED_ALIAS_EMAIL`, `CLIPBAITERS_CREATOR_CONTACT_EMAIL`, `CLIPBAITERS_CREATOR_BOOKING_URL`, `CLIPBAITERS_ACTIVE_LANES`, the per-lane `CLIPBAITERS_YOUTUBE_*_CHANNEL_URL` values, and any future Stripe or Relay planning metadata before moving ClipBaiters beyond planning. Optional `CLIPBAITERS_FACEBOOK_PAGE_ID` and `CLIPBAITERS_YOUTUBE_*_CHANNEL_ID` bindings tighten channel verification, but Facebook can stay deferred while the political and media YouTube lanes are the active rollout.
 - Add `CLIPBAITERS_STREAMING_PAYMENT_LINK_RETAINER`, `CLIPBAITERS_STREAMING_PAYMENT_LINK_EVENT_PACK`, and `CLIPBAITERS_STREAMING_PAYMENT_LINK_RUSH_PACK` before sending live ClipBaiters creator offers; the monetization report opens approval tasks until those links exist.
 - Keep raw ClipBaiters Stripe secret keys and unmasked Relay bank details out of the tracked `.env.example`; the repo uses payment-link readiness plus masked finance-planning metadata, not direct Stripe or bank automation.

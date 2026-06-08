@@ -2,6 +2,7 @@ node_modules/
 build/
 runtime/
 .env
+Secrets/
 .DS_Store
 coverage/
 __pycache__/

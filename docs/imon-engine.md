@@ -30,9 +30,9 @@ Business categories are normalized into reusable office-template profiles so dep
 - Active business route groups: `imon-engine` for office chat and market research, `imon-digital-asset-store` for asset blueprint generation, and `auto-funding-agency` for Northline scoring, outreach, site copy, reply classification, retention reporting, and prospect research
 - Reserved namespaces stay pre-registered for Northbeam, Velora, ClipBaiters, QuietPivot, and Imonic so future lane-specific AI APIs land in the same registry instead of spreading across callers
 
-Current stage-1 defaults are split by provider: `fast -> NVIDIA microsoft/phi-3.5-mini-instruct`, `deep -> NVIDIA deepseek-ai/deepseek-v3.1`, and `research -> OpenAI gpt-5` with `web_search_preview`. ImonEngine office chat overrides the shared `fast` route to the `nomi` provider with `model=auto`, so hosted control-room office chat can run through Nomi processing when `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL` are configured.
+Current defaults route `fast`, `deep`, and `research` through the `nomi` provider with `model=auto`, so shared ImonEngine AI processing enters the Nomi gateway `/requests` contract when `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL` are configured. Legacy `NOMI_GATEWAY_*` and `OMIN_NOMI_GATEWAY_*` keys still hydrate the Nomi provider during the migration window, and private `Secrets/*.env` files load after `.env` for workstation-only gateway keys.
 
-Provider secrets and optional host overrides stay in env through the `AI_PROVIDER_*` keys. NVIDIA defaults to `https://integrate.api.nvidia.com/v1` when no override is set, Nomi defaults to `http://127.0.0.1:1100` for local gateway use, and OpenAI stays active for the current `research` route. The route map owns which provider and model each shared or business-specific capability uses.
+Provider secrets and optional host overrides stay in env through the `AI_PROVIDER_*` keys. Nomi defaults to `http://127.0.0.1:1100` for local gateway use, while NVIDIA and OpenAI provider configs remain available for deliberate route overrides. The route map owns which provider and model each shared or business-specific capability uses.
 
 ## Agent Context Hub
 

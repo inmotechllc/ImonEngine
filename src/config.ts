@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parse as parseDotenv } from "dotenv";
 import {
@@ -231,10 +231,46 @@ function readEnvFile(filePath: string): Record<string, string> {
   );
 }
 
+function readSecretEnvFiles(projectRoot: string): Record<string, string> {
+  const secretsDir = path.join(projectRoot, "Secrets");
+  if (!existsSync(secretsDir)) {
+    return {};
+  }
+
+  const secretEnv = readdirSync(secretsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".env"))
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .reduce<Record<string, string>>(
+      (env, entry) => ({ ...env, ...readEnvFile(path.join(secretsDir, entry.name)) }),
+      {}
+    );
+
+  return {
+    ...expandSecretEnvAliases(secretEnv),
+    ...secretEnv
+  };
+}
+
+function expandSecretEnvAliases(env: Record<string, string>): Record<string, string> {
+  const aliases: Record<string, string> = {};
+  const nomiApiKey = env.NOMI_GATEWAY_API_KEY ?? env.OMIN_NOMI_GATEWAY_API_KEY;
+  const nomiBaseUrl = env.NOMI_GATEWAY_URL ?? env.OMIN_NOMI_GATEWAY_URL;
+
+  if (nomiApiKey && !env.AI_PROVIDER_NOMI_API_KEY) {
+    aliases.AI_PROVIDER_NOMI_API_KEY = nomiApiKey;
+  }
+  if (nomiBaseUrl && !env.AI_PROVIDER_NOMI_BASE_URL) {
+    aliases.AI_PROVIDER_NOMI_BASE_URL = nomiBaseUrl;
+  }
+
+  return aliases;
+}
+
 function hydrateProcessEnv(projectRoot: string): void {
   const mergedFiles = {
     ...readEnvFile(path.join(projectRoot, ".env")),
-    ...readEnvFile(path.join(projectRoot, ".env.example"))
+    ...readEnvFile(path.join(projectRoot, ".env.example")),
+    ...readSecretEnvFiles(projectRoot)
   };
 
   for (const [key, value] of Object.entries(mergedFiles)) {

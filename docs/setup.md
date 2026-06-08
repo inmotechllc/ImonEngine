@@ -10,14 +10,14 @@
 
 ## Environment Variables
 
-- `AI_PROVIDER_NVIDIA_API_KEY`: enables the default shared `fast` and `deep` routes.
+- `AI_PROVIDER_NVIDIA_API_KEY`: enables NVIDIA only for routes you intentionally reassign away from Nomi.
 - `AI_PROVIDER_NVIDIA_BASE_URL`: optional NVIDIA API Catalog host override. It defaults to `https://integrate.api.nvidia.com/v1` when unset.
 - Legacy `NVIDIA_API_KEY` and `NVIDIA_BASE_URL` still hydrate the NVIDIA provider during the migration window if an existing machine has not been renamed to the `AI_PROVIDER_NVIDIA_*` keys yet.
-- `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL`: enable Nomi-backed ImonEngine office chat through the Nomi gateway `/requests` contract. Legacy `NOMI_GATEWAY_*` and `OMIN_NOMI_GATEWAY_*` keys still hydrate this provider during the migration window.
-- `AI_PROVIDER_OPENAI_API_KEY`: keeps the shared `research` route active during the first NVIDIA migration window.
-- `AI_PROVIDER_OPENAI_BASE_URL`: optional OpenAI-compatible host override for the retained `research` route or any future OpenAI-backed overrides.
+- `AI_PROVIDER_NOMI_API_KEY` and `AI_PROVIDER_NOMI_BASE_URL`: enable Nomi-backed ImonEngine AI routes through the Nomi gateway `/requests` contract. Legacy `NOMI_GATEWAY_*` and `OMIN_NOMI_GATEWAY_*` keys still hydrate this provider during the migration window. Private files under `Secrets/*.env` load after `.env`, so workstation-only Nomi gateway keys can live there without being tracked.
+- `AI_PROVIDER_OPENAI_API_KEY`: enables OpenAI only for routes you intentionally reassign away from Nomi.
+- `AI_PROVIDER_OPENAI_BASE_URL`: optional OpenAI-compatible host override for future OpenAI-backed overrides.
 - `AI_PROVIDER_LOCAL_API_KEY` and `AI_PROVIDER_LOCAL_BASE_URL`: optional secondary provider credentials for future route swaps in `src/ai/api-map.ts`.
-- Shared route ids `fast`, `deep`, and `research`, plus the current business capability assignments, live in `src/ai/api-map.ts`. The current stage-1 defaults are `fast -> NVIDIA microsoft/phi-3.5-mini-instruct`, `deep -> NVIDIA deepseek-ai/deepseek-v3.1`, and `research -> OpenAI gpt-5` with `web_search_preview`, with ImonEngine office chat overriding `fast` to the `nomi` provider and `model=auto`. Caller files do not choose providers, models, or base URLs directly.
+- Shared route ids `fast`, `deep`, and `research`, plus the current business capability assignments, live in `src/ai/api-map.ts`. The current defaults are `fast -> Nomi auto`, `deep -> Nomi auto`, and `research -> Nomi auto`. Caller files do not choose providers, models, or base URLs directly.
 - `OPENAI_API_KEY`, `OPENAI_MODEL_FAST`, and `OPENAI_MODEL_DEEP`: legacy fallback and model-override keys that still hydrate the new AI routing config during the transition window, including route-level model overrides after the `fast` and `deep` NVIDIA cutover. Leave `OPENAI_MODEL_FAST` and `OPENAI_MODEL_DEEP` unset unless you intentionally want those overrides active.
 - Shared engine and infra:
   `IMON_ENGINE_NAME`, `IMON_ENGINE_TIMEZONE`,

@@ -147,20 +147,19 @@ export const AI_PROVIDER_MAP: Record<AIProviderId, AIProviderDefinition> = {
 
 export const AI_SHARED_ROUTE_MAP: Record<AISharedRouteId, AISharedRouteDefinition> = {
   fast: {
-    provider: "nvidia",
-    model: "microsoft/phi-3.5-mini-instruct",
-    description: "Shared low-cost route for lightweight scoring, drafting, and chat responses."
+    provider: "nomi",
+    model: "auto",
+    description: "Shared low-latency route for lightweight scoring, drafting, and chat responses through Nomi."
   },
   deep: {
-    provider: "nvidia",
-    model: "deepseek-ai/deepseek-v3.1",
-    description: "Shared higher-depth route for richer composition, synthesis, and reporting."
+    provider: "nomi",
+    model: "auto",
+    description: "Shared higher-depth route for richer composition, synthesis, and reporting through Nomi."
   },
   research: {
-    provider: "openai",
-    model: "gpt-5",
-    description: "Shared research route for web-backed summaries and prospect enrichment.",
-    tools: [{ type: "web_search_preview" }]
+    provider: "nomi",
+    model: "auto",
+    description: "Shared research and enrichment route through the Nomi gateway."
   }
 };
 

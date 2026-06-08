@@ -346,7 +346,7 @@ test("qualifier derives stage from score even when the model returns an inconsis
   assert.equal(scored.stage, "qualified");
 });
 
-test("ai config preserves legacy OpenAI fallbacks and route overrides during the NVIDIA migration", async () => {
+test("ai config keeps legacy provider credentials while routing shared AI through Nomi", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ai-route-map-legacy-"));
   const touchedKeys = [
     "AI_PROVIDER_NVIDIA_API_KEY",
@@ -391,6 +391,9 @@ test("ai config preserves legacy OpenAI fallbacks and route overrides during the
       capability: "office-chat",
       mode: "fast"
     });
+    const researchRoute = ai.describeRoute({
+      sharedRouteId: "research"
+    });
 
     assert.equal(config.ai.providers.openai.apiKey, "legacy-openai-key");
     assert.equal(config.ai.providers.nvidia.apiKey, "nvidia-preview-key");
@@ -402,15 +405,15 @@ test("ai config preserves legacy OpenAI fallbacks and route overrides during the
     assert.ok(assetBlueprintRoute);
     assert.equal(assetBlueprintRoute.routeId, "imon-digital-asset-store.asset-blueprint");
     assert.equal(assetBlueprintRoute.sharedRouteId, "deep");
-    assert.equal(assetBlueprintRoute.provider, "nvidia");
-    assert.equal(assetBlueprintRoute.providerLabel, "NVIDIA API Catalog");
-    assert.equal(assetBlueprintRoute.model, "legacy-deep");
+    assert.equal(assetBlueprintRoute.provider, "nomi");
+    assert.equal(assetBlueprintRoute.providerLabel, "Nomi Gateway");
+    assert.equal(assetBlueprintRoute.model, "auto");
     assert.equal(assetBlueprintRoute.available, true);
     assert.ok(inheritedClipbaitersRoute);
     assert.equal(inheritedClipbaitersRoute.routeId, "clipbaiters-viral-moments.office-chat");
     assert.equal(inheritedClipbaitersRoute.sharedRouteId, "fast");
-    assert.equal(inheritedClipbaitersRoute.provider, "nvidia");
-    assert.equal(inheritedClipbaitersRoute.model, "legacy-fast");
+    assert.equal(inheritedClipbaitersRoute.provider, "nomi");
+    assert.equal(inheritedClipbaitersRoute.model, "auto");
     assert.ok(imonOfficeRoute);
     assert.equal(imonOfficeRoute.routeId, "imon-engine.office-chat");
     assert.equal(imonOfficeRoute.sharedRouteId, "fast");
@@ -418,6 +421,51 @@ test("ai config preserves legacy OpenAI fallbacks and route overrides during the
     assert.equal(imonOfficeRoute.providerLabel, "Nomi Gateway");
     assert.equal(imonOfficeRoute.model, "auto");
     assert.equal(imonOfficeRoute.available, true);
+    assert.ok(researchRoute);
+    assert.equal(researchRoute.provider, "nomi");
+    assert.equal(researchRoute.model, "auto");
+    assert.equal(researchRoute.available, true);
+  } finally {
+    for (const key of touchedKeys) {
+      if (previous[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
+  }
+});
+
+test("ai config loads private Nomi gateway secrets from Secrets env files", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ai-nomi-secrets-"));
+  const touchedKeys = [
+    "AI_PROVIDER_NOMI_API_KEY",
+    "AI_PROVIDER_NOMI_BASE_URL",
+    "NOMI_GATEWAY_API_KEY",
+    "NOMI_GATEWAY_URL"
+  ] as const;
+  const previous = Object.fromEntries(touchedKeys.map((key) => [key, process.env[key]]));
+
+  try {
+    for (const key of touchedKeys) {
+      delete process.env[key];
+    }
+    await writeFile(path.join(root, ".env.example"), "AI_PROVIDER_NOMI_BASE_URL=http://127.0.0.1:1100\n");
+    await mkdir(path.join(root, "Secrets"), { recursive: true });
+    await writeFile(
+      path.join(root, "Secrets", "Nomi_Secrets.env"),
+      'NOMI_GATEWAY_URL="http://100.69.206.103:1100"\nNOMI_GATEWAY_API_KEY="nomi-secret-key"\n'
+    );
+
+    const config = await loadConfig(root);
+    const ai = new AIClient(config);
+    const fastRoute = ai.describeRoute({ sharedRouteId: "fast" });
+
+    assert.equal(config.ai.providers.nomi.apiKey, "nomi-secret-key");
+    assert.equal(config.ai.providers.nomi.baseUrl, "http://100.69.206.103:1100");
+    assert.ok(fastRoute);
+    assert.equal(fastRoute.provider, "nomi");
+    assert.equal(fastRoute.available, true);
   } finally {
     for (const key of touchedKeys) {
       if (previous[key] === undefined) {
